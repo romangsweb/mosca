@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { session, SENSE_LABEL } from '../engine/session.js';
 import { parseCSV, demoCSV } from '../engine/data.js';
 import { useS, useTick, Icon } from '../ui/kit.jsx';
+import { Paywall } from '../ui/Paywall.jsx';
 
 const TARGETS = [['dulce', 'Dulce', 'Lo que quieres que la mosca "quiera comer".', 'var(--acc)'], ['amargo', 'Amargo', 'Lo que debería frenarla. Si domina, MN9 se apaga.', 'var(--steel)'], ['jon_ce', 'Graves (oído)', 'Vibración lenta en la antena.', 'var(--steel)'], ['jon_f', 'Medios (oído)', 'La zona de la voz.', 'var(--white)'], ['jon_dm', 'Agudos (oído)', 'Brillos y chasquidos.', 'var(--acc)']];
 
@@ -32,6 +33,12 @@ export default function Datos() {
   const clear = () => { session.set({ data: null, dataMap: {}, row: 0 }); setStep(1); };
   const STEPS = [['Sube tus datos', 'CSV o texto separado'], ['Asigna sentidos', 'Columnas → estímulos'], ['Escucha', 'Una fila por compás']];
   const d = s.data;
+  if (!session.can('datos')) return (
+    <div className="page">
+      <div className="page-head"><div><h1 className="row" style={{ gap: 10 }}>Que la mosca pruebe tus datos <span className="badge-pro">PRO</span></h1><p>Cada columna de tu CSV estimula un sentido y cada fila dura un compás: ventas, clima o pasos del día convertidos en un groove que toca el circuito real.</p></div></div>
+      <Paywall feature="datos">Sube un CSV, asigna columnas a dulce, amargo o a las bandas del oído, y escucha cómo responde MN9 fila por fila.</Paywall>
+    </div>
+  );
   return (
     <div className="page">
       <div className="page-head">

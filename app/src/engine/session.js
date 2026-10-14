@@ -5,7 +5,7 @@ import { Ear } from './ear.js';
 import { Synth, DEFAULT_KIT } from './synth.js';
 import { mutate, identity } from './mutate.js';
 import { kvGet, kvSet, takePut, takesAll, takeDel, FREE_TAKES } from './storage.js';
-import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud } from './cloud.js';
+import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
 const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow'];
@@ -13,6 +13,13 @@ const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inp
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'] };
 export const SENSE_LABEL = { dulce: 'Dulce', amargo: 'Amargo', jon_ce: 'Graves', jon_f: 'Medios', jon_dm: 'Agudos' };
 export const HIST = 128;
+// Qué abre Pro. El servidor aplica lo que importa (límite de tomas); la app solo muestra y bloquea la interfaz.
+export const PRO_FEATURES = {
+  datos: 'Modo Datos: tus CSV estimulan los sentidos',
+  wav: 'Exportar tomas a WAV',
+  tomas: 'Tomas ilimitadas en la nube',
+};
+const NO_PLAN = { plan: 'free', planBase: 'free', trialEnds: null, trialUsed: false };
 const CURVES = { lineal: (x) => x, suave: (x) => Math.sqrt(x), dura: (x) => x * x };
 
 const DEFAULTS = {
@@ -33,7 +40,7 @@ export class Session {
     this.listeners = new Set(); this.stepListeners = new Set();
     this.s = structuredClone(DEFAULTS);
     this.s.playing = false; this.s.rec = false; this.s.ko = { input: null, output: null, error: null };
-    this.s.takes = []; this.s.ready = false; this.s.user = null; this.s.plan = 'free'; this.s.sync = cloudEnabled ? 'local' : 'off'; this.s.mutHistory = {}; this.s.data = null; this.s.row = 0; this.s.saved = Date.now();
+    this.s.takes = []; this.s.ready = false; this.s.user = null; Object.assign(this.s, NO_PLAN); this.s.sync = cloudEnabled ? 'local' : 'off'; this.s.mutHistory = {}; this.s.data = null; this.s.row = 0; this.s.saved = Date.now();
     this.live = { step: 0, pos: 0, active: 0, mn9: 0, groom: 0, rate: {}, lanes: {}, hist: new Array(64).fill(0), counts: null, lastHitAt: {}, rowHist: [], rateHist: {}, spikes: {} };
     this.rec = null; this.ear = new Ear(); this.synth = new Synth();
     this.ko = new KO2({
@@ -61,7 +68,7 @@ export class Session {
     await this.refreshTakes();
     if (cloudEnabled) {
       try { const u = await currentUser(); if (u) await this.adoptUser(u); } catch (e) { console.warn('cuenta', e); }
-      onAuth((u) => { if (u && u.id !== this.s.user?.id) this.adoptUser(u); if (!u && this.s.user) { this.set({ user: null, plan: 'free', sync: 'local' }); this.refreshTakes(); } });
+      onAuth((u) => { if (u && u.id !== this.s.user?.id) this.adoptUser(u); if (!u && this.s.user) { this.set({ user: null, ...NO_PLAN, sync: 'local' }); this.refreshTakes(); } });
     }
     this.s.ready = true; this.emit();
     if (navigator.requestMIDIAccess) this.connect(true);
@@ -96,7 +103,7 @@ export class Session {
       } else {
         this.s.onboarded = true; await saveProfile(user.id, { settings: this.snapshot(), alias: this.s.alias || p?.alias || null });
       }
-      this.set({ alias: this.s.alias || p?.alias || '', plan: p?.plan || 'free', sync: 'sincronizado' });
+      this.set({ alias: this.s.alias || p?.alias || '', ...this.planFrom(p), sync: 'sincronizado' });
       await this.refreshTakes();
     } catch (e) { console.warn('perfil', e); this.set({ sync: 'error' }); }
   }
@@ -106,7 +113,23 @@ export class Session {
     try { await saveProfile(this.s.user.id, { settings: this.snapshot(), alias: this.s.alias || null }); this.set({ sync: 'sincronizado' }); }
     catch (e) { console.warn('sincronizar', e); this.set({ sync: 'error' }); }
   }
-  async logout() { await signOut(); this.set({ user: null, plan: 'free', sync: 'local' }); await this.refreshTakes(); }
+  async logout() { await signOut(); this.set({ user: null, ...NO_PLAN, sync: 'local' }); await this.refreshTakes(); }
+  // ---------- plan ----------
+  planFrom(p) {
+    const trialEnds = p?.trial_ends_at ? new Date(p.trial_ends_at).getTime() : null, planBase = p?.plan || 'free';
+    const plan = planBase === 'pro' || (trialEnds && trialEnds > Date.now()) ? 'pro' : 'free';
+    clearTimeout(this._trialT);
+    if (planBase !== 'pro' && trialEnds && trialEnds > Date.now()) this._trialT = setTimeout(() => this.set(this.planFrom(p)), Math.min(trialEnds - Date.now() + 1000, 2 ** 31 - 1));
+    return { plan, planBase, trialEnds, trialUsed: !!p?.trial_used };
+  }
+  get onTrial() { return this.s.planBase !== 'pro' && this.s.plan === 'pro'; }
+  get canTrial() { return !!this.s.user && !this.s.trialUsed && this.s.planBase !== 'pro'; }
+  can(feature) { return this.s.plan === 'pro' || !PRO_FEATURES[feature]; }
+  async startTrial() {
+    const end = await startTrialCloud();
+    this.set(this.planFrom({ plan: this.s.planBase, trial_ends_at: new Date(end).toISOString(), trial_used: true }));
+    await this.refreshTakes();
+  }
   setInput(k, v) { this.set({ inputs: { ...this.s.inputs, [k]: v } }, true); }
   setTrack(id, patch) { this.set({ tracks: this.s.tracks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }, true); }
   track(id = this.s.selTrack) { return this.s.tracks.find((t) => t.id === id); }
@@ -128,7 +151,7 @@ export class Session {
   rates() {
     const r = { ...this.s.inputs };
     if (this.s.oidoSource !== 'manual' && this.ear.kind) { const L = this.ear.read(); r.jon_ce = L[0] * 200; r.jon_f = L[1] * 200; r.jon_dm = L[2] * 200; this.live.ear = L; }
-    if (this.s.data && Object.keys(this.s.dataMap).length) {
+    if (this.s.data && Object.keys(this.s.dataMap).length && this.can('datos')) {
       for (const [sense, ci] of Object.entries(this.s.dataMap)) if (ci !== '' && ci != null) r[sense] = this.s.data.cols[ci].norm[this.s.row] * 200;
     }
     // las pistas silenciadas no reciben estímulo de su sentido: así no ensucian el cerebro

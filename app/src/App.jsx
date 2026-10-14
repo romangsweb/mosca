@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { session } from './engine/session.js';
 import { useS, useTick, Icon, Logo } from './ui/kit.jsx';
+import { TrialBadge } from './ui/Paywall.jsx';
 import Estudio from './pages/Estudio.jsx';
 import Oido from './pages/Oido.jsx';
 import Datos from './pages/Datos.jsx';
@@ -19,7 +20,7 @@ const TIPS = {
   datos: ['Sube un CSV o usa el ejemplo.', 'Asigna columnas a sabores o sonidos.', 'Cada fila dura un compás: escucha cómo cambian tus datos.'],
   sonido: ['Densidad: cuánto tiempo neuronal pasa por cada paso.', 'Kit: qué voz tiene cada pad. Mutar respeta estos roles.', 'MIDI: reloj, latencia y control de efectos del K.O. II.'],
   tomas: ['Graba con el punto rojo o la tecla R.', 'Cada toma guarda las notas de todas las pistas.', 'Exporta a MIDI para tu DAW, o a WAV con los sonidos internos.'],
-  cuenta: ['Inicia sesión para llevar tus ajustes a cualquier dispositivo.', 'Las tomas siguen en este navegador; la nube llega en el siguiente paso.', 'Pro: datos, 4 pistas, nube ilimitada y WAV.'],
+  cuenta: ['Inicia sesión para llevar tus ajustes a cualquier dispositivo.', 'Con cuenta, tus tomas se guardan en la nube.', 'Pro: modo Datos, tomas ilimitadas y WAV. Pruébalo 7 días gratis.'],
 };
 const SYNC_LABEL = { off: 'Guardado en este navegador', local: 'Guardado en este navegador', sincronizando: 'Sincronizando…', sincronizado: 'Sincronizado con tu cuenta', error: 'Sin conexión · guardado local' };
 const initials = (s) => (s.alias || s.user?.email || 'FP').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 2).toUpperCase() || 'FP';
@@ -82,9 +83,10 @@ export default function App() {
           <button type="button" className="btn ghost hide-sm" onClick={() => session.connect()} title={s.ko.output ? `Conectado: ${s.ko.output}` : 'Conectar el K.O. II'}>
             <span className={`status-dot${s.ko.output ? ' on' : ''}`} />{s.ko.output ? 'EP-133 K.O. II' : 'Conectar K.O. II'}
           </button>
+          <TrialBadge />
           <button type="button" className="btn" aria-pressed={s.guide} onClick={() => session.set({ guide: !s.guide }, true)}>Guía</button>
           <button type="button" className="iconbtn" aria-label={night ? 'Cambiar a tema día' : 'Cambiar a tema noche'} onClick={() => session.set({ theme: night ? 'dia' : 'noche' }, true)}><Icon name={night ? 'sol' : 'luna'} size={15} /></button>
-          <a href="#/cuenta" className="avatar" aria-label={`Cuenta, plan ${s.plan}`}><span className="mono muted" style={{ fontSize: 9, letterSpacing: '.1em' }}>{s.user ? s.plan.toUpperCase() : 'INVITADO'}</span><span>{initials(s)}</span></a>
+          <a href="#/cuenta" className="avatar" aria-label={`Cuenta, plan ${s.plan}`}><span className="mono muted" style={{ fontSize: 9, letterSpacing: '.1em' }}>{!s.user ? 'INVITADO' : session.onTrial ? 'PRUEBA' : s.plan.toUpperCase()}</span><span>{initials(s)}</span></a>
         </div>
       </header>
       {s.guide && TIPS[page] && (

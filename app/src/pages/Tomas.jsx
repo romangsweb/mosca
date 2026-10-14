@@ -109,9 +109,10 @@ export default function Tomas() {
             <h2 id="exp-t" style={{ fontSize: 18 }}>Exportar «{take.name}»</h2>
             <div role="radiogroup" aria-label="Formato" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[['mid', 'MIDI (.mid)', 'Una pista por pista de Fly Punch. Ábrelo en Ableton, Logic o FL Studio.'], ['csv', 'CSV de disparos', 'Tiempo, neurona, nota y velocidad de cada disparo.'], ['wav', 'Audio (.wav) con sonido interno', 'Las voces de Fly Punch, no las de tu kit.']].map(([id, l, d]) => (
-                <button key={id} type="button" role="radio" aria-checked={fmtSel === id} className="radio-card" onClick={() => setFmt(id)}><span className="o" /><span><span style={{ display: 'block', fontWeight: 600 }}>{l}</span><span className="muted" style={{ fontSize: 12 }}>{d}</span></span></button>
+                <button key={id} type="button" role="radio" aria-checked={fmtSel === id} className="radio-card" disabled={id === 'wav' && !session.can('wav')} style={id === 'wav' && !session.can('wav') ? { opacity: 0.55, cursor: 'not-allowed' } : undefined} onClick={() => setFmt(id)}><span className="o" /><span style={{ flex: 1 }}><span style={{ display: 'block', fontWeight: 600 }}>{l}</span><span className="muted" style={{ fontSize: 12 }}>{d}</span></span>{id === 'wav' && !session.can('wav') && <span className="badge-pro">PRO</span>}</button>
               ))}
             </div>
+            {!session.can('wav') && <a href="#/cuenta?plan" className="muted" style={{ fontSize: 12 }}>WAV es parte de Pro · {session.canTrial ? 'pruébalo 7 días gratis' : 'ver planes'} →</a>}
             <div className="row" style={{ justifyContent: 'flex-end' }}><button type="button" className="btn lg" onClick={() => setExp(false)}>Cancelar</button><button type="button" className="btn lg primary" disabled={busy} onClick={doExport}>{busy ? 'Preparando…' : 'Descargar'}</button></div>
           </div>
         </div>

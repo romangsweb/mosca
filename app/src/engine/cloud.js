@@ -21,13 +21,19 @@ export async function currentUser() { const { data } = await cloud.auth.getSessi
 export function onAuth(fn) { const { data } = cloud.auth.onAuthStateChange((_e, s) => fn(s?.user || null)); return () => data.subscription.unsubscribe(); }
 
 export async function loadProfile(uid) {
-  const { data, error } = await cloud.from('profiles').select('alias, plan, settings, updated_at').eq('id', uid).maybeSingle();
+  const { data, error } = await cloud.from('profiles').select('alias, plan, settings, updated_at, trial_ends_at, trial_used').eq('id', uid).maybeSingle();
   if (error) throw error;
   return data;
 }
 export async function saveProfile(uid, patch) {
   const { error } = await cloud.from('profiles').update(patch).eq('id', uid);
   if (error) throw error;
+}
+
+export async function startTrialCloud() {
+  const { data, error } = await cloud.rpc('start_trial');
+  if (error) throw error;
+  return new Date(data).getTime();
 }
 
 // ---------- tomas ----------

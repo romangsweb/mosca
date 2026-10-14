@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { session } from '../engine/session.js';
 import { useS, Seg, Icon } from '../ui/kit.jsx';
+import { daysLeft } from '../ui/Paywall.jsx';
 
 const DOCS = [
   ['Primeros pasos', <>
@@ -49,27 +50,11 @@ export default function Cuenta() {
             <div className="row"><div className="stat"><div className="label">Tomas</div><div className="v">{s.takes.length} / 5</div></div><div className="stat"><div className="label">Notas grabadas</div><div className="v">{s.takes.reduce((a, t) => a + t.events.length, 0)}</div></div><div className="stat"><div className="label">Pistas</div><div className="v">{s.tracks.length}</div></div></div>
             <div className="row" style={{ borderTop: '1px solid var(--line)', paddingTop: 14, flexWrap: 'wrap' }}>
               <button type="button" className="btn" onClick={exportAll}><Icon name="bajar" size={14} />Exportar respaldo (.json)</button>
-              {s.user && <span className="muted" style={{ fontSize: 12, alignSelf: 'center' }}>Tus ajustes de sonido, pistas y kit viajan con tu cuenta. Las tomas siguen en este navegador (llegan a la nube en el paso 2).</span>}
+              {s.user && <span className="muted" style={{ fontSize: 12, alignSelf: 'center' }}>Tus ajustes de sonido, pistas, kit y tomas viajan con tu cuenta.</span>}
             </div>
           </section>
         )}
-        {tab === 'plan' && (
-          <>
-            <div className="between" style={{ flexWrap: 'wrap' }}><div><h1>Plan</h1><p className="muted" style={{ margin: '4px 0 0' }}>Gusto, Oído y la exportación MIDI son gratis.</p></div><Seg label="Facturación" items={[['m', 'Mensual'], ['a', 'Anual']]} value={yearly ? 'a' : 'm'} onChange={(v) => setYearly(v === 'a')} /></div>
-            <div className="cols" style={{ gap: 16 }}>
-              {[['Free', s.plan === 'free' ? 'TU PLAN' : '', '$0', 'para siempre', ['Gusto y Oído (micrófono y archivos)', '2 pistas en el K.O. II', '5 tomas (en la nube con cuenta)', 'Exportar a MIDI y CSV'], 'Plan actual', false],
-                ['Pro', s.plan === 'pro' ? 'TU PLAN' : 'PRÓXIMAMENTE', '[PRECIO]', yearly ? '/ año' : '/ mes', ['Modo Datos (CSV → sentidos)', '4 pistas (grupos A–D)', 'Tomas ilimitadas en la nube', 'Exportar WAV y presets de kit', 'Más circuitos: agua, olfato, novedad'], 'Avísame', true]].map(([n, tag, price, per, feats, cta, pro]) => (
-                <article key={n} className="panel" style={{ flex: '1 1 300px', padding: 22, gap: 14, borderColor: pro ? 'var(--acc)' : undefined }}>
-                  <div className="between"><h2 style={{ fontSize: 18 }}>{n}</h2><span className="label" style={{ color: pro ? 'var(--acc)' : undefined }}>{tag}</span></div>
-                  <div><span style={{ fontSize: 34, fontWeight: 700, letterSpacing: '-.02em' }}>{price}</span><span className="muted"> {per}</span></div>
-                  <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>{feats.map((f) => <li key={f} className="row" style={{ alignItems: 'flex-start', color: 'var(--sub)' }}><span style={{ color: pro ? 'var(--acc)' : 'var(--sub)' }}><Icon name="check" size={16} stroke={2.4} /></span>{f}</li>)}</ul>
-                  <button type="button" className={`btn lg ${pro ? 'acc' : ''}`} style={{ marginTop: 'auto' }} disabled={!pro}>{cta}</button>
-                </article>
-              ))}
-            </div>
-            <p className="dim" style={{ margin: 0, fontSize: 12 }}>Precios por definir. Mientras tanto, las funciones Pro están abiertas para probarlas.</p>
-          </>
-        )}
+        {tab === 'plan' && <PlanTab s={s} yearly={yearly} setYearly={setYearly} />}
         {tab === 'ajustes' && (
           <section className="panel" style={{ gap: 0, padding: 22 }}>
             <h1 style={{ marginBottom: 6 }}>Ajustes</h1>
@@ -88,5 +73,41 @@ export default function Cuenta() {
         )}
       </div>
     </div>
+  );
+}
+
+function PlanTab({ s, yearly, setYearly }) {
+  const [busy, setBusy] = useState(false), [err, setErr] = useState(null);
+  const start = async () => { setBusy(true); setErr(null); try { await session.startTrial(); } catch { setErr('No pudimos activar la prueba. Intenta de nuevo.'); } setBusy(false); };
+  const pro = s.plan === 'pro', trial = session.onTrial;
+  let cta;
+  if (s.planBase === 'pro') cta = <button type="button" className="btn lg" disabled>Tu plan</button>;
+  else if (trial) cta = <button type="button" className="btn lg" disabled>Prueba activa · quedan {daysLeft(s.trialEnds)} días</button>;
+  else if (session.canTrial) cta = <button type="button" className="btn lg acc" disabled={busy} onClick={start}>{busy ? 'Activando…' : 'Probar 7 días gratis'}</button>;
+  else if (!s.user) cta = <a className="btn lg acc" href="#/bienvenida">Crea tu cuenta para probar Pro</a>;
+  else cta = <button type="button" className="btn lg" disabled>Pago disponible pronto</button>;
+  const PLANS = [
+    ['Free', !pro ? 'TU PLAN' : '', '$0', 'para siempre', ['Gusto y Oído (micrófono y archivos)', '2 pistas en el K.O. II (grupos A y C)', '5 tomas en la nube con cuenta', 'Exportar a MIDI y CSV'], <button key="f" type="button" className="btn lg" disabled>{!pro ? 'Plan actual' : 'Incluido'}</button>, false],
+    ['Pro', trial ? 'PRUEBA' : pro ? 'TU PLAN' : 'RECOMENDADO', yearly ? '$100' : '$10', yearly ? 'USD / año · 2 meses gratis' : 'USD / mes', ['Todo lo de Free', 'Modo Datos: tus CSV como estímulo', 'Tomas ilimitadas en la nube', 'Exportar tomas a WAV', 'Próximamente: 4 pistas y más circuitos'], cta, true],
+  ];
+  return (
+    <>
+      <div className="between" style={{ flexWrap: 'wrap' }}>
+        <div><h1>Plan</h1><p className="muted" style={{ margin: '4px 0 0' }}>{trial ? `Estás probando Pro: quedan ${daysLeft(s.trialEnds)} días. Al terminar vuelves a Free y conservas tus tomas.` : 'Gusto, Oído y la exportación MIDI son gratis.'}</p></div>
+        <Seg label="Facturación" items={[['m', 'Mensual'], ['a', 'Anual']]} value={yearly ? 'a' : 'm'} onChange={(v) => setYearly(v === 'a')} />
+      </div>
+      <div className="cols" style={{ gap: 16 }}>
+        {PLANS.map(([n, tag, price, per, feats, action, isPro]) => (
+          <article key={n} className="panel" style={{ flex: '1 1 300px', padding: 22, gap: 14, borderColor: isPro ? 'var(--acc)' : undefined }}>
+            <div className="between"><h2 style={{ fontSize: 18 }}>{n}</h2><span className="label" style={{ color: isPro ? 'var(--acc)' : undefined }}>{tag}</span></div>
+            <div><span style={{ fontSize: 34, fontWeight: 700, letterSpacing: '-.02em' }}>{price}</span><span className="muted"> {per}</span></div>
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>{feats.map((f) => <li key={f} className="row" style={{ alignItems: 'flex-start', color: 'var(--sub)' }}><span style={{ color: isPro ? 'var(--acc)' : 'var(--sub)' }}><Icon name="check" size={16} stroke={2.4} /></span>{f}</li>)}</ul>
+            <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column' }}>{action}</div>
+          </article>
+        ))}
+      </div>
+      {err && <p role="alert" style={{ margin: 0, color: '#FF8A4D' }}>{err}</p>}
+      <p className="dim" style={{ margin: 0, fontSize: 12 }}>Precios en dólares (USD). El pago se habilita pronto; la prueba no pide tarjeta y se activa una sola vez por cuenta.</p>
+    </>
   );
 }
