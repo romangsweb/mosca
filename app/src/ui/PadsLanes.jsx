@@ -43,7 +43,7 @@ export function Lanes({ track, selPad }) {
     const paint = () => {
       const lanes = session.live.lanes[track.id], t = session.track(track.id), fz = t.play !== 'vivo' && t.frozen;
       const len = fz ? t.len || 16 : 16;
-      lanes.forEach((row, k) => row.forEach((v, i) => { const c = cells[k * 16 + i]; c.style.background = v ? `rgba(${color[k]},${0.25 + (v / 127) * 0.6})` : ''; c.classList.toggle('on', !!(fz && i < len && fz[k][i])); c.classList.toggle('out', i >= len); }));
+      lanes.forEach((row, k) => row.forEach((v, i) => { const c = cells[k * 16 + i]; c.style.background = v ? `rgba(${color[k]},${0.25 + (v / 127) * 0.6})` : ''; c.classList.toggle('on', !!(fz && i < len && fz[k][i])); c.classList.toggle('half', !!(fz && fz[k][i] && (t.prob?.[k]?.[i] ?? 100) < 100)); c.classList.toggle('out', i >= len); }));
     };
     paint();
     const off = session.onStep(paint);

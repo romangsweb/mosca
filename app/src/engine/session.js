@@ -311,12 +311,13 @@ export class Session {
       if (!this.synth.kits[id]) this.synth.kits[id] = (await build(id)).buffers;
       this.synth.trackKit[t.id] = id; this.synth.setSends(t.id, { rev: t.rev ?? 0, dly: t.dly ?? 0 });
     }
-    this.synth.setFx(this.s.fx, this.ko.internalBpm || this.s.bpm);
+    this.synth.setFx(this.s.fx, this.ko.internalBpm || this.s.bpm); this.synth.sc = this.s.fx?.sc || 0;
     this.set({ kitActive: want, customSamples: g.custom });
   }
   setTrackKit(tid, id) { if (id && !this.can('kits')) { location.hash = '#/cuenta?plan'; return; } this.setTrack(tid, { kitId: id || null }); this.loadKit(); }
-  setFx(patch, persist = true) { const fx = { ...FX_DEFAULT, ...this.s.fx, ...patch }; this.set({ fx }, persist); this.synth.setFx(fx, this.ko.internalBpm || this.s.bpm); }
-  get wavOptions() { return { fx: this.s.fx, bpm: this.ko.internalBpm || this.s.bpm, sends: Object.fromEntries(this.s.tracks.map((t) => [t.id, { rev: t.rev ?? 0, dly: t.dly ?? 0 }])), kits: this.synth.kits, trackKit: this.synth.trackKit }; }
+  setFx(patch, persist = true) {
+    if ('sc' in patch) this.synth.sc = patch.sc; const fx = { ...FX_DEFAULT, ...this.s.fx, ...patch }; this.set({ fx }, persist); this.synth.setFx(fx, this.ko.internalBpm || this.s.bpm); }
+  get wavOptions() { return { tuneFor: (e) => { const t = this.track(e.track); return t?.tune?.[t.map[e.pad]] || 0; }, fx: this.s.fx, bpm: this.ko.internalBpm || this.s.bpm, sends: Object.fromEntries(this.s.tracks.map((t) => [t.id, { rev: t.rev ?? 0, dly: t.dly ?? 0 }])), kits: this.synth.kits, trackKit: this.synth.trackKit }; }
   // ---------- congelar: el compás que te gustó queda como patrón editable ----------
   freeze(tid = this.s.selTrack) {
     const t = this.track(tid), lanes = this.live.lanes[tid]; if (!t || !lanes) return false;
@@ -324,9 +325,16 @@ export class Session {
     if (!frozen.some((r) => r.some(Boolean))) return false;
     this.setTrack(tid, { frozen, play: t.play === 'ambos' ? 'ambos' : 'congelado' }); return true;
   }
+  // clic en un paso: apagado → siempre → a veces (50 %) → apagado
   toggleStep(tid, k, pos) {
     const t = this.track(tid), frozen = (t.frozen || Array.from({ length: 12 }, () => new Array(16).fill(0))).map((r) => [...r]);
-    frozen[k][pos] = frozen[k][pos] ? 0 : 100; this.setTrack(tid, { frozen, play: t.play === 'vivo' ? 'congelado' : t.play });
+    const prob = (t.prob || Array.from({ length: 12 }, () => new Array(16).fill(100))).map((r) => [...r]);
+    if (!frozen[k][pos]) { frozen[k][pos] = 100; prob[k][pos] = 100; } else if (prob[k][pos] >= 100) prob[k][pos] = 50; else { frozen[k][pos] = 0; prob[k][pos] = 100; }
+    this.setTrack(tid, { frozen, prob, play: t.play === 'vivo' ? 'congelado' : t.play });
+  }
+  copyPattern(from, to) {
+    const a = this.track(from); if (!a?.frozen) return;
+    this.setTrack(to, { frozen: a.frozen.map((r) => [...r]), prob: a.prob?.map((r) => [...r]) || null, len: a.len || 16, play: this.track(to).play === 'vivo' ? 'congelado' : this.track(to).play });
   }
 
   setKit(id) { if (!this.kitAllowed(id)) { location.hash = '#/cuenta?plan'; return; } this.set({ kitId: id }, true); this.loadKit(); }
@@ -380,7 +388,8 @@ export class Session {
     if (r.voice === 'tono' && !this.can('melodia')) return { note: null, ch: r.ch, voice: t.kit[t.map[k]] };
     return r;
   }
-  sound(r, vel, when, t) { if (r.voice === 'tono') this.synth.play('tono', vel, when, r.note, t.id); else this.synth.play(r.voice, vel, when, t.id === 'oido' ? 3 : 0, t.id); }
+  // afinación por pad (semitonos) sobre la del kit; la pista Oído suena 3 semitonos arriba para distinguirse
+  sound(r, vel, when, t, k = null) { if (r.voice === 'tono') this.synth.play('tono', vel, when, r.note, t.id); else this.synth.play(r.voice, vel, when, (t.id === 'oido' ? 3 : 0) + (k != null ? t.tune?.[t.map[k]] || 0 : 0), t.id); }
   setBpm(b) { const bpm = Math.max(40, Math.min(240, Math.round(b))); this.ko.internalBpm = bpm; this.set({ bpm }, true); if (this.synth.chain) this.synth.setFx(this.s.fx, bpm); }
   setClockOut(v) { this.ko.clockOut = v; this.set({ clockOut: v }, true); }
   setLatency(v) { this.ko.latency = v; this.set({ latency: v }, true); }
@@ -432,14 +441,14 @@ export class Session {
         const mode = t.play || 'vivo', fz = mode !== 'vivo' && t.frozen ? t.frozen[k][n % (t.len || 16)] : 0;
         let vel = 0;
         if (c && on && mode !== 'congelado') { const x = Math.min(1, c / 3), ghost = s.ghost && p.inhibidora ? 0.6 : 1; vel = Math.round((s.velMin + (s.velMax - s.velMin) * curve(x)) * ghost * t.level); }
-        if (fz && on) vel = Math.max(vel, Math.round(fz * t.level));
+        if (fz && on && Math.random() * 100 < (t.prob?.[k]?.[n % (t.len || 16)] ?? 100)) vel = Math.max(vel, Math.round(fz * t.level));
         if (!vel) return;
         const when = at + swingMs + (Math.random() * 2 - 1) * s.humanize;
         const r = this.route(t, k);
         lanes[k][pos] = vel;
         const port = this.portFor(t);
         if (this.toDevice(t, port) && r.note != null) this.ko.hit(r.note, vel, r.ch, r.voice === 'tono' ? stepMs * 0.9 : 60, when, port);
-        if (this.toKit(t, port)) this.sound(r, vel, when, t);
+        if (this.toKit(t, port)) this.sound(r, vel, when, t, k);
         const mt = L.meter[t.id]; if (!mt || when - mt.at > 60 || vel > mt.vel) L.meter[t.id] = { at: when, vel };
         L.lastHitAt[t.id + k] = when;
         if (this.rec) this.rec.events.push({ t: when - this.rec.t0, step: n - this.rec.n0, track: t.id, pad: k, neuron: p.tipo, note: r.note ?? 0, vel, ch: r.ch, voice: r.voice, port: port?.name });
@@ -467,7 +476,7 @@ export class Session {
     const port = this.portFor(track);
     const dev = this.toDevice(track, port) && r.note != null;
     if (dev) this.ko.hit(r.note, 110, r.ch, 180, performance.now(), port);
-    if (!dev || this.toKit(track, port)) this.sound(r, 110, performance.now(), track);
+    if (!dev || this.toKit(track, port)) this.sound(r, 110, performance.now(), track, k);
   }
   // ---------- mutar ----------
   mutateTrack(id = this.s.selTrack) {
@@ -562,7 +571,7 @@ export class Session {
         const port = (e.port && this.ko.outPort(e.port)) || this.ko.output;
         const tr = this.track(e.track) || this.track();
         if (this.toDevice(tr, port)) this.ko.hit(e.note, e.vel, e.ch, 60, at, port);
-        if (this.toKit(tr, port)) e.voice === 'tono' ? this.synth.play('tono', e.vel, at, e.note, tr.id) : this.synth.play(e.voice, e.vel, at, e.track === 'oido' ? 3 : 0, tr.id);
+        if (this.toKit(tr, port)) e.voice === 'tono' ? this.synth.play('tono', e.vel, at, e.note, tr.id) : this.synth.play(e.voice, e.vel, at, (e.track === 'oido' ? 3 : 0) + (tr.tune?.[tr.map[e.pad]] || 0), tr.id);
       }, Math.max(0, e.t - 40)));
     }
     timers.push(setTimeout(() => { this.takeTimers = null; onEnd?.(); }, take.durMs + 100));

@@ -94,14 +94,15 @@ export default function Sonido() {
           <p className="muted" style={{ margin: 0, lineHeight: 1.55 }}>Dile a Fly Punch qué sonido tiene cada pad de tu kit en el K.O. II. Lo usa para las voces internas y para <strong style={{ color: 'var(--text)' }}>Mutar</strong>: las motoneuronas van a graves, las interneuronas a medios y los sensores e inhibidoras a agudos, así el azar cambia la mezcla sin romperla.</p>
           <div style={{ overflowX: 'auto' }}>
             <table className="table">
-              <thead><tr><th>Pad</th><th>Nota</th><th>Sonido en tu kit</th><th>Registro</th><th>Neurona que lo toca hoy</th><th>Probar</th></tr></thead>
+              <thead><tr><th>Pad</th><th>Nota</th><th>Sonido en tu kit</th><th>Registro</th><th title="Solo para el sonido de la compu">Afinación</th><th>Neurona que lo toca hoy</th><th>Probar</th></tr></thead>
               <tbody>{PAD_KEYS.map((key, off) => {
                 const k = track.map.indexOf(off), p = session.pads(track)[k];
                 return (
                   <tr key={key}>
                     <td className="mono" style={{ fontWeight: 600 }}>{key}</td><td className="mono muted">{k >= 0 ? session.route(track, k).note ?? '—' : '—'}</td>
                     <td><select className="input" aria-label={`Sonido del pad ${key}`} value={track.kit[off]} onChange={(e) => { const kit = [...track.kit]; kit[off] = e.target.value; session.setTrack(track.id, { kit }); }}>{VOICES.map((v) => <option key={v}>{v}</option>)}</select></td>
-                    <td className="muted">{VOICE_CAT[track.kit[off]]}</td><td className="mono">{p?.tipo}</td>
+                    <td className="muted">{VOICE_CAT[track.kit[off]]}</td>
+                    <td><input type="number" min="-12" max="12" className="input mono" style={{ width: 66, height: 30 }} aria-label={`Afinación del pad ${key} en semitonos`} value={track.tune?.[off] || 0} onChange={(e) => { const tune = [...(track.tune || new Array(12).fill(0))]; tune[off] = Math.max(-12, Math.min(12, +e.target.value || 0)); session.setTrack(track.id, { tune }); }} /></td><td className="mono">{p?.tipo}</td>
                     <td><button type="button" className="iconbtn" aria-label={`Probar pad ${key}`} onClick={() => session.tapPad(k, track)}><Icon name="play" size={12} fill="currentColor" /></button></td>
                   </tr>
                 );

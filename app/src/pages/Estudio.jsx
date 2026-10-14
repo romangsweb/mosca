@@ -154,6 +154,7 @@ export default function Estudio() {
                   {[16, 15, 14, 12, 10, 9, 8, 7, 6, 5, 3].map((n) => <option key={n} value={n}>{n} pasos</option>)}
                 </select>
               )}
+              {track.frozen && track.play !== 'vivo' && s.tracks.filter((x) => x.id !== track.id).map((x) => <button key={x.id} type="button" className="btn" title={`Copiar este patrón a la pista ${x.name}`} onClick={() => session.copyPattern(track.id, x.id)}>Copiar → {x.name}</button>)}
               <button type="button" className="btn" onClick={() => { if (!session.freeze(track.id)) session.set({ notice: 'congelar' }); }} title="Guarda el último compás de la mosca como patrón editable"><Icon name="nieve" size={14} />Congelar</button>
               <button type="button" className="btn" onClick={() => session.mutateTrack()} title="Reparte las neuronas entre los pads respetando graves, medios y agudos"><Icon name="dado" size={14} />Mutar</button>
               <button type="button" className="iconbtn" disabled={!canUndo} aria-label="Deshacer mutación" onClick={() => session.undoMutate()}><Icon name="deshacer" size={14} /></button>

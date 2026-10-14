@@ -102,6 +102,11 @@ export class Synth {
     const dest = track ? this.chain.bus(track, this.sends[track]) : this.out, kit = (track && this.kits[this.trackKit[track]]) || this.kit;
     if (name !== 'tono' && kit?.[name]) playBuffer(ctx, dest, kit[name], vel, t, pitch);
     else voice(ctx, dest, name, vel, t, pitch);
+    // sidechain: el bombo «empuja» a las demás pistas (baja su volumen un instante y vuelve)
+    if (name === 'bombo' && this.sc > 0) for (const [id, b] of Object.entries(this.chain.buses)) {
+      if (id === track) continue; const gn = b.in.gain, depth = 1 - this.sc * 0.85 * Math.min(1, vel / 110);
+      gn.cancelScheduledValues(t); gn.setValueAtTime(gn.value, t); gn.linearRampToValueAtTime(depth, t + 0.005); gn.linearRampToValueAtTime(1, t + 0.06 + this.sc * 0.18);
+    }
   }
 }
 
@@ -115,10 +120,13 @@ export function playBuffer(ctx, dest, buffer, vel, t, pitch = 0) {
 export async function renderWav(take, kitFor, kit = null, opt = {}) {
   const sr = 44100, dur = take.durMs / 1000 + 2.5;
   const ctx = new OfflineAudioContext(2, Math.ceil(sr * dur), sr), chain = buildChain(ctx, ctx.destination, opt.fx, opt.bpm);
+  for (const id of new Set(take.events.map((e) => e.track))) chain.bus(id || 'x', opt.sends?.[id]);
   for (const e of take.events) {
-    const n = kitFor(e), t = e.t / 1000 + 0.05, p = n === 'tono' ? e.note : e.track === 'oido' ? 3 : 0;
+    const n = kitFor(e), t = e.t / 1000 + 0.05, p = n === 'tono' ? e.note : (e.track === 'oido' ? 3 : 0) + (opt.tuneFor?.(e) || 0);
     const dest = chain.bus(e.track || 'x', opt.sends?.[e.track]), k = (opt.kits && opt.trackKit && opt.kits[opt.trackKit[e.track]]) || kit;
     if (n !== 'tono' && k?.[n]) playBuffer(ctx, dest, k[n], e.vel, t, p); else voice(ctx, dest, n, e.vel, t, p);
+    const sc = opt.fx?.sc || 0;
+    if (n === 'bombo' && sc > 0) for (const [id, b] of Object.entries(chain.buses)) { if (id === e.track) continue; const gn = b.in.gain; gn.setValueAtTime(1, t); gn.linearRampToValueAtTime(1 - sc * 0.85 * Math.min(1, e.vel / 110), t + 0.005); gn.linearRampToValueAtTime(1, t + 0.06 + sc * 0.18); }
   }
   return wavBlob(await ctx.startRendering());
 }

@@ -123,8 +123,9 @@ function KitStrip() {
         <div className="row" style={{ gap: 8, fontSize: 12 }}><span className="muted" style={{ width: 62 }}>Delay</span>
           <Seg label="Tiempo del delay" items={[['0.5', '1/8'], ['0.75', '1/8·'], ['1', '1/4']]} value={String(fx.dlyBeats ?? 0.75)} onChange={(v) => session.setFx({ dlyBeats: +v })} /></div>
         <Slider label="Repetir" value={(fx.dlyFb ?? 0.38) / 0.85} onChange={(v) => session.setFx({ dlyFb: v * 0.85 })} />
+        <Slider label="Sidechain" value={fx.sc || 0} onChange={(v) => session.setFx({ sc: v })} />
         <label className="row" style={{ gap: 10, fontSize: 12 }}><input type="checkbox" checked={fx.comp !== false} onChange={(e) => session.setFx({ comp: e.target.checked })} style={{ width: 16, height: 16, accentColor: 'var(--acc)' }} />Compresor maestro</label>
-        <p className="dim" style={{ margin: 0, fontSize: 11, lineHeight: 1.45 }}>Reverb y delay se mandan desde cada pista. El delay va a tempo. Los efectos también salen en el WAV.</p>
+        <p className="dim" style={{ margin: 0, fontSize: 11, lineHeight: 1.45 }}>Reverb y delay se mandan desde cada pista; el delay va a tempo. Sidechain: cada bombo baja un instante las demás pistas. Los efectos salen también en el WAV.</p>
       </>} />
   );
 }
