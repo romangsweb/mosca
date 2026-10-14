@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fly Punch · circuito del azúcar</title>
+<style>
+:root{--bg:#0C0D0F;--s1:#16181B;--s2:#1E2125;--line:rgba(255,255,255,.08);--fg:#F3F3F0;--mut:#9AA0A9;--acc:#FF5B1F;--ok:#34C77B;--inh:#6F8BFF;--warn:#F5B800}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,sans-serif}
+main{max-width:1180px;margin:0 auto;padding:24px 16px 64px;display:flex;flex-direction:column;gap:16px}
+.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.04em}
+h1{margin:0;font-size:clamp(32px,5vw,56px);line-height:.95;letter-spacing:-.04em}
+.card{background:var(--s1);border:1px solid var(--line);border-radius:20px;padding:18px}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+button{min-height:44px;padding:0 16px;border:0;border-radius:10px;background:var(--s2);color:var(--fg);font:600 14px system-ui;cursor:pointer}
+button.pri{background:var(--acc);color:#0C0D0F}
+.dot{width:10px;height:10px;border-radius:50%;background:#444;display:inline-block}.dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.layout{display:flex;flex-wrap:wrap;gap:16px}.layout>*{min-width:0}
+.pads{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.pad{position:relative;aspect-ratio:1;min-height:96px;border-radius:16px;background:var(--s2);border:1px solid var(--line);display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;padding:10px;text-align:left;transition:background .06s}
+.pad .k{font:700 20px ui-monospace,Menlo,monospace}.pad .r{font-size:11px;color:var(--mut);line-height:1.25}.pad .hz{font:12px ui-monospace,Menlo,monospace}
+.pad.inh{border-color:rgba(111,139,255,.45)}.pad.hit{background:var(--acc);color:#0C0D0F}.pad.hit .r{color:#0C0D0F}
+.pad.inh.hit{background:var(--inh)}.pad.off{opacity:.35;background:repeating-linear-gradient(-45deg,#1E2125 0 6px,#16181B 6px 12px)}
+.ctl{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.ctl label{display:flex;justify-content:space-between;color:var(--mut);font-size:13px}.ctl input[type=range]{width:100%;accent-color:var(--acc);min-height:32px}
+select,input[type=number]{background:var(--s2);color:var(--fg);border:1px solid var(--line);border-radius:10px;min-height:44px;padding:0 10px;font:inherit}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.stat{background:var(--s2);border-radius:12px;padding:12px}.stat b{display:block;font-size:22px;margin-top:2px}
+.meter{height:12px;border-radius:4px;background:var(--s2);overflow:hidden}.meter>div{height:100%;width:0;background:repeating-linear-gradient(90deg,var(--ok) 0 7px,transparent 7px 10px);transition:width .15s}
+canvas{width:100%;height:auto;border-radius:12px;background:#000;display:block;image-rendering:pixelated}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--mut);font-size:12px}.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+a{color:var(--fg)}
+</style>
+</head>
+<body>
+<main>
+  <header class="row" style="justify-content:space-between;align-items:flex-end">
+    <div>
+      <p class="mono" style="color:var(--mut);margin:0 0 8px">FLY PUNCH · PESO MOSCA PARA K.O. II</p>
+      <h1>El circuito del azúcar.</h1>
+      <p style="color:var(--mut);margin:10px 0 0;max-width:680px">356 neuronas reales del cerebro de la mosca, con sus 15,584 sinapsis, deciden qué pad suena. Los pads de abajo sienten el azúcar; la señal sube hasta MN9, la neurona que mueve la probóscide para comer.</p>
+    </div>
+    <div class="row">
+      <button class="pri" id="connect">Conectar K.O. II</button>
+      <button id="play">▶ Iniciar</button>
+    </div>
+  </header>
+
+  <section class="card row" style="justify-content:space-between">
+    <span><span class="dot" id="dot"></span> <span class="mono" id="status">sin conectar · funciona en modo visual</span></span>
+    <label class="row mono" style="gap:8px"><input type="checkbox" id="send" checked> mandar notas al K.O. II</label>
+  </section>
+
+  <div class="layout">
+    <section class="card" style="flex:1 1 360px">
+      <p class="mono" style="color:var(--mut);margin:0 0 12px">PADS · GRUPO C · CLIC PARA SILENCIAR UNA NEURONA</p>
+      <div class="pads" id="pads"></div>
+      <div class="legend" style="margin-top:12px"><span><i style="background:var(--acc)"></i>excitatoria</span><span><i style="background:var(--inh)"></i>inhibidora</span><span><i style="background:#444"></i>silenciada</span></div>
+    </section>
+
+    <section class="card" style="flex:999 1 560px;display:flex;flex-direction:column;gap:16px">
+      <div class="stats">
+        <div class="stat"><span class="mono" style="color:var(--mut)">Reloj</span><b id="clk">—</b></div>
+        <div class="stat"><span class="mono" style="color:var(--mut)">BPM</span><b id="bpm">—</b></div>
+        <div class="stat"><span class="mono" style="color:var(--mut)">Neuronas activas</span><b id="nact">0</b></div>
+        <div class="stat"><span class="mono" style="color:var(--mut)">MN9 · comer</span><b id="mn9">0 Hz</b></div>
+      </div>
+      <div>
+        <p class="mono" style="color:var(--mut);margin:0 0 6px">DECISIÓN DE COMER (MN9, REFERENCIA DEL PAPER: 71 HZ)</p>
+        <div class="meter"><div id="meter"></div></div>
+      </div>
+      <div>
+        <p class="mono" style="color:var(--mut);margin:0 0 6px">ACTIVIDAD DE LAS 356 NEURONAS · CADA COLUMNA ES UNA SEMICORCHEA</p>
+        <canvas id="raster" width="240" height="356"></canvas>
+        <div class="legend" style="margin-top:8px" id="capas"></div>
+      </div>
+      <div class="ctl">
+        <div><label for="sugar"><span>Azúcar (estímulo)</span><span class="mono" id="sugarV">150 Hz</span></label><input id="sugar" type="range" min="0" max="200" value="150"></div>
+        <div><label for="scale"><span>Tiempo neuronal por semicorchea</span><span class="mono" id="scaleV">4 ms</span></label><input id="scale" type="range" min="1" max="20" value="4"></div>
+        <div><label for="ibpm"><span>BPM interno (sin reloj del K.O. II)</span><span class="mono" id="ibpmV">110</span></label><input id="ibpm" type="range" min="60" max="180" value="110"></div>
+        <div class="row" style="gap:10px">
+          <div><label for="ch">Canal</label><select id="ch"></select></div>
+          <div><label for="base">Nota base</label><input id="base" type="number" min="0" max="116" value="60" style="width:96px"></div>
+          <button id="reset" style="align-self:flex-end">Restablecer</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="mono" style="color:var(--mut);line-height:1.8">
+    Datos: FlyWire v630 · modelo LIF de Shiu et al., Nature 2024 · <a href="https://github.com/philshiu/Drosophila_brain_model">github.com/philshiu/Drosophila_brain_model</a> (MIT). El subcircuito reproduce las tasas del cerebro completo (MN9 = 71 Hz a 150 Hz de azúcar). Es un modelo simplificado, no una mosca viva.
+  </footer>
+</main>
+
+<script type="module">
+import { KO2 } from './midi.js';
+const $ = (s) => document.querySelector(s);
+const D = await (await fetch('./circuito-azucar.json')).json();
+const P = D.params, N = D.n;
+
+// --- circuito: misma dinámica que model.py (Brian 2), paso de 0.1 ms ---
+const off = new Int32Array(N + 1); for (const p of D.syn.pre) off[p + 1]++; for (let i = 0; i < N; i++) off[i + 1] += off[i];
+const tgt = new Int32Array(D.syn.pre.length), wt = new Float32Array(D.syn.pre.length), fill = off.slice(0, N);
+D.syn.pre.forEach((p, k) => { const j = fill[p]++; tgt[j] = D.syn.post[k]; wt[j] = D.syn.w[k]; });
+const isSugar = new Uint8Array(N); D.sugar.forEach((i) => isSugar[i] = 1);
+const v = new Float32Array(N), g = new Float32Array(N), ref = new Float32Array(N), buf = new Float32Array(P.delay_steps * N);
+const counts = new Uint16Array(N); let t = 0; const silenced = new Set();
+function reset() { v.fill(P.v0); g.fill(0); ref.fill(0); buf.fill(0); t = 0; }
+function advance(ms, sugarHz) {
+  counts.fill(0); const steps = Math.max(1, Math.round(ms / P.dt)), p = sugarHz * P.dt / 1000, dly = P.delay_steps;
+  for (let s = 0; s < steps; s++, t++) {
+    const slot = (t % dly) * N;
+    for (let i = 0; i < N; i++) { g[i] += buf[slot + i]; buf[slot + i] = 0; }
+    for (const i of D.sugar) if (Math.random() < p) g[i] += P.w_poi;
+    for (let i = 0; i < N; i++) {
+      if (ref[i] <= 0) { v[i] += (P.v0 - v[i] + g[i]) / P.tm * P.dt; g[i] -= g[i] / P.tau * P.dt; }
+      ref[i] -= P.dt;
+    }
+    for (let i = 0; i < N; i++) {
+      if (v[i] > P.vth) {
+        counts[i]++; v[i] = P.v0; g[i] = 0; ref[i] = isSugar[i] ? 0 : P.trf;
+        if (!silenced.has(i)) for (let k = off[i]; k < off[i + 1]; k++) buf[slot + tgt[k]] += wt[k];
+      }
+    }
+  }
+  return counts;
+}
+reset();
+
+// --- pads (orden físico del K.O. II: 7 8 9 / 4 5 6 / 1 2 3 / . 0 enter) ---
+const LAYOUT = [9, 10, 11, 6, 7, 8, 3, 4, 5, 0, 1, 2];
+const padEls = [], rate = new Float32Array(12);
+const short = (r) => r.replace('interneurona', 'inter').replace('inhibidora', 'inhib.').replace(' · motora de la probóscide', ' · comer');
+for (const k of LAYOUT) {
+  const pd = D.pads[k], b = document.createElement('button');
+  b.className = 'pad' + (pd.inhibidora ? ' inh' : ''); b.type = 'button';
+  b.setAttribute('aria-pressed', 'false'); b.title = `FlyWire ${pd.flywire_id} · ref. ${pd.hz_ref} Hz`;
+  b.innerHTML = `<span class="k">${pd.pad}</span><span class="r">${short(pd.rol)}</span><span class="hz">0 Hz</span>`;
+  b.onclick = () => { const on = !silenced.has(pd.idx); on ? silenced.add(pd.idx) : silenced.delete(pd.idx); b.classList.toggle('off', on); b.setAttribute('aria-pressed', String(on)); };
+  $('#pads').appendChild(b); padEls[k] = b;
+}
+
+// --- raster: neuronas ordenadas por capa ---
+const CAPA_COL = ['#FF5B1F', '#F5B800', '#34C77B', '#6F8BFF'];
+const order = [...Array(N).keys()].sort((a, b) => D.capa[a] - D.capa[b] || a - b);
+const rowOf = new Int32Array(N); order.forEach((i, r) => rowOf[i] = r);
+const cv = $('#raster'), cx = cv.getContext('2d'); cx.fillStyle = '#000'; cx.fillRect(0, 0, cv.width, cv.height);
+const nCapa = [0, 1, 2, 3].map((c) => D.capa.filter((x) => x === c).length);
+$('#capas').innerHTML = ['sensores de azúcar', 'capa 1', 'capa 2', 'capa 3'].map((l, c) => `<span><i style="background:${CAPA_COL[c]}"></i>${l} · ${nCapa[c]}</span>`).join('');
+function drawColumn(cnt) {
+  cx.drawImage(cv, -1, 0); const x = cv.width - 1; cx.fillStyle = '#000'; cx.fillRect(x, 0, 1, cv.height);
+  for (let i = 0; i < N; i++) if (cnt[i]) { cx.fillStyle = CAPA_COL[Math.max(0, D.capa[i])]; cx.fillRect(x, rowOf[i], 1, 1); }
+}
+
+// --- reloj y MIDI ---
+let mn9ema = 0; const MN9 = D.pads[11].idx;
+function step() {
+  const ms = Number($('#scale').value), cnt = advance(ms, Number($('#sugar').value));
+  const send = $('#send').checked, ch = Number($('#ch').value), base = Number($('#base').value);
+  let nact = 0; for (let i = 0; i < N; i++) if (cnt[i]) nact++;
+  D.pads.forEach((pd, k) => {
+    const c = cnt[pd.idx]; rate[k] = rate[k] * 0.9 + 0.1 * (c / (ms / 1000));
+    if (c > 0) {
+      if (send) ko.hit(base + k, Math.min(127, 70 + 15 * (c - 1)), ch, 60);
+      const el = padEls[k]; el.classList.add('hit'); setTimeout(() => el.classList.remove('hit'), 70);
+    }
+  });
+  mn9ema = mn9ema * 0.9 + 0.1 * (cnt[MN9] / (ms / 1000));
+  drawColumn(cnt); $('#nact').textContent = nact;
+}
+const ko = new KO2({
+  onStep: step,
+  onStart: () => { if (!ko.running) togglePlay(); },
+  onStop: () => { if (ko.running) togglePlay(); },
+  onState: (s) => { $('#dot').classList.toggle('on', !!(s.input || s.output)); $('#status').textContent = s.output ? `conectado · ${s.output}` : 'K.O. II no encontrado · conéctalo directo a la Mac'; },
+});
+function togglePlay() { ko.running ? ko.stop() : ko.start(); $('#play').textContent = ko.running ? '■ Detener' : '▶ Iniciar'; }
+$('#play').onclick = togglePlay;
+$('#connect').onclick = async () => { try { await ko.connect(); } catch (e) { $('#status').textContent = e.message; } };
+$('#reset').onclick = () => { reset(); silenced.clear(); padEls.forEach((b) => { b.classList.remove('off'); b.setAttribute('aria-pressed', 'false'); }); };
+for (let c = 1; c <= 16; c++) $('#ch').add(new Option(c, c));
+for (const [id, out, unit] of [['sugar', 'sugarV', ' Hz'], ['scale', 'scaleV', ' ms'], ['ibpm', 'ibpmV', '']]) {
+  const upd = () => { $('#' + out).textContent = $('#' + id).value + unit; if (id === 'ibpm') ko.internalBpm = Number($('#ibpm').value); };
+  $('#' + id).oninput = upd; upd();
+}
+setInterval(() => {
+  $('#clk').textContent = ko.hasExternalClock ? 'K.O. II' : 'interno';
+  $('#bpm').textContent = ko.bpm.toFixed(0);
+  $('#mn9').textContent = mn9ema.toFixed(0) + ' Hz';
+  $('#meter').style.width = Math.min(100, mn9ema / 71 * 100) + '%';
+  D.pads.forEach((pd, k) => padEls[k].querySelector('.hz').textContent = rate[k].toFixed(0) + ' Hz');
+}, 200);
+</script>
+</body>
+</html>

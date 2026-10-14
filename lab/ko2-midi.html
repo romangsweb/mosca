@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mosca · Prueba MIDI K.O. II</title>
+<style>
+:root{--bg:#0C0D0F;--s1:#16181B;--s2:#1E2125;--line:rgba(255,255,255,.08);--fg:#F3F3F0;--mut:#9AA0A9;--acc:#FF5B1F;--ok:#34C77B;--warn:#F5B800}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,sans-serif}
+main{max-width:1100px;margin:0 auto;padding:24px 16px 60px;display:flex;flex-direction:column;gap:16px}
+h1{margin:0;font-size:28px;letter-spacing:-.02em}.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.04em}
+.card{background:var(--s1);border:1px solid var(--line);border-radius:18px;padding:18px}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.grow{flex:1 1 300px;min-width:0}
+label{color:var(--mut);font-size:13px}select,input{background:var(--s2);color:var(--fg);border:1px solid var(--line);border-radius:10px;min-height:44px;padding:0 12px;font:inherit}
+button{min-height:44px;padding:0 16px;border:0;border-radius:10px;background:var(--s2);color:var(--fg);font:600 14px system-ui;cursor:pointer}
+button.pri{background:var(--acc);color:#0C0D0F}button:disabled{opacity:.4;cursor:not-allowed}
+.dot{width:10px;height:10px;border-radius:50%;background:#444;display:inline-block}.dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{background:var(--s2);border-radius:12px;padding:12px}.stat b{display:block;font-size:24px;margin-top:4px}
+.pads{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;max-width:360px}
+.pad{aspect-ratio:1;border-radius:12px;background:var(--s2);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.pad.hit{background:var(--acc);color:#0C0D0F}
+#log{height:240px;overflow:auto;background:#000;border-radius:12px;padding:10px;white-space:pre}
+table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:8px;border-bottom:1px solid var(--line)}th{color:var(--mut);font-weight:500}
+.warn{color:var(--warn)}
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <p class="mono" style="color:var(--mut);margin:0 0 6px">MOSCA · LAB · K.O. II</p>
+    <h1>Prueba MIDI del K.O. II</h1>
+    <p style="color:var(--mut);margin:6px 0 0">Ábrelo en <b>Chrome</b> (Safari no soporta Web MIDI). Nada sale de tu Mac.</p>
+  </div>
+
+  <section class="card">
+    <div class="row">
+      <button class="pri" id="connect">Conectar MIDI</button>
+      <span><span class="dot" id="dot"></span> <span id="status" class="mono">sin conectar</span></span>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div class="grow"><label for="in">Entrada (lo que manda el K.O. II)</label><br><select id="in" style="width:100%"></select></div>
+      <div class="grow"><label for="out">Salida (hacia el K.O. II)</label><br><select id="out" style="width:100%"></select></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 style="margin:0 0 12px;font-size:18px">1 · Escuchar: presiona pads y dale play al K.O. II</h2>
+    <div class="stats">
+      <div class="stat"><span class="mono" style="color:var(--mut)">Tempo (reloj)</span><b id="bpm">—</b></div>
+      <div class="stat"><span class="mono" style="color:var(--mut)">Transporte</span><b id="transport">—</b></div>
+      <div class="stat"><span class="mono" style="color:var(--mut)">Última nota</span><b id="last">—</b></div>
+      <div class="stat"><span class="mono" style="color:var(--mut)">Mensajes</span><b id="count">0</b></div>
+    </div>
+    <h3 style="font-size:15px;margin:18px 0 8px">Mapa detectado (se llena al presionar pads)</h3>
+    <table><thead><tr><th>Canal</th><th>Nota</th><th>Nombre</th><th>Veces</th><th>Etiqueta (tú)</th></tr></thead><tbody id="map"></tbody></table>
+    <div class="row" style="margin-top:10px"><button id="export">Exportar mapa (JSON)</button><button id="clear">Limpiar</button></div>
+  </section>
+
+  <section class="card">
+    <h2 style="margin:0 0 12px;font-size:18px">2 · Enviar: ¿qué pad suena con cada nota?</h2>
+    <div class="row">
+      <div><label for="ch">Canal</label><br><select id="ch"></select></div>
+      <div><label for="base">Nota base</label><br><input id="base" type="number" min="0" max="115" value="36" style="width:110px"></div>
+      <div><label for="vel">Velocidad</label><br><input id="vel" type="number" min="1" max="127" value="100" style="width:110px"></div>
+      <button class="pri" id="sweep">Barrido de 12 notas</button>
+    </div>
+    <p style="color:var(--mut);margin:12px 0">Toca un pad aquí o lanza el barrido (una nota cada 0.4 s) y anota qué pad del K.O. II suena.</p>
+    <div class="pads" id="pads"></div>
+  </section>
+
+  <section class="card">
+    <h2 style="margin:0 0 12px;font-size:18px">3 · Sincronía: un golpe por tiempo, al reloj del K.O. II</h2>
+    <div class="row">
+      <div><label for="syncNote">Nota</label><br><input id="syncNote" type="number" min="0" max="127" value="36" style="width:110px"></div>
+      <div><label for="div">Cada</label><br><select id="div"><option value="24">negra</option><option value="12">corchea</option><option value="6" selected>semicorchea</option></select></div>
+      <button id="sync">Activar</button>
+      <span class="mono" id="syncState" style="color:var(--mut)">apagado · dale play en el K.O. II</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 style="margin:0 0 12px;font-size:18px">Registro</h2>
+    <div id="log" class="mono"></div>
+  </section>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const noteName = (n) => NAMES[n % 12] + (Math.floor(n / 12) - 2);
+let access = null, input = null, output = null, count = 0;
+let clocks = [], ticks = 0, syncOn = false;
+const seen = new Map();
+
+function log(t) { const el = $('#log'); el.textContent = `${new Date().toLocaleTimeString()}  ${t}\n` + el.textContent.slice(0, 20000); }
+function fill(sel, ports, match) {
+  sel.innerHTML = ''; let pick = null;
+  for (const p of ports.values()) { const o = new Option(p.name, p.id); sel.add(o); if (!pick && match.test(p.name)) pick = p.id; }
+  if (!sel.options.length) sel.add(new Option('— ningún dispositivo —', ''));
+  if (pick) sel.value = pick;
+}
+function bind() {
+  if (input) input.onmidimessage = null;
+  input = access.inputs.get($('#in').value) || null;
+  output = access.outputs.get($('#out').value) || null;
+  if (input) input.onmidimessage = onMsg;
+  $('#dot').classList.toggle('on', !!(input || output));
+  $('#status').textContent = `in: ${input ? input.name : '—'} · out: ${output ? output.name : '—'}`;
+}
+function refresh() {
+  const re = /EP-?133|K\.?O|teenage/i;
+  fill($('#in'), access.inputs, re); fill($('#out'), access.outputs, re); bind();
+}
+$('#connect').onclick = async () => {
+  if (!navigator.requestMIDIAccess) { $('#status').innerHTML = '<span class="warn">Este navegador no soporta Web MIDI. Usa Chrome.</span>'; return; }
+  try {
+    access = await navigator.requestMIDIAccess({ sysex: false });
+    access.onstatechange = (e) => { log(`dispositivo ${e.port.state}: ${e.port.name}`); refresh(); };
+    refresh(); log('MIDI listo. Dispositivos: ' + [...access.inputs.values()].map(p => p.name).join(', '));
+  } catch (e) { $('#status').innerHTML = `<span class="warn">Permiso denegado: ${e.message}</span>`; }
+};
+$('#in').onchange = bind; $('#out').onchange = bind;
+
+function onMsg(e) {
+  const [st, d1, d2] = e.data; const type = st & 0xF0, ch = (st & 0x0F) + 1;
+  $('#count').textContent = ++count;
+  if (st === 0xF8) { onClock(e.timeStamp); return; }
+  if (st === 0xFA) { $('#transport').textContent = '▶ start'; ticks = 0; log('START'); return; }
+  if (st === 0xFB) { $('#transport').textContent = '▶ continue'; log('CONTINUE'); return; }
+  if (st === 0xFC) { $('#transport').textContent = '■ stop'; log('STOP'); return; }
+  if (type === 0x90 && d2 > 0) {
+    $('#last').textContent = `${noteName(d1)} · ch ${ch}`;
+    const k = `${ch}:${d1}`; const r = seen.get(k) || { ch, note: d1, n: 0, label: '' }; r.n++; seen.set(k, r); renderMap();
+    log(`NOTE ON  ch${ch} nota ${d1} (${noteName(d1)}) vel ${d2}`); return;
+  }
+  if (type === 0x80 || (type === 0x90 && d2 === 0)) { log(`note off ch${ch} nota ${d1}`); return; }
+  if (type === 0xB0) { log(`CC       ch${ch} cc ${d1} = ${d2}`); return; }
+  if (type === 0xC0) { log(`PROGRAM  ch${ch} ${d1}`); return; }
+  log('otro: ' + [...e.data].map(b => b.toString(16).padStart(2, '0')).join(' '));
+}
+function onClock(t) {
+  clocks.push(t); if (clocks.length > 49) clocks.shift();
+  if (clocks.length > 24) { const span = (clocks[clocks.length - 1] - clocks[0]) / (clocks.length - 1); $('#bpm').textContent = (60000 / (span * 24)).toFixed(1); }
+  if (syncOn && output && ticks % Number($('#div').value) === 0) hit(Number($('#syncNote').value), 110, 0, 60);
+  ticks++;
+}
+function renderMap() {
+  const rows = [...seen.values()].sort((a, b) => a.ch - b.ch || a.note - b.note);
+  $('#map').innerHTML = rows.map(r => `<tr><td>${r.ch}</td><td>${r.note}</td><td>${noteName(r.note)}</td><td>${r.n}</td><td><input data-k="${r.ch}:${r.note}" value="${r.label}" placeholder="ej. A1 bombo" style="min-height:36px"></td></tr>`).join('');
+  $('#map').querySelectorAll('input').forEach(i => i.oninput = () => { seen.get(i.dataset.k).label = i.value; });
+}
+$('#clear').onclick = () => { seen.clear(); renderMap(); $('#log').textContent = ''; count = 0; $('#count').textContent = 0; };
+$('#export').onclick = () => {
+  const blob = new Blob([JSON.stringify({ dispositivo: input?.name, creado: new Date().toISOString(), pads: [...seen.values()] }, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'ko2-mapa.json'; a.click();
+};
+
+function hit(note, vel, chOverride, len = 120) {
+  if (!output) { log('sin salida MIDI seleccionada'); return; }
+  const ch = (chOverride ?? Number($('#ch').value)) - 1 & 0x0F;
+  output.send([0x90 | ch, note, vel]); output.send([0x80 | ch, note, 0], performance.now() + len);
+}
+for (let c = 1; c <= 16; c++) $('#ch').add(new Option(c, c));
+function drawPads() {
+  const base = Number($('#base').value); const g = $('#pads'); g.innerHTML = '';
+  for (let i = 0; i < 12; i++) {
+    const n = base + i, b = document.createElement('button'); b.className = 'pad'; b.type = 'button';
+    b.innerHTML = `<span style="font-size:18px">${n}</span><span class="mono">${noteName(n)}</span>`;
+    b.onclick = () => { hit(n, Number($('#vel').value)); flash(b); log(`→ enviado ch${$('#ch').value} nota ${n} (${noteName(n)})`); };
+    g.appendChild(b);
+  }
+}
+function flash(b) { b.classList.add('hit'); setTimeout(() => b.classList.remove('hit'), 150); }
+$('#base').oninput = drawPads; drawPads();
+$('#sweep').onclick = async () => {
+  const pads = [...document.querySelectorAll('.pad')]; $('#sweep').disabled = true;
+  for (const p of pads) { p.click(); await new Promise(r => setTimeout(r, 400)); }
+  $('#sweep').disabled = false;
+};
+$('#sync').onclick = () => {
+  syncOn = !syncOn; $('#sync').textContent = syncOn ? 'Desactivar' : 'Activar';
+  $('#syncState').textContent = syncOn ? 'activo · sigue el reloj del K.O. II' : 'apagado';
+};
+</script>
+</body>
+</html>
