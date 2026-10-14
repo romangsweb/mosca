@@ -40,15 +40,16 @@ export default function Cuenta() {
           <section className="panel" style={{ gap: 18, padding: 22 }}>
             <h1>Perfil</h1>
             <div className="row" style={{ flexWrap: 'wrap', gap: 16 }}>
-              <span style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--well)', border: '1px solid var(--line2)', display: 'grid', placeItems: 'center', fontWeight: 600, fontSize: 20 }}>{(s.alias || 'FP').slice(0, 2).toUpperCase()}</span>
-              <div><div style={{ fontWeight: 600, fontSize: 15 }}>{s.alias || 'Invitado'}</div><div className="muted">Sin cuenta · todo se guarda en este navegador</div></div>
-              <button type="button" className="btn lg" style={{ marginLeft: 'auto' }} disabled title="Llega con las cuentas">Crear cuenta · pronto</button>
+              <span style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--well)', border: '1px solid var(--line2)', display: 'grid', placeItems: 'center', fontWeight: 600, fontSize: 20 }}>{(s.alias || s.user?.email || 'FP').slice(0, 2).toUpperCase()}</span>
+              <div><div style={{ fontWeight: 600, fontSize: 15 }}>{s.alias || (s.user ? s.user.email : 'Invitado')}</div><div className="muted">{s.user ? `${s.user.email} · plan ${s.plan === 'pro' ? 'Pro' : 'Free'} · ${s.sync === 'sincronizado' ? 'sincronizado' : s.sync === 'error' ? 'sin conexión' : 'sincronizando…'}` : 'Sin cuenta · todo se guarda en este navegador'}</div></div>
+              {s.user ? <button type="button" className="btn lg" style={{ marginLeft: 'auto' }} onClick={() => session.logout()}>Cerrar sesión</button>
+                : <a className="btn lg primary" style={{ marginLeft: 'auto' }} href="#/bienvenida" aria-disabled={s.sync === 'off'}>{s.sync === 'off' ? 'Cuentas no configuradas' : 'Iniciar sesión o crear cuenta'}</a>}
             </div>
             <div className="field"><label htmlFor="alias">Nombre artístico</label><input id="alias" className="input" value={s.alias} placeholder="Peso Mosca" onChange={(e) => session.set({ alias: e.target.value }, true)} /></div>
             <div className="row"><div className="stat"><div className="label">Tomas</div><div className="v">{s.takes.length} / 5</div></div><div className="stat"><div className="label">Notas grabadas</div><div className="v">{s.takes.reduce((a, t) => a + t.events.length, 0)}</div></div><div className="stat"><div className="label">Pistas</div><div className="v">{s.tracks.length}</div></div></div>
             <div className="row" style={{ borderTop: '1px solid var(--line)', paddingTop: 14, flexWrap: 'wrap' }}>
               <button type="button" className="btn" onClick={exportAll}><Icon name="bajar" size={14} />Exportar respaldo (.json)</button>
-              <button type="button" className="btn ghost" onClick={() => { session.set({ onboarded: false }, true); location.hash = '#/bienvenida'; }}>Repetir bienvenida</button>
+              {s.user && <span className="muted" style={{ fontSize: 12, alignSelf: 'center' }}>Tus ajustes de sonido, pistas y kit viajan con tu cuenta. Las tomas siguen en este navegador (llegan a la nube en el paso 2).</span>}
             </div>
           </section>
         )}
@@ -56,8 +57,8 @@ export default function Cuenta() {
           <>
             <div className="between" style={{ flexWrap: 'wrap' }}><div><h1>Plan</h1><p className="muted" style={{ margin: '4px 0 0' }}>Gusto, Oído y la exportación MIDI son gratis.</p></div><Seg label="Facturación" items={[['m', 'Mensual'], ['a', 'Anual']]} value={yearly ? 'a' : 'm'} onChange={(v) => setYearly(v === 'a')} /></div>
             <div className="cols" style={{ gap: 16 }}>
-              {[['Free', 'TU PLAN', '$0', 'para siempre', ['Gusto y Oído (micrófono y archivos)', '2 pistas en el K.O. II', '5 tomas en este navegador', 'Exportar a MIDI y CSV'], 'Plan actual', false],
-                ['Pro', 'PRÓXIMAMENTE', '[PRECIO]', yearly ? '/ año' : '/ mes', ['Modo Datos (CSV → sentidos)', '4 pistas (grupos A–D)', 'Tomas ilimitadas en la nube', 'Exportar WAV y presets de kit', 'Más circuitos: agua, olfato, novedad'], 'Avísame', true]].map(([n, tag, price, per, feats, cta, pro]) => (
+              {[['Free', s.plan === 'free' ? 'TU PLAN' : '', '$0', 'para siempre', ['Gusto y Oído (micrófono y archivos)', '2 pistas en el K.O. II', '5 tomas en este navegador', 'Exportar a MIDI y CSV'], 'Plan actual', false],
+                ['Pro', s.plan === 'pro' ? 'TU PLAN' : 'PRÓXIMAMENTE', '[PRECIO]', yearly ? '/ año' : '/ mes', ['Modo Datos (CSV → sentidos)', '4 pistas (grupos A–D)', 'Tomas ilimitadas en la nube', 'Exportar WAV y presets de kit', 'Más circuitos: agua, olfato, novedad'], 'Avísame', true]].map(([n, tag, price, per, feats, cta, pro]) => (
                 <article key={n} className="panel" style={{ flex: '1 1 300px', padding: 22, gap: 14, borderColor: pro ? 'var(--acc)' : undefined }}>
                   <div className="between"><h2 style={{ fontSize: 18 }}>{n}</h2><span className="label" style={{ color: pro ? 'var(--acc)' : undefined }}>{tag}</span></div>
                   <div><span style={{ fontSize: 34, fontWeight: 700, letterSpacing: '-.02em' }}>{price}</span><span className="muted"> {per}</span></div>

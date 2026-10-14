@@ -5,6 +5,10 @@ import { Ear } from './ear.js';
 import { Synth, DEFAULT_KIT } from './synth.js';
 import { mutate, identity } from './mutate.js';
 import { kvGet, kvSet, takePut, takesAll, takeDel, FREE_TAKES } from './storage.js';
+import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut } from './cloud.js';
+
+// ajustes que se guardan en el navegador y, con cuenta, en la nube
+const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow'];
 
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'] };
 export const SENSE_LABEL = { dulce: 'Dulce', amargo: 'Amargo', jon_ce: 'Graves', jon_f: 'Medios', jon_dm: 'Agudos' };
@@ -28,7 +32,7 @@ export class Session {
     this.listeners = new Set(); this.stepListeners = new Set();
     this.s = structuredClone(DEFAULTS);
     this.s.playing = false; this.s.rec = false; this.s.ko = { input: null, output: null, error: null };
-    this.s.takes = []; this.s.ready = false; this.s.mutHistory = {}; this.s.data = null; this.s.row = 0; this.s.saved = Date.now();
+    this.s.takes = []; this.s.ready = false; this.s.user = null; this.s.plan = 'free'; this.s.sync = cloudEnabled ? 'local' : 'off'; this.s.mutHistory = {}; this.s.data = null; this.s.row = 0; this.s.saved = Date.now();
     this.live = { step: 0, pos: 0, active: 0, mn9: 0, groom: 0, rate: {}, lanes: {}, hist: new Array(64).fill(0), counts: null, lastHitAt: {}, rowHist: [] };
     this.rec = null; this.ear = new Ear(); this.synth = new Synth();
     this.ko = new KO2({
@@ -49,7 +53,12 @@ export class Session {
     const saved = await kvGet('settings');
     if (saved) Object.assign(this.s, { ...saved, tracks: saved.tracks?.map((t, i) => ({ ...DEFAULTS.tracks[i], ...t })) || this.s.tracks });
     this.ko.internalBpm = this.s.bpm; this.ko.clockOut = this.s.clockOut; this.ko.latency = this.s.latency;
-    this.s.takes = await takesAll(); this.s.ready = true; this.emit();
+    this.s.takes = await takesAll();
+    if (cloudEnabled) {
+      try { const u = await currentUser(); if (u) await this.adoptUser(u); } catch (e) { console.warn('cuenta', e); }
+      onAuth((u) => { if (u && u.id !== this.s.user?.id) this.adoptUser(u); if (!u && this.s.user) this.set({ user: null, plan: 'free', sync: 'local' }); });
+    }
+    this.s.ready = true; this.emit();
     if (navigator.requestMIDIAccess) this.connect(true);
   }
   // ---------- store ----------
@@ -61,13 +70,37 @@ export class Session {
     Object.assign(this.s, typeof patch === 'function' ? patch(this.s) : patch); this.emit();
     if (persist) this.persist();
   }
+  snapshot() { return Object.fromEntries(KEEP.map((k) => [k, this.s[k]])); }
   persist() {
     clearTimeout(this._pt);
-    this._pt = setTimeout(() => {
-      const keep = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow'];
-      kvSet('settings', Object.fromEntries(keep.map((k) => [k, this.s[k]]))); this.set({ saved: Date.now() });
-    }, 400);
+    this._pt = setTimeout(() => { kvSet('settings', this.snapshot()); this.set({ saved: Date.now() }); }, 400);
+    if (this.s.user) { clearTimeout(this._ct); this._ct = setTimeout(() => this.pushCloud(), 1500); }
   }
+  // ---------- cuenta ----------
+  async adoptUser(user) {
+    this.set({ user: { id: user.id, email: user.email, name: user.user_metadata?.name || '' }, sync: 'sincronizando' });
+    try {
+      const p = await loadProfile(user.id);
+      const remote = p?.settings || {};
+      if (Object.keys(remote).length) {
+        // la nube manda: es lo último que guardaste en cualquier dispositivo
+        const tracks = remote.tracks?.map((t, i) => ({ ...DEFAULTS.tracks[i], ...t })) || this.s.tracks;
+        Object.assign(this.s, remote, { tracks, onboarded: true });
+        this.ko.internalBpm = this.s.bpm; this.ko.clockOut = this.s.clockOut; this.ko.latency = this.s.latency;
+        kvSet('settings', this.snapshot());
+      } else {
+        this.s.onboarded = true; await saveProfile(user.id, { settings: this.snapshot(), alias: this.s.alias || p?.alias || null });
+      }
+      this.set({ alias: this.s.alias || p?.alias || '', plan: p?.plan || 'free', sync: 'sincronizado' });
+    } catch (e) { console.warn('perfil', e); this.set({ sync: 'error' }); }
+  }
+  async pushCloud() {
+    if (!this.s.user) return;
+    this.set({ sync: 'sincronizando' });
+    try { await saveProfile(this.s.user.id, { settings: this.snapshot(), alias: this.s.alias || null }); this.set({ sync: 'sincronizado' }); }
+    catch (e) { console.warn('sincronizar', e); this.set({ sync: 'error' }); }
+  }
+  async logout() { await signOut(); this.set({ user: null, plan: 'free', sync: 'local' }); }
   setInput(k, v) { this.set({ inputs: { ...this.s.inputs, [k]: v } }, true); }
   setTrack(id, patch) { this.set({ tracks: this.s.tracks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }, true); }
   track(id = this.s.selTrack) { return this.s.tracks.find((t) => t.id === id); }

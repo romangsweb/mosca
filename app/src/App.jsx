@@ -19,8 +19,10 @@ const TIPS = {
   datos: ['Sube un CSV o usa el ejemplo.', 'Asigna columnas a sabores o sonidos.', 'Cada fila dura un compás: escucha cómo cambian tus datos.'],
   sonido: ['Densidad: cuánto tiempo neuronal pasa por cada paso.', 'Kit: qué voz tiene cada pad. Mutar respeta estos roles.', 'MIDI: reloj, latencia y control de efectos del K.O. II.'],
   tomas: ['Graba con el punto rojo o la tecla R.', 'Cada toma guarda las notas de todas las pistas.', 'Exporta a MIDI para tu DAW, o a WAV con los sonidos internos.'],
-  cuenta: ['Todo se guarda en este navegador por ahora.', 'Pro desbloquea datos, nube y exportación WAV sin límite.', 'Las cuentas reales llegan pronto.'],
+  cuenta: ['Inicia sesión para llevar tus ajustes a cualquier dispositivo.', 'Las tomas siguen en este navegador; la nube llega en el siguiente paso.', 'Pro: datos, 4 pistas, nube ilimitada y WAV.'],
 };
+const SYNC_LABEL = { off: 'Guardado en este navegador', local: 'Guardado en este navegador', sincronizando: 'Sincronizando…', sincronizado: 'Sincronizado con tu cuenta', error: 'Sin conexión · guardado local' };
+const initials = (s) => (s.alias || s.user?.email || 'FP').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 2).toUpperCase() || 'FP';
 const route = () => (location.hash.replace(/^#\/?/, '') || 'estudio').split('?')[0];
 
 function Position() {
@@ -51,6 +53,7 @@ export default function App() {
   const s = useS(), [page, setPage] = useState(route());
   useEffect(() => { const f = () => setPage(route()); addEventListener('hashchange', f); return () => removeEventListener('hashchange', f); }, []);
   useEffect(() => { document.documentElement.dataset.theme = s.theme; }, [s.theme]);
+  useEffect(() => { if (s.user && page === 'bienvenida') location.hash = '#/estudio'; }, [s.user, page]);
   useEffect(() => {
     const k = (e) => {
       if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
@@ -71,7 +74,7 @@ export default function App() {
           <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
             <label className="sr" htmlFor="sess">Nombre de la sesión</label>
             <input id="sess" className="sessname" value={s.sessionName} onChange={(e) => session.set({ sessionName: e.target.value }, true)} />
-            <span className="muted hide-sm" style={{ fontSize: 11 }}>Guardado en este navegador</span>
+            <span className="muted hide-sm" style={{ fontSize: 11 }}>{SYNC_LABEL[s.sync] || SYNC_LABEL.local}</span>
           </div>
         </div>
         <Transport s={s} />
@@ -81,7 +84,7 @@ export default function App() {
           </button>
           <button type="button" className="btn" aria-pressed={s.guide} onClick={() => session.set({ guide: !s.guide }, true)}>Guía</button>
           <button type="button" className="iconbtn" aria-label={night ? 'Cambiar a tema día' : 'Cambiar a tema noche'} onClick={() => session.set({ theme: night ? 'dia' : 'noche' }, true)}><Icon name={night ? 'sol' : 'luna'} size={15} /></button>
-          <a href="#/cuenta" className="avatar" aria-label="Cuenta, plan Free"><span className="mono muted" style={{ fontSize: 9, letterSpacing: '.1em' }}>FREE</span><span>{(s.alias || 'FP').slice(0, 2).toUpperCase()}</span></a>
+          <a href="#/cuenta" className="avatar" aria-label={`Cuenta, plan ${s.plan}`}><span className="mono muted" style={{ fontSize: 9, letterSpacing: '.1em' }}>{s.user ? s.plan.toUpperCase() : 'INVITADO'}</span><span>{initials(s)}</span></a>
         </div>
       </header>
       {s.guide && TIPS[page] && (

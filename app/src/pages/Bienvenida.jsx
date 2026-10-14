@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { session } from '../engine/session.js';
 import { Logo } from '../ui/kit.jsx';
+import { cloudEnabled, signInGoogle, signInEmail } from '../engine/cloud.js';
 
 const STEPS = [
   ['usb', 'Conecta tu K.O. II', 'Cable USB-C con datos, directo a la computadora (sin dock). Fly Punch lo detecta solo en Chrome o Edge. Sin K.O. II también suena, con voces internas.'],
@@ -37,7 +38,7 @@ function Field() {
 }
 
 export default function Bienvenida() {
-  const [step, setStep] = useState(0), [mail, setMail] = useState('');
+  const [step, setStep] = useState(0);
   const done = () => { session.set({ onboarded: true }, true); location.hash = '#/estudio'; };
   const st = STEPS[Math.max(0, step - 1)];
   return (
@@ -54,16 +55,7 @@ export default function Bienvenida() {
       </section>
       <section style={{ flex: '1 1 440px', minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', background: '#0F0F11', borderLeft: '1px solid rgba(255,255,255,.06)' }}>
         {step === 0 ? (
-          <form style={{ width: '100%', maxWidth: 380, display: 'flex', flexDirection: 'column', gap: 14, animation: 'rise .4s ease-out both' }} onSubmit={(e) => { e.preventDefault(); session.set({ alias: mail.split('@')[0] }, true); setStep(1); }}>
-            <h2 style={{ fontSize: 24 }}>Entra a tu estudio</h2>
-            <p style={{ margin: '0 0 6px', color: '#8C8C94', fontSize: 14 }}>Guarda sesiones, tomas y tus ajustes de sonido.</p>
-            <button type="button" className="btn lg" disabled style={{ color: '#ECECEE', borderColor: 'rgba(255,255,255,.1)' }} title="Llega con las cuentas">Continuar con Google · pronto</button>
-            <div className="row" style={{ color: '#66666E', fontSize: 12 }}><span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.07)' }} />o<span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.07)' }} /></div>
-            <div className="field"><label htmlFor="email" style={{ color: '#A6A6AE' }}>Correo</label><input id="email" type="email" className="input" style={{ height: 44, background: '#0B0B0C', borderColor: 'rgba(255,255,255,.1)' }} placeholder="tu@correo.com" value={mail} onChange={(e) => setMail(e.target.value)} /></div>
-            <button type="submit" className="btn lg" style={{ background: '#ECECEE', color: '#0B0B0C', fontWeight: 600 }} disabled={!mail.includes('@')}>Continuar</button>
-            <button type="button" className="btn lg ghost" style={{ color: '#A6A6AE' }} onClick={() => setStep(1)}>Probar sin cuenta <span style={{ color: '#66666E' }}>· se guarda en este navegador</span></button>
-            <p style={{ margin: '10px 0 0', fontSize: 11, color: '#66666E', lineHeight: 1.6 }}>Versión inicial: por ahora todo se guarda en este navegador; las cuentas y la nube llegan con Pro.</p>
-          </form>
+          <Login onSkip={() => (session.s.onboarded ? (location.hash = '#/estudio') : setStep(1))} />
         ) : (
           <div key={step} style={{ width: '100%', maxWidth: 420, display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div role="progressbar" aria-valuemin={1} aria-valuemax={4} aria-valuenow={step} aria-label={`Paso ${step} de 4`} style={{ position: 'relative', height: 2, borderRadius: 1, background: 'rgba(255,255,255,.08)' }}><span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${step * 25}%`, background: '#FF6A1A', transition: 'width .45s cubic-bezier(.2,.8,.2,1)' }} /></div>
@@ -87,3 +79,34 @@ export default function Bienvenida() {
   );
 }
 const ICON_PATHS = { usb: 'M9 3v5M15 3v5M6.5 8h11v3a5.5 5.5 0 0 1-11 0zM12 16.5V21', gusto: 'M12 3c3.5 4.5 6 7.6 6 11a6 6 0 0 1-12 0c0-3.4 2.5-6.5 6-11z', play: 'M7 4.5v15l12-7.5z', tomas: 'M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0' };
+
+const G_ICON = <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3z" fill="#4285F4" /><path d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22z" fill="#34A853" /><path d="M6.4 14c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2V7.4H3.1a10 10 0 0 0 0 9.2z" fill="#FBBC05" /><path d="M12 5.9c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.4L6.4 10c.8-2.4 3-4.1 5.6-4.1z" fill="#EA4335" /></svg>;
+
+function Login({ onSkip }) {
+  const [mail, setMail] = useState(''), [state, setState] = useState('idle'), [err, setErr] = useState(null);
+  const google = async () => { setErr(null); try { await signInGoogle(); } catch (e) { setErr('No pudimos abrir Google. Intenta de nuevo.'); } };
+  const email = async (e) => {
+    e.preventDefault(); setErr(null); setState('enviando');
+    try { await signInEmail(mail.trim()); setState('enviado'); } catch (x) { setState('idle'); setErr(/rate|limit/i.test(x.message) ? 'Espera un minuto antes de pedir otro enlace.' : 'No pudimos enviar el enlace. Revisa el correo.'); }
+  };
+  if (state === 'enviado') return (
+    <div style={{ width: '100%', maxWidth: 380, display: 'flex', flexDirection: 'column', gap: 14, animation: 'rise .4s ease-out both' }}>
+      <h2 style={{ fontSize: 24 }}>Revisa tu correo</h2>
+      <p style={{ margin: 0, color: '#A6A6AE', fontSize: 14, lineHeight: 1.6 }}>Te enviamos un enlace de acceso a <strong style={{ color: '#ECECEE' }}>{mail}</strong>. Ábrelo en este mismo navegador y entrarás directo a tu estudio.</p>
+      <button type="button" className="btn lg ghost" style={{ color: '#A6A6AE', justifyContent: 'flex-start', padding: 0 }} onClick={() => setState('idle')}>Usar otro correo</button>
+    </div>
+  );
+  return (
+    <form style={{ width: '100%', maxWidth: 380, display: 'flex', flexDirection: 'column', gap: 14, animation: 'rise .4s ease-out both' }} onSubmit={email}>
+      <h2 style={{ fontSize: 24 }}>Entra a tu estudio</h2>
+      <p style={{ margin: '0 0 6px', color: '#8C8C94', fontSize: 14 }}>Tu cuenta guarda tus ajustes de sonido y los sincroniza entre dispositivos.</p>
+      <button type="button" className="btn lg" disabled={!cloudEnabled} onClick={google} style={{ color: '#ECECEE', borderColor: 'rgba(255,255,255,.1)', background: '#161618' }}>{G_ICON}Continuar con Google</button>
+      <div className="row" style={{ color: '#66666E', fontSize: 12 }}><span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.07)' }} />o con tu correo<span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.07)' }} /></div>
+      <div className="field"><label htmlFor="email" style={{ color: '#A6A6AE' }}>Correo</label><input id="email" type="email" required autoComplete="email" className="input" style={{ height: 44, background: '#0B0B0C', borderColor: 'rgba(255,255,255,.1)' }} placeholder="tu@correo.com" value={mail} onChange={(e) => setMail(e.target.value)} disabled={!cloudEnabled} /></div>
+      <button type="submit" className="btn lg" style={{ background: '#ECECEE', color: '#0B0B0C', fontWeight: 600 }} disabled={!cloudEnabled || !mail.includes('@') || state === 'enviando'}>{state === 'enviando' ? 'Enviando…' : 'Enviar enlace de acceso'}</button>
+      {err && <p role="alert" style={{ margin: 0, color: '#FF8A4D', fontSize: 13 }}>{err}</p>}
+      <button type="button" className="btn lg ghost" style={{ color: '#A6A6AE' }} onClick={onSkip}>Probar sin cuenta <span style={{ color: '#66666E' }}>· se guarda en este navegador</span></button>
+      <p style={{ margin: '10px 0 0', fontSize: 11, color: '#66666E', lineHeight: 1.6 }}>{cloudEnabled ? 'Sin contraseñas: entras con Google o con un enlace a tu correo. Tus tomas siguen en este navegador por ahora.' : 'Las cuentas no están configuradas en esta instalación; todo se guarda en este navegador.'}</p>
+    </form>
+  );
+}
