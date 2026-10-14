@@ -1,3 +1,4 @@
+import Libreria from '../ui/Libreria.jsx';
 import { useState } from 'react';
 import { session } from '../engine/session.js';
 import { PAD_KEYS, GROUP_BASE } from '../engine/midi.js';
@@ -23,16 +24,18 @@ function Toggle({ label, desc, checked, onChange, children }) {
 }
 
 export default function Sonido() {
-  const s = useS(), [tab, setTab] = useState('ritmo'), track = session.track();
+  const s = useS(), [tab, setTab] = useState('libreria'), track = session.track();
   const curve = { lineal: (x) => x, suave: (x) => Math.sqrt(x), dura: (x) => x * x }[s.curve];
   const pts = Array.from({ length: 21 }, (_, i) => `${40 + i * 17},${220 - (s.velMin + (s.velMax - s.velMin) * curve(i / 20)) / 127 * 190}`).join(' ');
   const swingX = (i) => 20 + i * 37.5 + (i % 2 ? ((s.swing - 50) / 50) * 37.5 : 0);
   return (
     <div className="page">
       <div className="page-head">
-        <div><h1>Sonido</h1><p>Cómo se traducen los disparos de las neuronas en notas, y qué hace Fly Punch con tu K.O. II.</p></div>
-        <Seg role="tab" label="Secciones" items={[['ritmo', 'Ritmo'], ['din', 'Dinámica'], ['kit', 'Kit y pistas'], ['midi', 'MIDI y reloj']]} value={tab} onChange={setTab} />
+        <div><h1>Sonido</h1><p>Los kits de la librería, cómo se traducen los disparos en notas y la configuración MIDI.</p></div>
+        <Seg role="tab" label="Secciones" items={[['libreria', 'Librería'], ['ritmo', 'Ritmo'], ['din', 'Dinámica'], ['kit', 'Kit y pistas'], ['midi', 'MIDI y reloj']]} value={tab} onChange={setTab} />
       </div>
+
+      {tab === 'libreria' && <Libreria />}
 
       {tab === 'ritmo' && (
         <div className="cols">

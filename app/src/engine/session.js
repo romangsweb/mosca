@@ -5,11 +5,12 @@ import { profileById, route } from './devices.js';
 import { Ear } from './ear.js';
 import { Synth, DEFAULT_KIT } from './synth.js';
 import { mutate, identity } from './mutate.js';
-import { kvGet, kvSet, takePut, takesAll, takeDel, FREE_TAKES } from './storage.js';
+import { kvGet, kvSet, takePut, takesAll, takeDel, FREE_TAKES, sampleGet, samplePut, sampleDel } from './storage.js';
+import { VOICES as KIT_VOICES, kitData, toBuffers } from './kits.js';
 import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
-const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides'];
+const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId'];
 
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'] };
 export const SENSE_LABEL = { dulce: 'Dulce', amargo: 'Amargo', jon_ce: 'Graves', jon_f: 'Medios', jon_dm: 'Agudos' };
@@ -20,6 +21,7 @@ export const PRO_FEATURES = {
   wav: 'Exportar tomas a WAV',
   tomas: 'Tomas ilimitadas en la nube',
   melodia: 'Modo melódico: escalas, bajo y melodía',
+  kits: 'Librería completa de kits y tus propias muestras',
 };
 const NO_PLAN = { plan: 'free', planBase: 'free', trialEnds: null, trialUsed: false };
 const CURVES = { lineal: (x) => x, suave: (x) => Math.sqrt(x), dura: (x) => x * x };
@@ -34,7 +36,7 @@ const DEFAULTS = {
   selTrack: 'gusto', selPad: 11,
   density: 4, swing: 54, humanize: 4, curve: 'suave', velMin: 70, velMax: 127, ghost: true,
   sendMidi: true, clockOut: false, fxAuto: false, monitor: 'auto', latency: 0,
-  device: 'ko2', port: null, devOverrides: {},
+  device: 'ko2', port: null, devOverrides: {}, kitId: 'analogo',
   oidoSource: 'manual', dataMap: {}, perRow: 16,
 };
 
@@ -74,6 +76,7 @@ export class Session {
       onAuth((u) => { if (u && u.id !== this.s.user?.id) this.adoptUser(u); if (!u && this.s.user) { this.set({ user: null, ...NO_PLAN, sync: 'local' }); this.refreshTakes(); } });
     }
     this.s.ready = true; this.emit();
+    this.loadKit();
     if (navigator.requestMIDIAccess) this.connect(true);
   }
   // ---------- store ----------
@@ -107,6 +110,7 @@ export class Session {
         this.s.onboarded = true; await saveProfile(user.id, { settings: this.snapshot(), alias: this.s.alias || p?.alias || null });
       }
       this.set({ alias: this.s.alias || p?.alias || '', ...this.planFrom(p), sync: 'sincronizado' });
+      this.loadKit();
       await this.refreshTakes();
     } catch (e) { console.warn('perfil', e); this.set({ sync: 'error' }); }
   }
@@ -116,13 +120,33 @@ export class Session {
     try { await saveProfile(this.s.user.id, { settings: this.snapshot(), alias: this.s.alias || null }); this.set({ sync: 'sincronizado' }); }
     catch (e) { console.warn('sincronizar', e); this.set({ sync: 'error' }); }
   }
-  async logout() { await signOut(); this.set({ user: null, ...NO_PLAN, sync: 'local' }); await this.refreshTakes(); }
+  async logout() { await signOut(); this.set({ user: null, ...NO_PLAN, sync: 'local' }); this.loadKit(); await this.refreshTakes(); }
+  // ---------- librería de sonidos ----------
+  // 'propio' = Mi kit: base Análogo + las muestras que subas por sonido (se guardan en este navegador)
+  kitAllowed(id) { return id === 'analogo' || this.can('kits'); }
+  async loadKit() {
+    const want = this.kitAllowed(this.s.kitId) ? this.s.kitId : 'analogo', ctx = this.synth.ensure();
+    const base = { ...kitData(want === 'propio' ? 'analogo' : want) }, custom = {};
+    if (want === 'propio') for (const v of KIT_VOICES) {
+      const smp = await sampleGet(v); if (!smp) continue;
+      try { base[v] = await ctx.decodeAudioData(smp.data.slice(0)); custom[v] = smp.name; } catch (e) { console.warn('muestra', v, e); }
+    }
+    this.synth.kit = toBuffers(ctx, base); this.set({ kitActive: want, customSamples: custom });
+  }
+  setKit(id) { if (!this.kitAllowed(id)) { location.hash = '#/cuenta?plan'; return; } this.set({ kitId: id }, true); this.loadKit(); }
+  async addSample(voice, file) {
+    if (!this.can('kits')) throw new Error('pro');
+    if (file.size > 4 * 1024 * 1024) throw new Error('grande');
+    const data = await file.arrayBuffer(); await this.synth.ensure().decodeAudioData(data.slice(0)); // valida que sea audio
+    await samplePut(voice, { name: file.name, data }); if (this.s.kitId !== 'propio') this.set({ kitId: 'propio' }, true); await this.loadKit();
+  }
+  async removeSample(voice) { await sampleDel(voice); await this.loadKit(); }
   // ---------- plan ----------
   planFrom(p) {
     const trialEnds = p?.trial_ends_at ? new Date(p.trial_ends_at).getTime() : null, planBase = p?.plan || 'free';
     const plan = planBase === 'pro' || (trialEnds && trialEnds > Date.now()) ? 'pro' : 'free';
     clearTimeout(this._trialT);
-    if (planBase !== 'pro' && trialEnds && trialEnds > Date.now()) this._trialT = setTimeout(() => this.set(this.planFrom(p)), Math.min(trialEnds - Date.now() + 1000, 2 ** 31 - 1));
+    if (planBase !== 'pro' && trialEnds && trialEnds > Date.now()) this._trialT = setTimeout(() => { this.set(this.planFrom(p)); this.loadKit(); }, Math.min(trialEnds - Date.now() + 1000, 2 ** 31 - 1));
     return { plan, planBase, trialEnds, trialUsed: !!p?.trial_used };
   }
   get onTrial() { return this.s.planBase !== 'pro' && this.s.plan === 'pro'; }
@@ -131,6 +155,7 @@ export class Session {
   async startTrial() {
     const end = await startTrialCloud();
     this.set(this.planFrom({ plan: this.s.planBase, trial_ends_at: new Date(end).toISOString(), trial_used: true }));
+    this.loadKit();
     await this.refreshTakes();
   }
   setInput(k, v) { this.set({ inputs: { ...this.s.inputs, [k]: v } }, true); }

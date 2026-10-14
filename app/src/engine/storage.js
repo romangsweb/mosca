@@ -1,11 +1,11 @@
 // Fly Punch · guardado local (IndexedDB). Más adelante se sincroniza con la cuenta.
-const DB = 'flypunch', VER = 1;
+const DB = 'flypunch', VER = 2;
 let dbp = null;
 function db() {
   if (dbp) return dbp;
   dbp = new Promise((res, rej) => {
     const r = indexedDB.open(DB, VER);
-    r.onupgradeneeded = () => { const d = r.result; if (!d.objectStoreNames.contains('takes')) d.createObjectStore('takes', { keyPath: 'id' }); if (!d.objectStoreNames.contains('kv')) d.createObjectStore('kv'); };
+    r.onupgradeneeded = () => { const d = r.result; if (!d.objectStoreNames.contains('takes')) d.createObjectStore('takes', { keyPath: 'id' }); if (!d.objectStoreNames.contains('kv')) d.createObjectStore('kv'); if (!d.objectStoreNames.contains('samples')) d.createObjectStore('samples'); };
     r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
   });
   return dbp;
@@ -18,3 +18,7 @@ export const takesAll = () => tx('takes', 'readonly', (s) => s.getAll()).then((a
 export const takePut = (t) => tx('takes', 'readwrite', (s) => s.put(t));
 export const takeDel = (id) => tx('takes', 'readwrite', (s) => s.delete(id));
 export const FREE_TAKES = 5;
+// muestras propias por sonido (Mi kit): { name, data: ArrayBuffer }
+export const sampleGet = (voice) => tx('samples', 'readonly', (s) => s.get(voice)).catch(() => undefined);
+export const samplePut = (voice, v) => tx('samples', 'readwrite', (s) => s.put(v, voice));
+export const sampleDel = (voice) => tx('samples', 'readwrite', (s) => s.delete(voice));

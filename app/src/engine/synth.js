@@ -42,7 +42,7 @@ export function voice(ctx, dest, name, vel, t, pitch = 0) {
 }
 
 export class Synth {
-  constructor() { this.ctx = null; this.out = null; this.enabled = true; }
+  constructor() { this.ctx = null; this.out = null; this.enabled = true; this.kit = null; }
   ensure() {
     if (!this.ctx) {
       this.ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -56,16 +56,23 @@ export class Synth {
   play(name, vel, at = performance.now(), pitch = 0) {
     if (!this.enabled || !name) return;
     const ctx = this.ensure(), t = Math.max(ctx.currentTime, ctx.currentTime + (at - performance.now()) / 1000);
-    voice(ctx, this.out, name, vel, t, pitch);
+    if (name !== 'tono' && this.kit?.[name]) playBuffer(ctx, this.out, this.kit[name], vel, t, pitch);
+    else voice(ctx, this.out, name, vel, t, pitch);
   }
+
 }
 
 // Render de una toma a WAV con las voces internas.
-export async function renderWav(take, kitFor) {
+// toca una muestra del kit: velocidad → volumen, pitch → semitonos
+export function playBuffer(ctx, dest, buffer, vel, t, pitch = 0) {
+  const src = ctx.createBufferSource(), g = ctx.createGain(); src.buffer = buffer; src.playbackRate.value = Math.pow(2, pitch / 12);
+  g.gain.value = Math.pow(Math.max(0.05, vel / 127), 1.3); src.connect(g).connect(dest); src.start(t);
+}
+export async function renderWav(take, kitFor, kit = null) {
   const sr = 44100, dur = take.durMs / 1000 + 1;
   const ctx = new OfflineAudioContext(2, Math.ceil(sr * dur), sr), out = ctx.createGain(); out.gain.value = 0.7;
   const comp = ctx.createDynamicsCompressor(); out.connect(comp).connect(ctx.destination);
-  for (const e of take.events) { const n = kitFor(e); voice(ctx, out, n, e.vel, e.t / 1000 + 0.05, n === 'tono' ? e.note : e.track === 'oido' ? 3 : 0); }
+  for (const e of take.events) { const n = kitFor(e), t = e.t / 1000 + 0.05, p = n === 'tono' ? e.note : e.track === 'oido' ? 3 : 0; if (n !== 'tono' && kit?.[n]) playBuffer(ctx, out, kit[n], e.vel, t, p); else voice(ctx, out, n, e.vel, t, p); }
   return wavBlob(await ctx.startRendering());
 }
 function wavBlob(buf) {

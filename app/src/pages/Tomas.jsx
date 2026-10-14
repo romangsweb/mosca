@@ -44,7 +44,7 @@ export default function Tomas() {
     const base = slug(take.name);
     if (fmtSel === 'mid') download(takeToMidi(take), `${base}.mid`);
     if (fmtSel === 'csv') download(takeToCsv(take), `${base}-disparos.csv`);
-    if (fmtSel === 'wav') download(await renderWav(take, (e) => e.voice), `${base}-sonido-interno.wav`);
+    if (fmtSel === 'wav') download(await renderWav(take, (e) => e.voice, session.synth.kit), `${base}-${session.s.kitActive || 'kit'}.wav`);
     setBusy(false); setExp(false);
   };
   return (
@@ -108,7 +108,7 @@ export default function Tomas() {
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="exp-t">
             <h2 id="exp-t" style={{ fontSize: 18 }}>Exportar «{take.name}»</h2>
             <div role="radiogroup" aria-label="Formato" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {[['mid', 'MIDI (.mid)', 'Una pista por pista de Fly Punch. Ábrelo en Ableton, Logic o FL Studio.'], ['csv', 'CSV de disparos', 'Tiempo, neurona, nota y velocidad de cada disparo.'], ['wav', 'Audio (.wav) con sonido interno', 'Las voces de Fly Punch, no las de tu kit.']].map(([id, l, d]) => (
+              {[['mid', 'MIDI (.mid)', 'Una pista por pista de Fly Punch. Ábrelo en Ableton, Logic o FL Studio.'], ['csv', 'CSV de disparos', 'Tiempo, neurona, nota y velocidad de cada disparo.'], ['wav', 'Audio (.wav)', 'Con el kit de la librería que tengas elegido (no con los sonidos de tu aparato).']].map(([id, l, d]) => (
                 <button key={id} type="button" role="radio" aria-checked={fmtSel === id} className="radio-card" disabled={id === 'wav' && !session.can('wav')} style={id === 'wav' && !session.can('wav') ? { opacity: 0.55, cursor: 'not-allowed' } : undefined} onClick={() => setFmt(id)}><span className="o" /><span style={{ flex: 1 }}><span style={{ display: 'block', fontWeight: 600 }}>{l}</span><span className="muted" style={{ fontSize: 12 }}>{d}</span></span>{id === 'wav' && !session.can('wav') && <span className="badge-pro">PRO</span>}</button>
               ))}
             </div>
