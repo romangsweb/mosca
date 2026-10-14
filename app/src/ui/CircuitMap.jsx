@@ -127,6 +127,22 @@ export default function CircuitMap({ selTrack, selPad, onPick, sense }) {
         g.font = `${sel || S.hover === kk ? 600 : 400} 10px "JetBrains Mono", ui-monospace, monospace`; g.textAlign = left ? 'right' : 'left'; g.textBaseline = 'middle';
         g.fillStyle = sel ? '#ECECEE' : e > 0.4 ? '#C4C4CA' : '#8C8C94'; g.fillText(p.tipo, x + (left ? -12 : 12), y);
       });
+      // optogenética: un haz de luz baja por la fibra hasta cada neurona elegida (roja activa, verde silencia)
+      const O = session.live.opto, oo = session.s.opto;
+      if (oo?.on) {
+        const col = oo.mode === 'silenciar' ? [56, 224, 123] : [255, 59, 48];
+        const tg = O && now >= O.at && now - O.at < 460 ? O : null, a = tg ? 1 - (now - tg.at) / 460 : 0;
+        for (const i of tg ? tg.ids : session.optoTargets()) {
+          const P = D.pos_um[i], [x, y] = proj(P[0], P[1], P[2]);
+          if (tg) {
+            const beam = g.createLinearGradient(x, 0, x, y); beam.addColorStop(0, rgba(col, 0)); beam.addColorStop(1, rgba(col, 0.32 * a));
+            g.fillStyle = beam; g.beginPath(); g.moveTo(x - 2, 0); g.lineTo(x + 2, 0); g.lineTo(x + 14, y); g.lineTo(x - 14, y); g.closePath(); g.fill();
+            const r = 10 + 26 * a, gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, rgba(col, 0.8 * a)); gr.addColorStop(1, rgba(col, 0)); g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+            const kk = S.idxToK.get(i); if (kk !== undefined) { const [nx, ny] = nodes[kk]; g.strokeStyle = rgba(col, a); g.lineWidth = 2; g.beginPath(); g.arc(nx, ny, 10 + (1 - a) * 18, 0, Math.PI * 2); g.stroke(); }
+          } else { g.strokeStyle = rgba(col, 0.5); g.lineWidth = 1; g.beginPath(); g.arc(x, y, 5, 0, Math.PI * 2); g.stroke(); }
+        }
+        if (tg) { g.fillStyle = rgba(col, 0.5 * a); g.fillRect(0, 0, W, 2); }
+      }
       // columnas
       g.font = '500 9px "JetBrains Mono", monospace'; g.fillStyle = '#55555C'; g.textAlign = 'center';
       [['SENSORES', 0], ['INTERNEURONAS', 0.4], ['DESCENDENTES', 0.73], ['SALIDA', 1]].forEach(([l, u]) => g.fillText(l, W * 0.27 + u * W * 0.46, H * 0.55 - 26));

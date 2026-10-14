@@ -62,6 +62,22 @@ export default function Brain({ view, selTrack, selPad, onPick, sense }) {
         gl_FragColor = vec4(mix(rest, hot, min(1., vA*1.5)), (.014 + .03*vF) + vA*.34); }`,
     })));
 
+    // optogenética en 3D: un haz vertical y un destello en cada neurona iluminada
+    const OPT = 12, op = new Float32Array(OPT * 3), ol = new Float32Array(OPT * 6), og = new THREE.BufferGeometry(), lg = new THREE.BufferGeometry();
+    og.setAttribute('position', new THREE.BufferAttribute(op, 3)); lg.setAttribute('position', new THREE.BufferAttribute(ol, 3));
+    const oU = { uCol: { value: new THREE.Color('#FF3B30') }, uA: { value: 0 }, uPx: { value: renderer.getPixelRatio() } };
+    const optoPts = new THREE.Points(og, new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms: oU,
+      vertexShader: `uniform float uA, uPx; void main(){ vec4 mv = modelViewMatrix*vec4(position,1.); gl_PointSize = (14. + 40.*uA) * uPx * (22. / -mv.z); gl_Position = projectionMatrix*mv; }`,
+      fragmentShader: `uniform vec3 uCol; uniform float uA; void main(){ float d = length(gl_PointCoord-.5); if (d > .5) discard; gl_FragColor = vec4(uCol, uA * smoothstep(.5, .0, d)); }` }));
+    const optoBeam = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: '#FF3B30', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+    scene.add(optoPts, optoBeam);
+    const updOpto = (now) => {
+      const O = session.live.opto, oo = session.s.opto, on = oo?.on && O && now >= O.at && now - O.at < 460, a = on ? 1 - (now - O.at) / 460 : 0;
+      oU.uA.value = a; optoBeam.material.opacity = a * 0.6; if (!on) { og.setDrawRange(0, 0); lg.setDrawRange(0, 0); return; }
+      const col = O.mode === 'silenciar' ? '#38E07B' : '#FF3B30'; oU.uCol.value.set(col); optoBeam.material.color.set(col);
+      const ids = O.ids.slice(0, OPT); ids.forEach((i, j) => { op.set(pos.subarray(i * 3, i * 3 + 3), j * 3); ol.set([pos[i * 3], pos[i * 3 + 1] + 9, pos[i * 3 + 2], pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]], j * 6); });
+      og.attributes.position.needsUpdate = true; lg.attributes.position.needsUpdate = true; og.setDrawRange(0, ids.length); lg.setDrawRange(0, ids.length * 2);
+    };
     // etiquetas de los 12 pads de la pista seleccionada
     const tags = Array.from({ length: 12 }, () => { const s = document.createElement('span'); s.className = 'tag'; el.querySelector('.tags').appendChild(s); return s; });
     const tmp = new THREE.Vector3(); let tween = null, padIdx = [], sel = -1, allTags = false;
@@ -97,7 +113,7 @@ export default function Brain({ view, selTrack, selPad, onPick, sense }) {
       for (let i = 0; i < N; i++) aAct[i] *= k; for (let i = 0; i < eAct.length; i++) eAct[i] *= k;
       ng.attributes.aAct.needsUpdate = true; eg.attributes.aAct.needsUpdate = true;
       if (tween) { const u = Math.min(1, (now - tween.t0) / tween.dur), e = 1 - Math.pow(1 - u, 3); camera.position.lerpVectors(tween.from, tween.to, e); controls.target.lerpVectors(tween.tFrom, tween.tTo, e); if (u >= 1) tween = null; }
-      controls.update(); depthU.uCam.value = camera.position.distanceTo(bs.center); renderer.render(scene, camera);
+      updOpto(now); controls.update(); depthU.uCam.value = camera.position.distanceTo(bs.center); renderer.render(scene, camera);
       const w = el.clientWidth, h = el.clientHeight;
       padIdx.forEach((i, k) => { const t = tags[k]; tmp.fromArray(pos, i * 3).project(camera); const vis = tmp.z < 1 && (allTags || k === sel || aAct[i] > 0.85); t.style.display = vis ? 'block' : 'none'; if (vis) t.style.transform = `translate(${(tmp.x * 0.5 + 0.5) * w + 9}px,${(-tmp.y * 0.5 + 0.5) * h - 7}px)`; t.classList.toggle('hot', aAct[i] > 0.4); });
       raf = requestAnimationFrame(frame);

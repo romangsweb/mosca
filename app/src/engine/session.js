@@ -17,7 +17,7 @@ import { SCALES } from './devices.js';
 import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud , shareTake, unshareTake } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
-const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes'];
+const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes', 'opto'];
 
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'], olfato: ['vinagre', 'co2', 'geosmina'], cortejo: ['canto', 'cva', 'deseo'] };
 // circuitos: cada uno es una parte real del mismo cerebro, con sus sensores y su neurona de salida
@@ -60,6 +60,7 @@ const DEFAULTS = {
   mappings: [], audioIn: null, captureAudio: false, kitVol: 0.7,
   sk: { follow: false, fxAuto: false, fx: [0, 1] },
   fx: { ...FX_DEFAULT }, metro: false, countIn: 1, autoLanes: [],
+  opto: { on: false, mode: 'activar', target: 'pad', power: 0.6, pattern: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] },
   follow: { source: 'entrada', tempo: true, key: true, autoPlay: true, offset: 0 },
   oidoSource: 'manual', dataMap: {}, perRow: 16,
 };
@@ -172,6 +173,22 @@ export class Session {
       if (l.mode === 'rec') l.pts[i] = t.get(this); // escribe lo que estás moviendo (perilla, sidekick o pad XY)
       else if (l.pts[i] != null && t.get(this) !== l.pts[i]) t.set(this, l.pts[i]);
     }
+  }
+  // ---------- optogenética: luz que activa (CsChrimson, luz roja) o silencia (GtACR, luz verde) neuronas, al ritmo ----------
+  setOpto(patch) { this.set({ opto: { ...DEFAULTS.opto, ...this.s.opto, ...patch } }, true); }
+  optoTargets() {
+    const o = this.s.opto || DEFAULTS.opto, t = this.track(), pads = this.pads(t);
+    if (o.target === 'pista') return pads.filter((p) => p.clase !== 'sensor').map((p) => p.idx);
+    if (o.target === 'salida') return [pads[11].idx];
+    return [pads[this.s.selPad ?? 11].idx];
+  }
+  opto(n, at) {
+    const o = this.s.opto; this.sim.optoOff?.forEach((i) => this.sim.silenced.delete(i)); this.sim.optoOff = null;
+    if (!o?.on || !o.pattern[n % 16]) return;
+    const ids = this.optoTargets();
+    if (o.mode === 'silenciar') { const add = ids.filter((i) => !this.sim.silenced.has(i)); add.forEach((i) => this.sim.silenced.add(i)); this.sim.optoOff = add; ids.forEach((i) => { this.sim.g[i] -= this.D.params.w_poi * (1 + 4 * o.power); }); } // silencia solo durante este paso (respeta las que silenciaste a mano)
+    else ids.forEach((i) => { this.sim.g[i] += this.D.params.w_poi * (1 + 4 * o.power); });
+    this.live.opto = { at, ids, mode: o.mode, power: o.power };
   }
   // ---------- tempo con golpecitos ----------
   tap() {
@@ -428,6 +445,7 @@ export class Session {
     if (s.data && n > 0 && n % s.perRow === 0) { s.row = (s.row + 1) % s.data.rows; queueMicrotask(() => this.emit()); }
     this.live.step = n; if (n % 16 === 0) onBar(this, n / 16);
     if (s.autoLanes?.length) this.batch(() => this.automate(n));
+    this.opto(n, at);
     const R = this.rates(); L.lastRates = R;
     const cnt = this.sim.advance(s.density, R); L.counts = cnt;
     let active = 0; for (let i = 0; i < cnt.length; i++) if (cnt[i]) active++;

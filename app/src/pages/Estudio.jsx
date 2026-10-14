@@ -7,6 +7,7 @@ import { useS, useTick, Icon, Knob, Seg, roleColor, ROLE_DESC } from '../ui/kit.
 // el 3D (three.js) solo se descarga si abres una vista 3D: el arranque es más rápido
 const Brain = lazy(() => import('../ui/Brain.jsx'));
 const Automation = lazy(() => import('../ui/Automation.jsx'));
+const Opto = lazy(() => import('../ui/Opto.jsx'));
 import CircuitMap from '../ui/CircuitMap.jsx';
 import { Pads, Lanes } from '../ui/PadsLanes.jsx';
 import ScenesStrip from '../ui/Scenes.jsx';
@@ -136,7 +137,7 @@ export default function Estudio() {
         </section>
         <section className="panel lanes-panel" style={{ gap: 8 }}>
           <div className="between" style={{ flexWrap: 'wrap' }}>
-            <Seg label="Vista" items={[['disparos', 'Disparos'], ['mov', 'Movimientos']]} value={view2} onChange={setView2} />
+            <Seg label="Vista" items={[['disparos', 'Disparos'], ['mov', 'Movimientos'], ['luz', 'Luz']]} value={view2} onChange={setView2} />
             <div className="tracks" role="list" aria-label="Pistas">
               {s.tracks.map((t) => (
                 <div key={t.id} className="trk" role="listitem" aria-current={t.id === track.id}>
@@ -160,7 +161,7 @@ export default function Estudio() {
               <button type="button" className="iconbtn" disabled={!canUndo} aria-label="Deshacer mutación" onClick={() => session.undoMutate()}><Icon name="deshacer" size={14} /></button>
             </div>
           </div>
-          {view2 === 'mov' ? <Suspense fallback={null}><Automation /></Suspense> : <Lanes track={track} selPad={selPad} />}
+          {view2 === 'mov' ? <Suspense fallback={null}><Automation /></Suspense> : view2 === 'luz' ? <Suspense fallback={null}><Opto /></Suspense> : <Lanes track={track} selPad={selPad} />}
           <SoundRoute tracks={[track]} compact />
         </section>
       </div>
