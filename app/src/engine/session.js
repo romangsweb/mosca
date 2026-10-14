@@ -14,7 +14,7 @@ import { audioPut, audioGet, audioDel, dbOk } from './storage.js';
 import { SK_PRESET, skPorts, skSend } from './sidekick.js';
 import { Follower } from './follow.js';
 import { SCALES } from './devices.js';
-import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud } from './cloud.js';
+import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud , shareTake, unshareTake } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
 const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes'];
@@ -551,6 +551,17 @@ export class Session {
     if (this.s.captureAudio && this.can('audio')) this.capture.start(this.s.audioIn).catch((e) => { console.warn('audio', e); this.set({ notice: 'audio' }); });
     this.rec = { t0, n0, events: [] }; this.set({ rec: true, counting: false });
   }
+  // abrir en mi estudio una toma compartida: copia local nueva
+  async importTake(t) {
+    const take = { ...t, id: crypto.randomUUID(), name: `${t.name} (remix)`.slice(0, 80), date: Date.now(), owner: null, cloud: false, shared: false, shareId: null };
+    delete take.author; await takePut(take); if (!this.s.onboarded) this.set({ onboarded: true }, true);
+    await this.refreshTakes(); this.set({ lastTake: take.id });
+  }
+  async share(id) {
+    const t = this.s.takes.find((x) => x.id === id); if (!t) return null;
+    const shareId = await shareTake(id, this.s.alias || '', t.shareId); this.set({ takes: this.s.takes.map((x) => (x.id === id ? { ...x, shared: true, shareId } : x)) }); return shareId;
+  }
+  async unshare(id) { await unshareTake(id); this.set({ takes: this.s.takes.map((x) => (x.id === id ? { ...x, shared: false } : x)) }); }
   async renameTake(id, name) {
     const t = this.s.takes.find((x) => x.id === id); if (!t) return;
     if (t.where === 'nube') await renameTakeCloud(id, name).catch((e) => console.warn(e));

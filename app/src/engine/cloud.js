@@ -40,10 +40,27 @@ export async function startTrialCloud() {
 const META = 'id, name, created_at, bpm, dur_ms, steps, source, tracks, inputs, n_events';
 const fromRow = (r) => ({ id: r.id, name: r.name, date: new Date(r.created_at).getTime(), bpm: r.bpm, durMs: r.dur_ms, steps: r.steps, source: r.source, tracks: r.tracks, inputs: r.inputs, events: r.events ?? null, nEvents: r.n_events ?? r.events?.length ?? 0 });
 export async function listTakes() {
-  const { data, error } = await cloud.from('takes').select(META).order('created_at', { ascending: false });
-  if (error) throw error;
-  return data.map(fromRow);
+  // con las columnas de compartir (migración 0004); si aún no existen, sin ellas
+  let r = await cloud.from('takes').select(`${META}, public, share_id`).order('created_at', { ascending: false });
+  if (r.error) r = await cloud.from('takes').select(META).order('created_at', { ascending: false });
+  if (r.error) throw r.error;
+  return r.data.map((x) => ({ ...fromRow(x), shared: !!x.public, shareId: x.share_id || null }));
 }
+// ---------- compartir ----------
+const slugId = () => Array.from(crypto.getRandomValues(new Uint8Array(10)), (b) => 'abcdefghijkmnpqrstuvwxyz23456789'[b % 32]).join('');
+export async function shareTake(id, author = '', existing = null) {
+  const share_id = existing || slugId(); // el mismo enlace si ya se había compartido
+  const { data, error } = await cloud.from('takes').update({ public: true, share_id, author: author.slice(0, 40) || null }).eq('id', id).select('share_id').single();
+  if (error) throw error;
+  return data.share_id;
+}
+export async function unshareTake(id) { const { error } = await cloud.from('takes').update({ public: false }).eq('id', id); if (error) throw error; }
+export async function getPublicTake(shareId) {
+  const { data, error } = await cloud.from('takes').select('id, name, created_at, bpm, dur_ms, steps, tracks, inputs, events, author').eq('share_id', shareId).eq('public', true).maybeSingle();
+  if (error) throw error;
+  return data && { ...fromRow(data), author: data.author };
+}
+export const shareUrl = (shareId) => `${location.origin}${location.pathname}#/t/${shareId}`;
 export async function getTake(id) {
   const { data, error } = await cloud.from('takes').select(`${META}, events`).eq('id', id).single();
   if (error) throw error;

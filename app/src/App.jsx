@@ -13,6 +13,7 @@ import Bienvenida from './pages/Bienvenida.jsx';
 import Equipo from './pages/Equipo.jsx';
 import Cancion from './pages/Cancion.jsx';
 import Mezcla from './pages/Mezcla.jsx';
+import Escuchar from './pages/Escuchar.jsx';
 
 const NAV = [
   ['estudio', 'Estudio', 'estudio'], ['mezcla', 'Mezcla', 'mezcla'], ['cancion', 'Canción', 'cancion', true], null,
@@ -103,6 +104,7 @@ export default function App() {
         : <div className="row"><Logo /> Cargando el cerebro…</div>}
     </div>
   );
+  if (page.startsWith('t/')) return <Escuchar shareId={page.slice(2)} />; // toma compartida: sin cuenta ni bienvenida
   if (!s.onboarded || page === 'bienvenida') return <Bienvenida />;
   const Page = PAGES[page] || Estudio;
   const night = s.theme === 'noche';

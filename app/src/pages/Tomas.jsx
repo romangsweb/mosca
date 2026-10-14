@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { session } from '../engine/session.js';
 import { makeZip } from '../engine/zip.js';
+import { shareUrl } from '../engine/cloud.js';
 import { renderVideo, videoSupported } from '../engine/video.js';
 import { takeToMidi, takeToCsv, download, slug } from '../engine/midifile.js';
 import { renderWav, wavBlob } from '../engine/synth.js';
@@ -38,6 +39,46 @@ function RealAudio({ id }) {
   useEffect(() => { let u; session.getAudio(id).then((b) => { if (b) { u = URL.createObjectURL(b); setUrl(u); } }); return () => u && URL.revokeObjectURL(u); }, [id]);
   if (!url) return null;
   return <div className="well row" style={{ padding: '8px 12px', gap: 12 }}><span className="chip acc">AUDIO REAL</span><audio controls src={url} style={{ flex: 1, height: 32 }} /></div>;
+}
+
+// compartir por enlace: la toma queda pública (solo su música) en flypunch…/#/t/<id>; se puede retirar
+function ShareButton({ take }) {
+  const s = useS(), [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [err, setErr] = useState(null), [copied, setCopied] = useState(false);
+  const url = take.shareId ? shareUrl(take.shareId) : null;
+  const doShare = async () => {
+    setErr(null); setBusy(true);
+    try { const id = await session.share(take.id); const u = shareUrl(id); try { await navigator.clipboard.writeText(u); setCopied(true); } catch {} if (navigator.share) navigator.share({ title: take.name, text: 'Un cerebro real de mosca tocando mi música', url: u }).catch(() => {}); }
+    catch (e) { console.warn('compartir', e); setErr(/column|share_id|public/i.test(e?.message || '') ? 'Falta activar «compartir» en la base de datos (migración 0004).' : 'No pudimos compartir. Revisa tu conexión.'); }
+    setBusy(false);
+  };
+  return (
+    <span style={{ position: 'relative' }}>
+      <button type="button" className={`btn lg ${take.shared ? 'acc' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open}><Icon name="subir" size={14} />{take.shared ? 'Compartida' : 'Compartir'}</button>
+      {open && (
+        <div className="panel" role="dialog" aria-label="Compartir toma" style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', width: 320, zIndex: 20, gap: 10, boxShadow: '0 12px 40px rgba(0,0,0,.35)' }}>
+          {!s.user ? <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>Para compartir con un enlace, <a href="#/cuenta" style={{ textDecoration: 'underline' }}>inicia sesión</a>: la toma se sube a tu cuenta.</p>
+            : take.where !== 'nube' ? <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>Esta toma aún no está en la nube. Se sube sola al sincronizar; vuelve en un momento.</p>
+            : take.shared && url ? (
+              <>
+                <span style={{ fontSize: 12.5 }}>Cualquiera con el enlace puede escucharla y ver el cerebro. No se muestra tu correo.</span>
+                <input className="input mono" readOnly value={url} onFocus={(e) => e.target.select()} style={{ fontSize: 11 }} />
+                <div className="row" style={{ gap: 6 }}>
+                  <button type="button" className="btn primary" onClick={async () => { try { await navigator.clipboard.writeText(url); setCopied(true); } catch {} }}>{copied ? 'Copiado' : 'Copiar enlace'}</button>
+                  {navigator.share && <button type="button" className="btn" onClick={() => navigator.share({ title: take.name, url }).catch(() => {})}>Compartir…</button>}
+                  <button type="button" className="btn ghost" style={{ marginLeft: 'auto' }} onClick={async () => { setBusy(true); await session.unshare(take.id).catch(() => setErr('No pudimos retirarla.')); setBusy(false); }} disabled={busy}>Retirar</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: 12.5, lineHeight: 1.5 }}>Crea un enlace público: se escucha con los sonidos de la compu y se ve el cerebro tocando. Quien lo abra puede llevarla a su estudio.</span>
+                <button type="button" className="btn acc" onClick={doShare} disabled={busy}>{busy ? 'Creando…' : 'Crear enlace'}</button>
+              </>
+            )}
+          {err && <p role="alert" style={{ margin: 0, fontSize: 12, color: '#FF8A4D' }}>{err}</p>}
+        </div>
+      )}
+    </span>
+  );
 }
 
 export default function Tomas() {
@@ -113,6 +154,7 @@ export default function Tomas() {
                 <div className="row">
                   <button type="button" className="btn lg primary" onClick={play} disabled={!ready}><Icon name={playing ? 'stop' : 'play'} size={12} fill="currentColor" />{playing ? 'Detener' : 'Reproducir'}</button>
                   <button type="button" className="btn lg" onClick={() => setExp(true)} disabled={!ready}><Icon name="bajar" size={14} />Exportar</button>
+                  <ShareButton take={take} />
                 </div>
               </div>
               <div style={{ borderRadius: 12, background: 'var(--screen)', padding: 12, minHeight: 140, display: 'grid', placeItems: ready ? 'stretch' : 'center', color: '#8C8C94' }}>{ready ? <Roll take={take} playing={playing} t0={session.takeT0} /> : <span>{loadErr || 'Descargando notas de la nube…'}</span>}</div>
