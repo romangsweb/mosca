@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { session, SENSES, SENSE_LABEL } from '../engine/session.js';
+import { session, SENSES, SENSE_LABEL, HIST } from '../engine/session.js';
 import { PAD_KEYS, GROUP_BASE } from '../engine/midi.js';
 import { useS, useTick, Icon, Knob, Seg, roleColor, ROLE_DESC } from '../ui/kit.jsx';
 import Brain from '../ui/Brain.jsx';
@@ -22,6 +22,30 @@ function Hud() {
     </div>
   );
 }
+// Gráfica de la neurona: frecuencia de disparo (área) y cada disparo real (marcas abajo), últimos HIST pasos.
+function RateChart({ track, k, color }) {
+  useTick(15);
+  const L = session.live, rh = L.rateHist[track.id]?.[k], sp = L.spikes[track.id]?.[k];
+  if (!rh) return null;
+  const W = 270, H = 58, n = session.s.playing ? L.step : 0, vals = [], spk = [];
+  for (let i = 0; i < HIST; i++) { const j = (n + 1 + i) % HIST; vals.push(rh[j]); spk.push(sp[j]); }
+  const max = Math.max(20, ...vals) * 1.15, x = (i) => (i / (HIST - 1)) * W, y = (v) => H - 2 - (v / max) * (H - 8);
+  const line = vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const secs = Math.round((HIST * session.ko.stepMs) / 1000), last = vals[HIST - 1], gid = `rg-${track.id}-${k}`;
+  return (
+    <div className="well" style={{ padding: '8px 10px 6px' }}>
+      <svg viewBox={`0 0 ${W} ${H + 14}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label={`Frecuencia de disparo de los últimos ${secs} segundos, máximo ${Math.round(max / 1.15)} hercios`}>
+        <defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={color} stopOpacity="0.35" /><stop offset="1" stopColor={color} stopOpacity="0" /></linearGradient></defs>
+        {[0.25, 0.5, 0.75].map((f) => <line key={f} x1="0" x2={W} y1={H * f} y2={H * f} stroke="var(--line)" />)}
+        <polygon points={`0,${H} ${line} ${W},${H}`} fill={`url(#${gid})`} />
+        <polyline points={line} fill="none" stroke={color} strokeWidth="1.6" strokeLinejoin="round" />
+        {session.s.playing && <circle cx={W} cy={y(last)} r="3" fill={color}><animate attributeName="r" values="3;5;3" dur="1s" repeatCount="indefinite" /></circle>}
+        {spk.map((c, i) => c ? <rect key={i} x={x(i) - 0.75} y={H + 5} width="1.5" height={Math.min(8, 3 + c * 2)} fill={color} opacity={0.85} /> : null)}
+      </svg>
+      <div className="between mono" style={{ fontSize: 9, color: 'var(--dim)', letterSpacing: '.06em' }}><span>−{secs} s</span><span>MÁX {Math.round(Math.max(...vals))} HZ</span><span>AHORA</span></div>
+    </div>
+  );
+}
 function NeuronCard({ track, k }) {
   useTick(6);
   const p = session.pads(track)[k], off = track.map[k], rate = session.s.playing ? Math.round(session.live.rate[track.id][k]) : 0;
@@ -32,6 +56,7 @@ function NeuronCard({ track, k }) {
     <section className="panel" style={{ flex: 1 }}>
       <div className="panel-head"><h2>Neurona</h2><span className="mono muted" style={{ fontSize: 10 }}>PAD {PAD_KEYS[off]} · NOTA {GROUP_BASE[track.group] + off}</span></div>
       <div className="between"><span className="mono" style={{ fontSize: 20, fontWeight: 600, color: roleColor(p) }}>{p.tipo}</span><span className="mono" style={{ fontSize: 20 }}>{rate}<small className="muted" style={{ fontSize: 11 }}> Hz</small></span></div>
+      <RateChart track={track} k={k} color={roleColor(p)} />
       <span className="muted" style={{ fontSize: 12, lineHeight: 1.5 }}>{ROLE_DESC[p.clase]}{p.inhibidora ? ' Es inhibidora: frena a las que conecta.' : ''}{p.idx === D.mn9 ? ' MN9 es la que hace comer a la mosca: la salida del circuito.' : ''}</span>
       <div className="row"><div className="stat"><div className="label">Entradas</div><div className="v">{ins}</div></div><div className="stat"><div className="label">Salidas</div><div className="v">{outs}</div></div><div className="stat"><div className="label">Transmisor</div><div className="v">{NT[p.nt] || p.nt}</div></div></div>
       <div className="row">

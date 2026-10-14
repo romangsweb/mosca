@@ -12,6 +12,7 @@ const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inp
 
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'] };
 export const SENSE_LABEL = { dulce: 'Dulce', amargo: 'Amargo', jon_ce: 'Graves', jon_f: 'Medios', jon_dm: 'Agudos' };
+export const HIST = 128;
 const CURVES = { lineal: (x) => x, suave: (x) => Math.sqrt(x), dura: (x) => x * x };
 
 const DEFAULTS = {
@@ -33,7 +34,7 @@ export class Session {
     this.s = structuredClone(DEFAULTS);
     this.s.playing = false; this.s.rec = false; this.s.ko = { input: null, output: null, error: null };
     this.s.takes = []; this.s.ready = false; this.s.user = null; this.s.plan = 'free'; this.s.sync = cloudEnabled ? 'local' : 'off'; this.s.mutHistory = {}; this.s.data = null; this.s.row = 0; this.s.saved = Date.now();
-    this.live = { step: 0, pos: 0, active: 0, mn9: 0, groom: 0, rate: {}, lanes: {}, hist: new Array(64).fill(0), counts: null, lastHitAt: {}, rowHist: [] };
+    this.live = { step: 0, pos: 0, active: 0, mn9: 0, groom: 0, rate: {}, lanes: {}, hist: new Array(64).fill(0), counts: null, lastHitAt: {}, rowHist: [], rateHist: {}, spikes: {} };
     this.rec = null; this.ear = new Ear(); this.synth = new Synth();
     this.ko = new KO2({
       onStep: (n, at) => this.step(n, at),
@@ -49,7 +50,11 @@ export class Session {
       fetch(`${import.meta.env.BASE_URL}data/cerebro-nube.bin`).then((r) => r.arrayBuffer()),
     ]);
     this.D = D; this.cloud = new Int16Array(cloud); this.sim = new Circuit(D);
-    for (const t of this.s.tracks) this.live.lanes[t.id] = [...Array(12)].map(() => new Uint8Array(16)), this.live.rate[t.id] = new Float32Array(12);
+    for (const t of this.s.tracks) {
+      this.live.lanes[t.id] = [...Array(12)].map(() => new Uint8Array(16)); this.live.rate[t.id] = new Float32Array(12);
+      // historia por neurona (últimos HIST pasos): frecuencia suavizada y disparos crudos, para la gráfica del inspector
+      this.live.rateHist[t.id] = [...Array(12)].map(() => new Float32Array(HIST)); this.live.spikes[t.id] = [...Array(12)].map(() => new Uint8Array(HIST));
+    }
     const saved = await kvGet('settings');
     if (saved) Object.assign(this.s, { ...saved, tracks: saved.tracks?.map((t, i) => ({ ...DEFAULTS.tracks[i], ...t })) || this.s.tracks });
     this.ko.internalBpm = this.s.bpm; this.ko.clockOut = this.s.clockOut; this.ko.latency = this.s.latency;
@@ -141,7 +146,7 @@ export class Session {
       const pads = D.modos[t.sense].pads, lanes = L.lanes[t.id], rate = L.rate[t.id], on = this.audible(t);
       pads.forEach((p, k) => {
         const c = cnt[p.idx]; rate[k] = rate[k] * 0.9 + 0.1 * (c / (s.density / 1000));
-        lanes[k][pos] = 0;
+        lanes[k][pos] = 0; L.rateHist[t.id][k][n % HIST] = rate[k]; L.spikes[t.id][k][n % HIST] = c;
         if (!c || !on) return;
         const x = Math.min(1, c / 3), ghost = s.ghost && p.inhibidora ? 0.6 : 1;
         const vel = Math.round((s.velMin + (s.velMax - s.velMin) * curve(x)) * ghost * t.level);
