@@ -18,7 +18,7 @@ export function voice(ctx, dest, name, vel, t, pitch = 0) {
   const v = Math.max(0.05, vel / 127), g = ctx.createGain(); g.connect(dest);
   const osc = (type, f) => { const o = ctx.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, t); return o; };
   const noise = (filterType, f, q = 1) => { const s = ctx.createBufferSource(); s.buffer = noiseBuffer(ctx); const fl = ctx.createBiquadFilter(); fl.type = filterType; fl.frequency.value = f; fl.Q.value = q; s.connect(fl).connect(g); return s; };
-  const p = Math.pow(2, pitch / 12);
+  const p = name === 'tono' ? 1 : Math.pow(2, pitch / 12);
   switch (name) {
     case 'bombo': { const o = osc('sine', 150 * p); o.frequency.exponentialRampToValueAtTime(42 * p, t + 0.12); o.connect(g); env(ctx, g, t, 0.9 * v, 0.42); o.start(t); o.stop(t + 0.45); break; }
     case 'tom': { const o = osc('sine', 220 * p); o.frequency.exponentialRampToValueAtTime(110 * p, t + 0.2); o.connect(g); env(ctx, g, t, 0.6 * v, 0.3); o.start(t); o.stop(t + 0.32); break; }
@@ -29,6 +29,13 @@ export function voice(ctx, dest, name, vel, t, pitch = 0) {
     case 'hat': { const s = noise('highpass', 7500); env(ctx, g, t, 0.28 * v, 0.05); s.start(t); s.stop(t + 0.06); break; }
     case 'hat abierto': { const s = noise('highpass', 6500); env(ctx, g, t, 0.24 * v, 0.28); s.start(t); s.stop(t + 0.3); break; }
     case 'perc': { const o = osc('triangle', 520 * p), m = osc('square', 1370 * p), mg = ctx.createGain(); mg.gain.value = 300; m.connect(mg).connect(o.frequency); o.connect(g); env(ctx, g, t, 0.3 * v, 0.09); o.start(t); m.start(t); o.stop(t + 0.1); m.stop(t + 0.1); break; }
+    case 'tono': { // voz melódica: pitch = nota MIDI. Dos osciladores desafinados + filtro con envolvente
+      const f = 440 * Math.pow(2, (pitch - 69) / 12), lp = ctx.createBiquadFilter(), dur = pitch < 52 ? 0.42 : 0.3;
+      lp.type = 'lowpass'; lp.Q.value = 6; lp.frequency.setValueAtTime(400 + v * 3800, t); lp.frequency.exponentialRampToValueAtTime(260, t + dur);
+      const a = osc('sawtooth', f), b = osc(pitch < 52 ? 'square' : 'triangle', f * 1.004); a.connect(lp); b.connect(lp); lp.connect(g);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.32 * v, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      a.start(t); b.start(t); a.stop(t + dur + 0.02); b.stop(t + dur + 0.02); break;
+    }
     case 'zap': { const o = osc('square', 1800 * p); o.frequency.exponentialRampToValueAtTime(120, t + 0.09); o.connect(g); env(ctx, g, t, 0.18 * v, 0.1); o.start(t); o.stop(t + 0.11); break; }
     default: break;
   }
@@ -58,7 +65,7 @@ export async function renderWav(take, kitFor) {
   const sr = 44100, dur = take.durMs / 1000 + 1;
   const ctx = new OfflineAudioContext(2, Math.ceil(sr * dur), sr), out = ctx.createGain(); out.gain.value = 0.7;
   const comp = ctx.createDynamicsCompressor(); out.connect(comp).connect(ctx.destination);
-  for (const e of take.events) voice(ctx, out, kitFor(e), e.vel, e.t / 1000 + 0.05, e.track === 'oido' ? 3 : 0);
+  for (const e of take.events) { const n = kitFor(e); voice(ctx, out, n, e.vel, e.t / 1000 + 0.05, n === 'tono' ? e.note : e.track === 'oido' ? 3 : 0); }
   return wavBlob(await ctx.startRendering());
 }
 function wavBlob(buf) {

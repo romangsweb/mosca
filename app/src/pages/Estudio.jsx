@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { session, SENSES, SENSE_LABEL, HIST } from '../engine/session.js';
-import { PAD_KEYS, GROUP_BASE } from '../engine/midi.js';
+import { PAD_KEYS } from '../engine/midi.js';
+import { SCALES, NOTE_NAMES } from '../engine/devices.js';
 import { useS, useTick, Icon, Knob, Seg, roleColor, ROLE_DESC } from '../ui/kit.jsx';
 import Brain from '../ui/Brain.jsx';
 import CircuitMap from '../ui/CircuitMap.jsx';
@@ -54,7 +55,7 @@ function NeuronCard({ track, k }) {
   const toggleMute = () => { silenced ? session.sim.silenced.delete(p.idx) : session.sim.silenced.add(p.idx); session.emit(); };
   return (
     <section className="panel" style={{ flex: 1 }}>
-      <div className="panel-head"><h2>Neurona</h2><span className="mono muted" style={{ fontSize: 10 }}>PAD {PAD_KEYS[off]} · NOTA {GROUP_BASE[track.group] + off}</span></div>
+      <div className="panel-head"><h2>Neurona</h2><span className="mono muted" style={{ fontSize: 10 }}>PAD {PAD_KEYS[off]} · NOTA {session.route(track, k).note ?? '—'}</span></div>
       <div className="between"><span className="mono" style={{ fontSize: 20, fontWeight: 600, color: roleColor(p) }}>{p.tipo}</span><span className="mono" style={{ fontSize: 20 }}>{rate}<small className="muted" style={{ fontSize: 11 }}> Hz</small></span></div>
       <RateChart track={track} k={k} color={roleColor(p)} />
       <span className="muted" style={{ fontSize: 12, lineHeight: 1.5 }}>{ROLE_DESC[p.clase]}{p.inhibidora ? ' Es inhibidora: frena a las que conecta.' : ''}{p.idx === D.mn9 ? ' MN9 es la que hace comer a la mosca: la salida del circuito.' : ''}</span>
@@ -105,7 +106,15 @@ export default function Estudio() {
       </div>
       <div className="studio-bottom">
         <section className="panel pads-panel" style={{ gap: 8 }}>
-          <div className="panel-head"><h2>Pads · {track.name}</h2><span className="mono muted" style={{ fontSize: 10 }}>GRUPO {track.group} · {GROUP_BASE[track.group]}–{GROUP_BASE[track.group] + 11}</span></div>
+          <div className="panel-head"><h2>Pads · {track.name}</h2>
+            <Seg label="Modo de la pista" items={[['ritmo', 'Ritmo'], ['melodia', session.can('melodia') ? 'Melodía' : 'Melodía · PRO']]} value={track.mode || 'ritmo'} onChange={(m) => (m === 'melodia' && !session.can('melodia') ? (location.hash = '#/cuenta?plan') : session.setTrack(track.id, { mode: m }))} />
+          </div>
+          {track.mode === 'melodia' && session.can('melodia') && (
+            <div className="row" style={{ gap: 6 }}>
+              <select className="input" aria-label="Escala" style={{ flex: 1, height: 30 }} value={track.scale} onChange={(ev) => session.setTrack(track.id, { scale: ev.target.value })}>{Object.entries(SCALES).map(([id, [n]]) => <option key={id} value={id}>{n}</option>)}</select>
+              <select className="input" aria-label="Tónica" style={{ width: 84, height: 30 }} value={track.root} onChange={(ev) => session.setTrack(track.id, { root: +ev.target.value })}>{[36, 48, 60].flatMap((o) => NOTE_NAMES.map((n, i) => <option key={o + i} value={o + i}>{n}{o / 12 - 1}</option>))}</select>
+            </div>
+          )}
           <Pads track={track} selPad={selPad} onSelect={onPick} />
         </section>
         <section className="panel lanes-panel" style={{ gap: 8 }}>

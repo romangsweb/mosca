@@ -1,6 +1,7 @@
 // Fly Punch · motor de la sesión: un cerebro, varias pistas, reloj, grabación y salida MIDI / audio interno.
 import { Circuit } from './sim.js';
-import { KO2, GROUP_BASE } from './midi.js';
+import { KO2 } from './midi.js';
+import { profileById, route } from './devices.js';
 import { Ear } from './ear.js';
 import { Synth, DEFAULT_KIT } from './synth.js';
 import { mutate, identity } from './mutate.js';
@@ -8,7 +9,7 @@ import { kvGet, kvSet, takePut, takesAll, takeDel, FREE_TAKES } from './storage.
 import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
-const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow'];
+const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides'];
 
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'] };
 export const SENSE_LABEL = { dulce: 'Dulce', amargo: 'Amargo', jon_ce: 'Graves', jon_f: 'Medios', jon_dm: 'Agudos' };
@@ -18,6 +19,7 @@ export const PRO_FEATURES = {
   datos: 'Modo Datos: tus CSV estimulan los sentidos',
   wav: 'Exportar tomas a WAV',
   tomas: 'Tomas ilimitadas en la nube',
+  melodia: 'Modo melódico: escalas, bajo y melodía',
 };
 const NO_PLAN = { plan: 'free', planBase: 'free', trialEnds: null, trialUsed: false };
 const CURVES = { lineal: (x) => x, suave: (x) => Math.sqrt(x), dura: (x) => x * x };
@@ -26,12 +28,13 @@ const DEFAULTS = {
   bpm: 110, sessionName: 'Sesión sin título', theme: 'noche', guide: true, onboarded: false, alias: '',
   inputs: { dulce: 150, amargo: 40, jon_ce: 0, jon_f: 0, jon_dm: 0 },
   tracks: [
-    { id: 'gusto', name: 'Gusto', sense: 'gusto', group: 'C', ch: 1, mute: false, solo: false, level: 1, map: identity(), kit: [...DEFAULT_KIT] },
-    { id: 'oido', name: 'Oído', sense: 'oido', group: 'A', ch: 1, mute: true, solo: false, level: 0.85, map: identity(), kit: [...DEFAULT_KIT] },
+    { id: 'gusto', name: 'Gusto', sense: 'gusto', group: 'C', ch: 1, mute: false, solo: false, level: 1, map: identity(), kit: [...DEFAULT_KIT], mode: 'ritmo', scale: 'menor_pent', root: 48 },
+    { id: 'oido', name: 'Oído', sense: 'oido', group: 'A', ch: 1, mute: true, solo: false, level: 0.85, map: identity(), kit: [...DEFAULT_KIT], mode: 'ritmo', scale: 'menor_pent', root: 60 },
   ],
   selTrack: 'gusto', selPad: 11,
   density: 4, swing: 54, humanize: 4, curve: 'suave', velMin: 70, velMax: 127, ghost: true,
   sendMidi: true, clockOut: false, fxAuto: false, monitor: 'auto', latency: 0,
+  device: 'ko2', port: null, devOverrides: {},
   oidoSource: 'manual', dataMap: {}, perRow: 16,
 };
 
@@ -136,13 +139,27 @@ export class Session {
   pads(track) { return this.D.modos[track.sense].pads; }
   audible(t) { const solo = this.s.tracks.some((x) => x.solo); return solo ? t.solo : !t.mute; }
   // ---------- dispositivo ----------
+  get profile() { return profileById(this.s.device); }
+  get devOverride() { return this.s.devOverrides[this.s.device] || {}; }
+  wantPort() { const p = this.profile; return p.kind === 'interno' ? { none: true } : this.s.port ? { port: this.s.port } : { match: p.match }; }
   async connect(silent = false) {
+    this.ko.want = this.wantPort();
     try { await this.ko.connect(); } catch (e) { if (!silent) this.set({ ko: { input: null, output: null, error: e.message } }); }
   }
+  // cambiar de dispositivo o de puerto
+  chooseDevice(id, port = null) { this.set({ device: id, port }, true); this.ko.bind(this.wantPort()); if (!this.ko.access && id !== 'interno') this.connect(); }
+  setDevOverride(patch) { this.set({ devOverrides: { ...this.s.devOverrides, [this.s.device]: { ...this.devOverride, ...patch } } }, true); }
+  route(t, k) {
+    const r = route(this.profile, t, k, this.pads(t), this.devOverride);
+    // sin Pro, lo melódico no sale por MIDI y suena con la voz de batería del pad
+    if (r.voice === 'tono' && !this.can('melodia')) return { note: null, ch: r.ch, voice: t.kit[t.map[k]] };
+    return r;
+  }
+  sound(r, vel, when, t) { if (r.voice === 'tono') this.synth.play('tono', vel, when, r.note); else this.synth.play(r.voice, vel, when, t.id === 'oido' ? 3 : 0); }
   setBpm(b) { const bpm = Math.max(40, Math.min(240, Math.round(b))); this.ko.internalBpm = bpm; this.set({ bpm }, true); }
   setClockOut(v) { this.ko.clockOut = v; this.set({ clockOut: v }, true); }
   setLatency(v) { this.ko.latency = v; this.set({ latency: v }, true); }
-  get monitorOn() { return this.s.monitor === 'siempre' || (this.s.monitor === 'auto' && !this.ko.connected); }
+  get monitorOn() { return this.s.monitor === 'siempre' || (this.s.monitor === 'auto' && (!this.ko.connected || this.profile.kind === 'interno')); }
   // ---------- transporte ----------
   play() { this.synth.ensure(); this.sim.reset(); this.live.step = 0; this.s.row = 0; this.ko.start(); this.set({ playing: true }); }
   stop() { this.ko.stop(); if (this.s.rec) this.toggleRec(); this.set({ playing: false }); }
@@ -175,33 +192,30 @@ export class Session {
         const x = Math.min(1, c / 3), ghost = s.ghost && p.inhibidora ? 0.6 : 1;
         const vel = Math.round((s.velMin + (s.velMax - s.velMin) * curve(x)) * ghost * t.level);
         const when = at + swingMs + (Math.random() * 2 - 1) * s.humanize;
-        const off = t.map[k], note = GROUP_BASE[t.group] + off;
+        const r = this.route(t, k);
         lanes[k][pos] = vel;
-        if (s.sendMidi && this.ko.connected) this.ko.hit(note, vel, t.ch, 60, when);
-        if (this.monitorOn) this.synth.play(t.kit[off], vel, when, t.id === 'oido' ? 3 : 0);
+        if (s.sendMidi && this.ko.connected && r.note != null) this.ko.hit(r.note, vel, r.ch, r.voice === 'tono' ? stepMs * 0.9 : 60, when);
+        if (this.monitorOn) this.sound(r, vel, when, t);
         L.lastHitAt[t.id + k] = when;
-        if (this.rec) this.rec.events.push({ t: when - this.rec.t0, step: n - this.rec.n0, track: t.id, pad: k, neuron: p.tipo, note, vel, ch: t.ch, voice: t.kit[off] });
+        if (this.rec) this.rec.events.push({ t: when - this.rec.t0, step: n - this.rec.n0, track: t.id, pad: k, neuron: p.tipo, note: r.note ?? 0, vel, ch: r.ch, voice: r.voice });
       });
     }
     L.mn9 = L.mn9 * 0.9 + 0.1 * (cnt[D.mn9] / (s.density / 1000));
     const g = D.modos.oido.pads[11].idx; L.groom = L.groom * 0.9 + 0.1 * (cnt[g] / (s.density / 1000));
-    if (s.fxAuto && this.ko.connected && n % 2 === 0) { this.ko.cc(12, Math.min(127, L.mn9 * 1.4)); this.ko.cc(13, Math.min(127, active * 2)); }
+    const fx = this.profile.fx;
+    if (s.fxAuto && fx && this.ko.connected && n % 2 === 0) { this.ko.cc(fx.x, Math.min(127, L.mn9 * 1.4)); this.ko.cc(fx.y, Math.min(127, active * 2)); }
     if (s.data) L.rowHist[s.row] = L.mn9;
     this.stepListeners.forEach((f) => f(n, cnt));
   }
-  // pad del K.O. II → estimula su neurona (como optogenética)
+  // nota que llega del aparato → estimula la neurona que toca esa nota (como optogenética)
   onKoNote({ note }) {
-    for (const t of this.s.tracks) {
-      const base = GROUP_BASE[t.group]; if (note < base || note > base + 11) continue;
-      const k = t.map.indexOf(note - base); if (k < 0) continue;
-      this.sim.g[this.pads(t)[k].idx] += this.D.params.w_poi * 2;
-    }
+    for (const t of this.s.tracks) for (let k = 0; k < 12; k++) if (this.route(t, k).note === note) this.sim.g[this.pads(t)[k].idx] += this.D.params.w_poi * 2;
   }
   tapPad(k, track = this.track()) {
     this.sim.g[this.pads(track)[k].idx] += this.D.params.w_poi * 2;
-    const off = track.map[k]; this.synth.ensure();
-    if (this.s.sendMidi && this.ko.connected) this.ko.hit(GROUP_BASE[track.group] + off, 110, track.ch);
-    else this.synth.play(track.kit[off], 110);
+    const r = this.route(track, k); this.synth.ensure();
+    if (this.s.sendMidi && this.ko.connected && r.note != null) this.ko.hit(r.note, 110, r.ch, 180);
+    else this.sound(r, 110, performance.now(), track);
   }
   // ---------- mutar ----------
   mutateTrack(id = this.s.selTrack) {
@@ -284,7 +298,7 @@ export class Session {
       timers.push(setTimeout(() => {
         const at = t0 + e.t;
         if (this.s.sendMidi && this.ko.connected) this.ko.hit(e.note, e.vel, e.ch, 60, at);
-        if (this.monitorOn) this.synth.play(e.voice, e.vel, at, e.track === 'oido' ? 3 : 0);
+        if (this.monitorOn) e.voice === 'tono' ? this.synth.play('tono', e.vel, at, e.note) : this.synth.play(e.voice, e.vel, at, e.track === 'oido' ? 3 : 0);
       }, Math.max(0, e.t - 40)));
     }
     timers.push(setTimeout(() => { this.takeTimers = null; onEnd?.(); }, take.durMs + 100));

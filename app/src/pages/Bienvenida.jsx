@@ -4,7 +4,7 @@ import { Logo } from '../ui/kit.jsx';
 import { cloudEnabled, signInGoogle, signInEmail } from '../engine/cloud.js';
 
 const STEPS = [
-  ['usb', 'Conecta tu K.O. II', 'Cable USB-C con datos, directo a la computadora (sin dock). Fly Punch lo detecta solo en Chrome o Edge. Sin K.O. II también suena, con voces internas.'],
+  ['usb', 'Conecta tu aparato', 'K.O. II, TR-8S, Digitakt, Ableton o cualquier equipo MIDI: elígelo en la galería de Equipo. En Chrome o Edge. Sin aparato también suena, con sonidos internos.'],
   ['gusto', 'Elige qué siente la mosca', 'Gusto (dulce y amargo), Oído (micrófono o un audio) o Datos (un CSV). Cada sentido enciende un circuito real distinto y toca su propia pista.'],
   ['play', 'Toca', 'Tocar está arriba al centro, junto al tempo (o usa la barra espaciadora). Las neuronas que disparan tocan su pad a tempo.'],
   ['tomas', 'Graba, muta y exporta', 'El punto rojo graba. Mutar reparte las neuronas entre los sonidos de tu kit sin romper la mezcla. Exporta tus tomas a MIDI para cualquier DAW.'],
@@ -49,7 +49,7 @@ export default function Bienvenida() {
         <div className="row" style={{ position: 'relative', gap: 12 }}><Logo size={30} /><span style={{ fontWeight: 600, fontSize: 17 }}>Fly Punch</span></div>
         <div style={{ position: 'relative', maxWidth: 520, animation: 'rise .6s ease-out both' }}>
           <p className="label" style={{ margin: '0 0 14px', fontSize: 10 }}>Conectoma FlyWire · 818 neuronas · MIDI</p>
-          <h1 style={{ fontSize: 'clamp(36px, 4.2vw, 56px)', lineHeight: 1.02, letterSpacing: '-.035em' }}>Un cerebro real de mosca toca tu K.O. II.</h1>
+          <h1 style={{ fontSize: 'clamp(36px, 4.2vw, 56px)', lineHeight: 1.02, letterSpacing: '-.035em' }}>Un cerebro real de mosca toca tu música.</h1>
           <p style={{ margin: '18px 0 0', fontSize: 16, lineHeight: 1.6, color: '#A6A6AE', maxWidth: 460 }}>Las neuronas reaccionan a sabores, sonidos y datos. Cada una que dispara toca un pad, a tempo.</p>
         </div>
       </section>

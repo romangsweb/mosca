@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { session } from '../engine/session.js';
 import { PAD_KEYS } from '../engine/midi.js';
+import { NOTE_NAMES } from '../engine/devices.js';
 import { roleColor, roleGlow } from './kit.jsx';
 
 // Pads en el acomodo del K.O. II: 7 8 9 / 4 5 6 / 1 2 3 / . 0 ENT (offsets de nota: . 0 ENT 1..9 = 0..11).
@@ -25,7 +26,7 @@ export function Pads({ track, selPad, onSelect }) {
             <span className="glow" /><span className="led" />
             <span className="k">{PAD_KEYS[off]}</span>
             <span className="n">{p.tipo}</span>
-            <span className="v">{track.kit[off]}</span>
+            <span className="v">{(() => { const r = session.route(track, k); return r.voice === 'tono' && r.note != null ? `${NOTE_NAMES[r.note % 12]}${Math.floor(r.note / 12) - 1}` : track.kit[off]; })()}</span>
           </button>
         );
       })}

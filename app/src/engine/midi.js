@@ -32,9 +32,10 @@ export class KO2 {
     if (!this.access) return { inputs: [], outputs: [] };
     return { inputs: [...this.access.inputs.values()].map((p) => p.name), outputs: [...this.access.outputs.values()].map((p) => p.name) };
   }
-  bind(preferred) {
-    const re = preferred ? new RegExp(preferred.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') : /EP-?133|K\.?O|teenage/i;
-    const pick = (m) => [...m.values()].find((p) => re.test(p.name)) || null;
+  // want: { port: nombre exacto elegido por el usuario, match: RegExp del perfil, none: true para no conectar }
+  bind(want = this.want || {}) {
+    this.want = want; if (!this.access) return;
+    const pick = (m) => { const ps = [...m.values()]; if (want.none) return null; if (want.port) return ps.find((p) => p.name === want.port) || null; return want.match ? ps.find((p) => want.match.test(p.name)) || null : null; };
     if (this.input) this.input.onmidimessage = null;
     this.input = pick(this.access.inputs); this.output = pick(this.access.outputs);
     if (this.input) this.input.onmidimessage = (e) => this.onMsg(e);

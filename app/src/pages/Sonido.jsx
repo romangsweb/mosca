@@ -31,7 +31,7 @@ export default function Sonido() {
     <div className="page">
       <div className="page-head">
         <div><h1>Sonido</h1><p>Cómo se traducen los disparos de las neuronas en notas, y qué hace Fly Punch con tu K.O. II.</p></div>
-        <Seg role="tab" label="Secciones" items={[['ritmo', 'Ritmo'], ['din', 'Dinámica'], ['kit', 'Kit y pistas'], ['midi', 'K.O. II y MIDI']]} value={tab} onChange={setTab} />
+        <Seg role="tab" label="Secciones" items={[['ritmo', 'Ritmo'], ['din', 'Dinámica'], ['kit', 'Kit y pistas'], ['midi', 'MIDI y reloj']]} value={tab} onChange={setTab} />
       </div>
 
       {tab === 'ritmo' && (
@@ -77,7 +77,7 @@ export default function Sonido() {
           <div className="between" style={{ flexWrap: 'wrap' }}>
             <Seg label="Pista" items={s.tracks.map((t) => [t.id, `${t.name} · grupo ${t.group}`])} value={track.id} onChange={(id) => session.set({ selTrack: id }, true)} />
             <div className="row" style={{ flexWrap: 'wrap' }}>
-              <label className="row" style={{ gap: 6 }}>Grupo del K.O. II<select className="input" value={track.group} onChange={(e) => session.setTrack(track.id, { group: e.target.value })}>{Object.keys(GROUP_BASE).map((g) => <option key={g}>{g}</option>)}</select></label>
+              {session.profile.kind === 'grupos' && <label className="row" style={{ gap: 6 }}>Grupo del K.O. II<select className="input" value={track.group} onChange={(e) => session.setTrack(track.id, { group: e.target.value })}>{Object.keys(GROUP_BASE).map((g) => <option key={g}>{g}</option>)}</select></label>}
               <label className="row" style={{ gap: 6 }}>Canal<select className="input" value={track.ch} onChange={(e) => session.setTrack(track.id, { ch: +e.target.value })}>{Array.from({ length: 16 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}</select></label>
               <label className="row" style={{ gap: 6 }}>Nivel<input type="range" min="20" max="100" value={Math.round(track.level * 100)} onChange={(e) => session.setTrack(track.id, { level: +e.target.value / 100 })} /></label>
               <button type="button" className="btn" onClick={() => session.mutateTrack(track.id)}><Icon name="dado" size={14} />Mutar</button>
@@ -92,7 +92,7 @@ export default function Sonido() {
                 const k = track.map.indexOf(off), p = session.pads(track)[k];
                 return (
                   <tr key={key}>
-                    <td className="mono" style={{ fontWeight: 600 }}>{key}</td><td className="mono muted">{GROUP_BASE[track.group] + off}</td>
+                    <td className="mono" style={{ fontWeight: 600 }}>{key}</td><td className="mono muted">{k >= 0 ? session.route(track, k).note ?? '—' : '—'}</td>
                     <td><select className="input" aria-label={`Sonido del pad ${key}`} value={track.kit[off]} onChange={(e) => { const kit = [...track.kit]; kit[off] = e.target.value; session.setTrack(track.id, { kit }); }}>{VOICES.map((v) => <option key={v}>{v}</option>)}</select></td>
                     <td className="muted">{VOICE_CAT[track.kit[off]]}</td><td className="mono">{p?.tipo}</td>
                     <td><button type="button" className="iconbtn" aria-label={`Probar pad ${key}`} onClick={() => session.tapPad(k, track)}><Icon name="play" size={12} fill="currentColor" /></button></td>
@@ -106,16 +106,16 @@ export default function Sonido() {
 
       {tab === 'midi' && (
         <section className="panel" style={{ gap: 0 }}>
-          <Toggle label="Enviar notas al K.O. II" desc="Cada disparo toca su pad por USB-MIDI." checked={s.sendMidi} onChange={(v) => session.set({ sendMidi: v }, true)} />
+          <Toggle label="Enviar notas al aparato" desc={`Cada disparo toca una nota en ${session.profile.name}. Cámbialo en Equipo.`} checked={s.sendMidi} onChange={(v) => session.set({ sendMidi: v }, true)} />
           <Toggle label="Fly Punch marca el tempo (maestro)" desc="Manda reloj y Start/Stop: el secuenciador del K.O. II arranca junto con la mosca y puedes grabar sus patrones encima. En el K.O. II: SHIFT + ERASE, código 101, ENTER. Si lo dejas apagado y el K.O. manda reloj (código 102), Fly Punch lo sigue." checked={s.clockOut} onChange={(v) => session.setClockOut(v)} />
-          <Toggle label="La mosca mueve los efectos" desc="MN9 controla la perilla X de efectos (CC 12) y la actividad total la perilla Y (CC 13). Elige un efecto en el K.O. II para oírlo." checked={s.fxAuto} onChange={(v) => session.set({ fxAuto: v }, true)} />
+          {session.profile.fx && <Toggle label="La mosca mueve los efectos" desc="MN9 controla la perilla X de efectos (CC 12) y la actividad total la perilla Y (CC 13). Elige un efecto en el K.O. II para oírlo." checked={s.fxAuto} onChange={(v) => session.set({ fxAuto: v }, true)} />}
           <Toggle label="Sonido interno" desc="Voces de batería simples para escuchar sin K.O. II. No imitan tu kit.">
             <Seg label="Sonido interno" items={[['auto', 'Solo sin K.O.'], ['siempre', 'Siempre'], ['nunca', 'Nunca']]} value={s.monitor} onChange={(v) => session.set({ monitor: v }, true)} />
           </Toggle>
           <Toggle label="Compensar latencia" desc="Adelanta las notas MIDI si el K.O. II suena tarde.">
             <div className="row" style={{ minWidth: 240 }}><input type="range" min="0" max="60" value={s.latency} onChange={(e) => session.setLatency(+e.target.value)} aria-label="Latencia en milisegundos" style={{ flex: 1 }} /><span className="mono" style={{ width: 48, textAlign: 'right' }}>{s.latency} ms</span></div>
           </Toggle>
-          <Toggle label="Recibir pads del K.O. II" desc="Al tocar un pad del K.O. II se estimula su neurona en el cerebro (como optogenética). Siempre activo; en el K.O. usa el código 110 para recibir en todos los canales.">
+          <Toggle label="Recibir notas del aparato" desc="Al tocar un pad o tecla que corresponde a una neurona, se estimula esa neurona en el cerebro (como optogenética). Siempre activo.">
             <span className={`chip${s.ko.input ? ' acc' : ''}`}>{s.ko.input ? 'ENTRADA LISTA' : 'SIN ENTRADA'}</span>
           </Toggle>
         </section>
