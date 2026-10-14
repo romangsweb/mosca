@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useState } from 'react';
 import { session, SENSES, SENSE_LABEL, HIST, CIRCUITS } from '../engine/session.js';
 import { PAD_KEYS } from '../engine/midi.js';
-import { SCALES, NOTE_NAMES } from '../engine/devices.js';
+import { SCALES, NOTE_NAMES, CHORDS, PROGS } from '../engine/devices.js';
 import { SoundRoute } from '../ui/SoundRoute.jsx';
 import { useS, useTick, Icon, Knob, Seg, roleColor, ROLE_DESC } from '../ui/kit.jsx';
 // el 3D (three.js) solo se descarga si abres una vista 3D: el arranque es más rápido
@@ -32,6 +32,33 @@ function Hud() {
       <div><div className="label">Neuronas activas</div><div className="v">{on ? L.active : 0}<small> / {D.n}</small></div></div>
       <div><div className="label">{label}</div><div className="v" style={{ color: 'var(--acc)' }} data-out={outIdx}>{on ? Math.round(hz) : 0}<small> Hz</small></div></div>
       <div><div className="label">Estado</div><div style={{ fontSize: 14, fontWeight: 500, marginTop: 5 }}>{!on ? 'En pausa' : hz > 15 ? st : veto ? 'Rechaza · amargo' : sense === 'gusto' ? 'Probando' : 'Escuchando'}</div></div>
+    </div>
+  );
+}
+// La mosca aprende tu gusto: Me gusta / No me gusta refuerza o debilita las sinapsis que acaban de disparar juntas
+function Taste() {
+  const s = useS(); useTick(4);
+  const [open, setOpen] = useState(false), pro = session.can('aprende'), ta = s.taste || {}, n = session.learnedCount;
+  const Lr = session.live.learn, fresh = Lr && performance.now() - Lr.at < 1600;
+  const msg = fresh ? (Lr.syn.length ? `${Lr.sign > 0 ? 'Reforzó' : 'Debilitó'} ${Lr.syn.length} sinapsis` : 'Dale play: aprende de lo que está sonando') : `${n} sinapsis aprendidas`;
+  const scr = { background: 'rgba(20,20,22,.85)', borderColor: 'rgba(255,255,255,.1)', color: '#ECECEE', backdropFilter: 'blur(6px)' };
+  return (
+    <div className="br" style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+      {open && (
+        <div role="dialog" aria-label="Aprendizaje" style={{ ...scr, border: '1px solid rgba(255,255,255,.1)', borderRadius: 10, padding: 12, width: 250, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12 }}>
+          <strong style={{ fontSize: 13 }}>La mosca aprende tu gusto</strong>
+          <span style={{ color: '#9A9AA2', lineHeight: 1.45 }}>Mientras suena, pulsa <b>Me gusta</b> (G) o <b>No me gusta</b> (N). Las sinapsis entre neuronas que acaban de disparar juntas se refuerzan o debilitan (de ×0,25 a ×3 su peso real), y «Mutar» tiende hacia los repartos que te gustaron.</span>
+          <label className="row" style={{ gap: 8 }}><input type="checkbox" checked={ta.on !== false} onChange={(e) => session.set({ taste: { ...ta, on: e.target.checked } }, true)} style={{ accentColor: 'var(--acc)' }} />Mutar según mi gusto</label>
+          <div className="between mono" style={{ fontSize: 10, color: '#77777F' }}><span>{n} SINAPSIS · {ta.n || 0} VOTOS</span>
+            <button type="button" className="btn" style={{ height: 26, fontSize: 11 }} disabled={!n && !ta.n} onClick={() => session.forget()}>Olvidar</button></div>
+        </div>
+      )}
+      <div className="row" style={{ gap: 6 }}>
+        <span className="mono" aria-live="polite" style={{ fontSize: 10, color: fresh && Lr.syn.length ? (Lr.sign > 0 ? '#FF6A1A' : '#7D93B2') : '#77777F', alignSelf: 'center' }}>{pro ? msg.toUpperCase() : ''}</span>
+        <button type="button" className="btn" style={scr} title="Me gusta (G): refuerza lo que está sonando" onClick={() => session.feedback(1)}><Icon name="gusta" size={14} />Me gusta{!pro && <span className="badge-pro">PRO</span>}</button>
+        <button type="button" className="iconbtn" style={{ ...scr, border: '1px solid rgba(255,255,255,.1)' }} aria-label="No me gusta" title="No me gusta (N): debilita lo que está sonando" onClick={() => session.feedback(-1)}><Icon name="nogusta" size={14} /></button>
+        {pro && <button type="button" className="iconbtn" style={{ ...scr, border: '1px solid rgba(255,255,255,.1)' }} aria-label="Ajustes de aprendizaje" aria-expanded={open} onClick={() => setOpen(!open)}><Icon name="chevron" size={12} /></button>}
+      </div>
     </div>
   );
 }
@@ -109,7 +136,7 @@ export default function Estudio() {
       <div className="studio-top">
         <section className="screen" aria-label="Cerebro de la mosca">
           <div className="grid" />{view === 'Mapa' ? <CircuitMap selTrack={track.id} selPad={selPad} onPick={onPick} sense={track.sense} /> : <Suspense fallback={<div className="mono" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#77777F', fontSize: 11 }}>CARGANDO 3D…</div>}><Brain view={view} selTrack={track.id} selPad={selPad} onPick={onPick} sense={track.sense} /></Suspense>}<div className="vignette" />
-          <Hud />
+          <Hud /><Taste />
           <div className="tr"><Seg onScreen label="Vista" items={[['Mapa', 'Mapa'], ['Frontal', '3D'], ['Dorsal', 'Dorsal'], ['Lateral', 'Lateral']]} value={view} onChange={setView} /></div>
           <div className="bl">
             <span className="legend"><i style={{ borderColor: '#ECECEE' }} />SENSOR</span><span className="legend"><i style={{ borderColor: '#FF6A1A' }} />EXCITA</span><span className="legend"><i style={{ borderColor: '#7D93B2' }} />INHIBE</span>
@@ -128,9 +155,12 @@ export default function Estudio() {
             <Seg label="Modo de la pista" items={[['ritmo', 'Ritmo'], ['melodia', session.can('melodia') ? 'Melodía' : 'Melodía · PRO']]} value={track.mode || 'ritmo'} onChange={(m) => (m === 'melodia' && !session.can('melodia') ? (location.hash = '#/cuenta?plan') : session.setTrack(track.id, { mode: m }))} />
           </div>
           {track.mode === 'melodia' && session.can('melodia') && (
-            <div className="row" style={{ gap: 6 }}>
-              <select className="input" aria-label="Escala" style={{ flex: 1, height: 30 }} value={track.scale} onChange={(ev) => session.setTrack(track.id, { scale: ev.target.value })}>{Object.entries(SCALES).map(([id, [n]]) => <option key={id} value={id}>{n}</option>)}</select>
-              <select className="input" aria-label="Tónica" style={{ width: 84, height: 30 }} value={track.root} onChange={(ev) => session.setTrack(track.id, { root: +ev.target.value })}>{[36, 48, 60].flatMap((o) => NOTE_NAMES.map((n, i) => <option key={o + i} value={o + i}>{n}{o / 12 - 1}</option>))}</select>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 84px', gap: 6 }}>
+              <select className="input" aria-label="Escala" style={{ height: 30 }} value={track.scale} onChange={(ev) => session.setTrack(track.id, { scale: ev.target.value })}>{Object.entries(SCALES).map(([id, [n]]) => <option key={id} value={id}>{n}</option>)}</select>
+              <select className="input" aria-label="Tónica" style={{ height: 30 }} value={track.root} onChange={(ev) => session.setTrack(track.id, { root: +ev.target.value })}>{[36, 48, 60].flatMap((o) => NOTE_NAMES.map((n, i) => <option key={o + i} value={o + i}>{n}{o / 12 - 1}</option>))}</select>
+              <select className="input" aria-label="Acorde" title="Cada neurona toca un acorde dentro de la escala; el bajo sigue con nota sola" style={{ height: 30 }} value={track.chord || 'nota'} onChange={(ev) => session.setTrack(track.id, { chord: ev.target.value })}>{Object.entries(CHORDS).map(([id, [n]]) => <option key={id} value={id}>{n}</option>)}</select>
+              <span />
+              <select className="input" aria-label="Progresión" title="La armonía avanza un acorde por compás" style={{ height: 30, gridColumn: '1 / -1' }} value={track.prog || 'ninguna'} onChange={(ev) => session.setTrack(track.id, { prog: ev.target.value })}>{Object.entries(PROGS).map(([id, [n]]) => <option key={id} value={id}>{n}</option>)}</select>
             </div>
           )}
           <Pads track={track} selPad={selPad} onSelect={onPick} />

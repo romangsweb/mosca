@@ -95,6 +95,8 @@ export default function App() {
       if (e.key === 'r' || e.key === 'R') session.toggleRec();
       if (e.key === 'm' || e.key === 'M') session.set({ metro: !session.s.metro }, true);
       if (e.key === 't' || e.key === 'T') session.tap();
+      if (e.key === 'g' || e.key === 'G') session.feedback(1);
+      if (e.key === 'n' || e.key === 'N') session.feedback(-1);
     };
     addEventListener('keydown', k); return () => removeEventListener('keydown', k);
   }, []);

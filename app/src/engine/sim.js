@@ -9,6 +9,9 @@ export class Circuit {
     this.off = off; this.tgt = tgt; this.wt = wt; this.groups = D.grupos;
     this.isInput = new Uint8Array(N); for (const g of Object.values(D.grupos)) for (const i of g) this.isInput[i] = 1;
     this.v = new Float32Array(N); this.g = new Float32Array(N); this.ref = new Float32Array(N);
+    // plasticidad: rastro de actividad reciente por neurona y pesos de partida para poder volver atrás
+    this.trace = new Float32Array(N); this.wt0 = wt.slice(); this.pre = new Int32Array(wt.length);
+    for (let i = 0; i < N; i++) for (let k = off[i]; k < off[i + 1]; k++) this.pre[k] = i;
     this.buf = new Float32Array(P.delay_steps * N); this.counts = new Uint16Array(N); this.silenced = new Set();
     this.reset();
   }
@@ -33,6 +36,26 @@ export class Circuit {
         }
       }
     }
+    const dec = Math.exp(-ms / 1500); for (let i = 0; i < N; i++) this.trace[i] = this.trace[i] * dec + counts[i]; // rastro de ~1.5 s
     return counts;
   }
+  // Aprendizaje por recompensa (como la dopamina en el cuerpo fungiforme): las sinapsis entre neuronas que
+  // estuvieron activas juntas hace poco se refuerzan si te gustó (+) o se debilitan si no (−). Devuelve las que cambió.
+  // solo cambian las `max` sinapsis más coactivas (las de neuronas que dispararon juntas con más fuerza): aprendizaje selectivo
+  reinforce(sign, eta = 0.12, only = null, max = 500) {
+    const { trace, wt, wt0, tgt, pre } = this, cand = [];
+    for (let k = 0; k < wt.length; k++) {
+      const i = pre[k], j = tgt[k]; if (trace[i] < 0.6 || trace[j] < 0.6) continue; if (only && !only.has(i) && !only.has(j)) continue;
+      cand.push([trace[i] * trace[j], k]);
+    }
+    cand.sort((a, b) => b[0] - a[0]); const changed = [];
+    for (const [c, k] of cand.slice(0, max)) {
+      const f = 1 + sign * eta * Math.min(1, Math.sqrt(c) / 4), w = wt[k] * f, lo = Math.abs(wt0[k]) * 0.25, hi = Math.abs(wt0[k]) * 3;
+      wt[k] = Math.sign(wt0[k]) * Math.max(lo, Math.min(hi, Math.abs(w))); changed.push(k);
+    }
+    return changed;
+  }
+  // factores aprendidos (k → peso/peso inicial), para guardarlos y restaurarlos
+  learned() { const out = {}; for (let k = 0; k < this.wt.length; k++) { const f = this.wt[k] / this.wt0[k]; if (Math.abs(f - 1) > 0.005) out[k] = Math.round(f * 1000) / 1000; } return out; }
+  applyLearned(map = {}) { this.wt.set(this.wt0); for (const [k, f] of Object.entries(map)) if (+k < this.wt.length) this.wt[+k] = this.wt0[+k] * f; }
 }

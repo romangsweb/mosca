@@ -35,21 +35,42 @@ export const SCALES = {
   menor_pent: ['Pentatónica menor', [0, 3, 5, 7, 10]], mayor_pent: ['Pentatónica mayor', [0, 2, 4, 7, 9]],
   dorica: ['Dórica', [0, 2, 3, 5, 7, 9, 10]], menor: ['Menor natural', [0, 2, 3, 5, 7, 8, 10]], mayor: ['Mayor', [0, 2, 4, 5, 7, 9, 11]],
   frigia: ['Frigia', [0, 1, 3, 5, 7, 8, 10]],
+  lidia: ['Lidia', [0, 2, 4, 6, 7, 9, 11]], mixolidia: ['Mixolidia', [0, 2, 4, 5, 7, 9, 10]],
+  armonica: ['Menor armónica', [0, 2, 3, 5, 7, 8, 11]], melodica: ['Menor melódica', [0, 2, 3, 5, 7, 9, 11]],
+  frigia_dom: ['Frigia dominante', [0, 1, 4, 5, 7, 8, 10]], blues: ['Blues', [0, 3, 5, 6, 7, 10]],
+  hirajoshi: ['Hirajoshi (japonesa)', [0, 2, 3, 7, 8]], in_sen: ['In sen (japonesa)', [0, 1, 5, 7, 10]],
+  hexatonos: ['Tonos enteros', [0, 2, 4, 6, 8, 10]], cromatica: ['Cromática', [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]],
+};
+// acordes: grados de la escala que se apilan sobre la nota (diatónicos: siempre suenan dentro de la escala)
+export const CHORDS = { nota: ['Nota sola', [0]], quinta: ['Quinta', [0, 4]], triada: ['Tríada', [0, 2, 4]], septima: ['Séptima', [0, 2, 4, 6]], sus: ['Suspendido', [0, 3, 4]], octava: ['Octavas', [0, 7]] };
+// progresiones: cada compás mueve la armonía este número de grados (I=0, ii=1, …); se repiten en bucle
+export const PROGS = {
+  ninguna: ['Sin progresión', [0]], pop: ['I–V–vi–IV (pop)', [0, 4, 5, 3]], epica: ['i–VI–III–VII (épica)', [0, 5, 2, 6]],
+  jazz: ['ii–V–I (jazz)', [1, 4, 0, 0]], andaluza: ['i–VII–VI–V (andaluza)', [0, 6, 5, 4]], dos: ['i–iv (dos acordes)', [0, 3]],
 };
 export const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
 // grado de la escala por neurona: motoneuronas y descendentes abajo (bajo), interneuronas en medio, sensores arriba
 const RANK = { motoneurona: 0, descendente: 1, ascendente: 2, interneurona: 3, sensor: 5 };
-export function melodicNote(pads, k, track) {
+const degNote = (track, d) => { const sc = (SCALES[track.scale] || SCALES.menor_pent)[1]; return (track.root ?? 48) + 12 * Math.floor(d / sc.length) + sc[((d % sc.length) + sc.length) % sc.length]; };
+export function melodicNote(pads, k, track, bar = 0) {
   const order = pads.map((p, i) => [RANK[p.clase] ?? 3, p.inhibidora ? 1 : 0, i]).sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]).map((x) => x[2]);
-  const pos = order.indexOf(k), sc = SCALES[track.scale || 'menor_pent'][1];
-  return (track.root ?? 48) + 12 * Math.floor(pos / sc.length) + sc[pos % sc.length];
+  const prog = (PROGS[track.prog] || PROGS.ninguna)[1], d = order.indexOf(k) + prog[bar % prog.length];
+  return degNote(track, d);
+}
+// las notas del acorde de la neurona k (la primera es la principal)
+export function melodicChord(pads, k, track, bar = 0) {
+  const order = pads.map((p, i) => [RANK[p.clase] ?? 3, p.inhibidora ? 1 : 0, i]).sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]).map((x) => x[2]);
+  const prog = (PROGS[track.prog] || PROGS.ninguna)[1], d = order.indexOf(k) + prog[bar % prog.length];
+  // el bajo (motoneuronas y descendentes, las primeras del orden) toca nota sola para no embarrar
+  const shape = order.indexOf(k) < 2 ? [0] : (CHORDS[track.chord] || CHORDS.nota)[1];
+  return shape.map((x) => degNote(track, d + x));
 }
 
 // ¿Qué nota y canal toca la neurona k de una pista con este perfil? (null = no manda MIDI)
-export function route(profile, track, k, pads, overrides = {}) {
+export function route(profile, track, k, pads, overrides = {}, bar = 0) {
   const off = track.map[k], voice = track.kit[off];
-  if (track.mode === 'melodia' || profile.kind === 'melodico') return { note: melodicNote(pads, k, track), ch: overrides.ch ?? profile.ch, voice: 'tono' };
+  if (track.mode === 'melodia' || profile.kind === 'melodico') { const notes = melodicChord(pads, k, track, bar); return { note: notes[0], chord: notes, ch: overrides.ch ?? profile.ch, voice: 'tono' }; }
   switch (profile.kind) {
     case 'grupos': return { note: (profile.base ?? GROUP_BASE[track.group]) + off, ch: overrides.ch ?? (profile.id === 'ko2' ? track.ch : profile.ch), voice };
     case 'voces': return { note: (overrides.notes || profile.notes)[voice] ?? 36, ch: overrides.ch ?? profile.ch, voice };

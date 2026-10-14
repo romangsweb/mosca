@@ -4,7 +4,7 @@ import { KO2 } from './midi.js';
 import { profileById, route } from './devices.js';
 import { Ear } from './ear.js';
 import { Synth, DEFAULT_KIT, FX_DEFAULT } from './synth.js';
-import { mutate, identity } from './mutate.js';
+import { mutate, mutateTaste, identity } from './mutate.js';
 import { kvGet, kvSet, takePut, takesAll, takeDel, FREE_TAKES, sampleGet, samplePut, sampleDel } from './storage.js';
 import { VOICES as KIT_VOICES, kitData, toBuffers } from './kits.js';
 import { SLOTS, FREE_SLOTS, snapshot, applyScene, morphRates, onBar, exampleSong } from './song.js';
@@ -17,7 +17,7 @@ import { SCALES } from './devices.js';
 import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud , shareTake, unshareTake } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
-const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes', 'opto'];
+const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes', 'opto', 'taste'];
 
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'], olfato: ['vinagre', 'co2', 'geosmina'], cortejo: ['canto', 'cva', 'deseo'] };
 // circuitos: cada uno es una parte real del mismo cerebro, con sus sensores y su neurona de salida
@@ -33,6 +33,7 @@ export const HIST = 128;
 export const PRO_FEATURES = {
   datos: 'Modo Datos: tus CSV estimulan los sentidos',
   automatizacion: 'Movimientos ilimitados (grabar y dibujar automatización)',
+  aprende: 'La mosca aprende tu gusto (plasticidad sináptica)',
   wav: 'Exportar tomas a WAV',
   tomas: 'Tomas ilimitadas en la nube',
   melodia: 'Modo melódico: escalas, bajo y melodía',
@@ -60,6 +61,7 @@ const DEFAULTS = {
   mappings: [], audioIn: null, captureAudio: false, kitVol: 0.7,
   sk: { follow: false, fxAuto: false, fx: [0, 1] },
   fx: { ...FX_DEFAULT }, metro: false, countIn: 1, autoLanes: [],
+  taste: { on: true, likes: {}, dislikes: {}, n: 0, plastic: {} },
   opto: { on: false, mode: 'activar', target: 'pad', power: 0.6, pattern: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] },
   follow: { source: 'entrada', tempo: true, key: true, autoPlay: true, offset: 0 },
   oidoSource: 'manual', dataMap: {}, perRow: 16,
@@ -110,6 +112,7 @@ export class Session {
     };
     try { await Promise.race([restoreLocal(), new Promise((_, rej) => setTimeout(() => rej(new Error('guardado local lento')), 5000))]); }
     catch (e) { console.warn('Fly Punch arrancó sin restaurar todo:', e); this.s.notice = 'restauracion'; }
+    try { const pl = this.s.taste?.plastic?.[this.plasticKey]; if (pl) this.sim.applyLearned(pl); } catch (e) { console.warn('aprendizaje', e); }
     this.s.ready = true; this.emit(); this.remember();
     try { this.loadKit(); } catch (e) { console.warn('kit', e); }
     if (cloudEnabled) {
@@ -190,6 +193,22 @@ export class Session {
     else ids.forEach((i) => { this.sim.g[i] += this.D.params.w_poi * (1 + 4 * o.power); });
     this.live.opto = { at, ids, mode: o.mode, power: o.power };
   }
+  // ---------- la mosca aprende tu gusto ----------
+  // Me gusta / no me gusta: refuerza o debilita las sinapsis entre neuronas que acaban de disparar juntas (plasticidad por
+  // recompensa) y guarda el reparto de pads para que «Mutar» tienda hacia lo que te gusta.
+  get plasticKey() { return `${this.D.n}:${this.sim.wt.length}`; }
+  feedback(sign) {
+    if (!this.can('aprende')) { location.hash = '#/cuenta?plan'; return 0; }
+    const t = this.track(), ta = { ...DEFAULTS.taste, ...this.s.taste }, key = sign > 0 ? 'likes' : 'dislikes';
+    const list = [...(ta[key][t.sense] || []), [...t.map]].slice(-12);
+    const changed = this.s.playing ? this.sim.reinforce(sign) : [];
+    const plastic = { ...ta.plastic, [this.plasticKey]: this.sim.learned() };
+    this.set({ taste: { ...ta, [key]: { ...ta[key], [t.sense]: list }, n: (ta.n || 0) + 1, plastic } }, true);
+    this.live.learn = { at: performance.now(), sign, syn: changed };
+    return changed.length;
+  }
+  forget() { this.sim.applyLearned({}); this.set({ taste: { ...DEFAULTS.taste, on: this.s.taste?.on ?? true } }, true); }
+  get learnedCount() { return Object.keys(this.s.taste?.plastic?.[this.plasticKey] || {}).length; }
   // ---------- tempo con golpecitos ----------
   tap() {
     const now = performance.now(); this._taps = (this._taps || []).filter((t) => now - t < 2500); this._taps.push(now);
@@ -399,8 +418,8 @@ export class Session {
   // salida por pista (Pro): cada pista puede ir a otro perfil y puerto; si no, la del Equipo principal
   profileFor(t) { return t.out?.device && this.can('multi') ? profileById(t.out.device) : this.profile; }
   portFor(t) { if (t.out?.port && this.can('multi')) return this.ko.outPort(t.out.port); return this.profileFor(t).kind === 'interno' ? null : this.ko.output; }
-  route(t, k) {
-    const prof = this.profileFor(t), r = route(prof, t, k, this.pads(t), this.s.devOverrides[prof.id] || {});
+  route(t, k, bar = Math.floor((this.live.step || 0) / 16)) {
+    const prof = this.profileFor(t), r = route(prof, t, k, this.pads(t), this.s.devOverrides[prof.id] || {}, bar);
     // sin Pro, lo melódico no sale por MIDI y suena con la voz de batería del pad
     if (r.voice === 'tono' && !this.can('melodia')) return { note: null, ch: r.ch, voice: t.kit[t.map[k]] };
     return r;
@@ -466,11 +485,12 @@ export class Session {
         const r = this.route(t, k);
         lanes[k][pos] = vel;
         const port = this.portFor(t);
-        if (this.toDevice(t, port) && r.note != null) this.ko.hit(r.note, vel, r.ch, r.voice === 'tono' ? stepMs * 0.9 : 60, when, port);
-        if (this.toKit(t, port)) this.sound(r, vel, when, t, k);
+        const notes = r.chord && r.note != null ? r.chord : [r.note]; // acorde: todas las notas, las añadidas un poco más suaves
+        if (this.toDevice(t, port) && r.note != null) notes.forEach((nt, j) => this.ko.hit(nt, j ? Math.round(vel * 0.8) : vel, r.ch, r.voice === 'tono' ? stepMs * 0.9 : 60, when, port));
+        if (this.toKit(t, port)) notes.forEach((nt, j) => this.sound({ ...r, note: nt }, j ? Math.round(vel * 0.7) : vel, when, t, k));
         const mt = L.meter[t.id]; if (!mt || when - mt.at > 60 || vel > mt.vel) L.meter[t.id] = { at: when, vel };
         L.lastHitAt[t.id + k] = when;
-        if (this.rec) this.rec.events.push({ t: when - this.rec.t0, step: n - this.rec.n0, track: t.id, pad: k, neuron: p.tipo, note: r.note ?? 0, vel, ch: r.ch, voice: r.voice, port: port?.name });
+        if (this.rec) notes.forEach((nt, j) => this.rec.events.push({ t: when - this.rec.t0, step: n - this.rec.n0, track: t.id, pad: k, neuron: p.tipo, note: nt ?? 0, vel: j ? Math.round(vel * 0.8) : vel, ch: r.ch, voice: r.voice, port: port?.name, ...(j ? { chord: 1 } : {}) }));
       });
     }
     L.mn9 = L.mn9 * 0.9 + 0.1 * (cnt[D.mn9] / (s.density / 1000));
@@ -500,7 +520,8 @@ export class Session {
   // ---------- mutar ----------
   mutateTrack(id = this.s.selTrack) {
     const t = this.track(id), hist = this.s.mutHistory[id] || [];
-    const map = mutate(this.pads(t), t.kit, this.D.mn9, Date.now());
+    const ts = this.s.taste?.on && this.can('aprende') ? { likes: this.s.taste.likes?.[t.sense] || [], dislikes: this.s.taste.dislikes?.[t.sense] || [] } : {};
+    const map = mutateTaste(this.pads(t), t.kit, this.D.mn9, ts, Date.now());
     this.set({ mutHistory: { ...this.s.mutHistory, [id]: [...hist, t.map].slice(-20) } });
     this.setTrack(id, { map });
   }

@@ -143,6 +143,17 @@ export default function CircuitMap({ selTrack, selPad, onPick, sense }) {
         }
         if (tg) { g.fillStyle = rgba(col, 0.5 * a); g.fillRect(0, 0, W, 2); }
       }
+      // aprendizaje: las sinapsis que se reforzaron (naranja) o debilitaron (acero) brillan un instante sobre el cerebro
+      const Lr = session.live.learn;
+      if (Lr && now - Lr.at < 1400) {
+        const a = 1 - (now - Lr.at) / 1400, col = Lr.sign > 0 ? ACC : STEEL, sm = session.sim;
+        g.strokeStyle = rgba(col, 0.55 * a); g.lineWidth = 1; g.beginPath();
+        for (const k of Lr.syn) { const P = D.pos_um[sm.pre[k]], Q = D.pos_um[sm.tgt[k]], [x1, y1] = proj(P[0], P[1], P[2]), [x2, y2] = proj(Q[0], Q[1], Q[2]); g.moveTo(x1, y1); g.lineTo(x2, y2); }
+        g.stroke();
+        const ids = new Set(); Lr.syn.forEach((k) => { ids.add(sm.pre[k]); ids.add(sm.tgt[k]); });
+        ids.forEach((i) => { const kk = S.idxToK.get(i); if (kk !== undefined) { const [nx, ny] = nodes[kk]; g.strokeStyle = rgba(col, a); g.lineWidth = 2; g.beginPath(); g.arc(nx, ny, 9 + (1 - a) * 14, 0, Math.PI * 2); g.stroke(); } });
+        g.fillStyle = rgba(col, 0.45 * a); g.fillRect(0, H - 2, W, 2);
+      }
       // columnas
       g.font = '500 9px "JetBrains Mono", monospace'; g.fillStyle = '#55555C'; g.textAlign = 'center';
       [['SENSORES', 0], ['INTERNEURONAS', 0.4], ['DESCENDENTES', 0.73], ['SALIDA', 1]].forEach(([l, u]) => g.fillText(l, W * 0.27 + u * W * 0.46, H * 0.55 - 26));

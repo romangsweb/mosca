@@ -78,6 +78,17 @@ export default function Brain({ view, selTrack, selPad, onPick, sense }) {
       const ids = O.ids.slice(0, OPT); ids.forEach((i, j) => { op.set(pos.subarray(i * 3, i * 3 + 3), j * 3); ol.set([pos[i * 3], pos[i * 3 + 1] + 9, pos[i * 3 + 2], pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]], j * 6); });
       og.attributes.position.needsUpdate = true; lg.attributes.position.needsUpdate = true; og.setDrawRange(0, ids.length); lg.setDrawRange(0, ids.length * 2);
     };
+    // aprendizaje: al pulsar Me gusta / No me gusta se iluminan un instante las sinapsis que cambiaron
+    const LRN = 500, lp = new Float32Array(LRN * 6), lrg = new THREE.BufferGeometry(); lrg.setAttribute('position', new THREE.BufferAttribute(lp, 3));
+    const lrn = new THREE.LineSegments(lrg, new THREE.LineBasicMaterial({ color: '#FF6A1A', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+    scene.add(lrn); let lrnAt = 0;
+    const updLearn = (now) => {
+      const Lr = session.live.learn, a = Lr && now - Lr.at < 1400 ? 1 - (now - Lr.at) / 1400 : 0; lrn.material.opacity = a * 0.9;
+      if (!a) { lrg.setDrawRange(0, 0); return; }
+      if (Lr.at !== lrnAt) { lrnAt = Lr.at; const sm = session.sim, syn = Lr.syn.slice(0, LRN); lrn.material.color.set(Lr.sign > 0 ? '#FF6A1A' : '#7D93B2');
+        syn.forEach((k, j) => { const i = sm.pre[k], o = sm.tgt[k]; lp.set(pos.subarray(i * 3, i * 3 + 3), j * 6); lp.set(pos.subarray(o * 3, o * 3 + 3), j * 6 + 3); });
+        lrg.attributes.position.needsUpdate = true; lrg.setDrawRange(0, syn.length * 2); }
+    };
     // etiquetas de los 12 pads de la pista seleccionada
     const tags = Array.from({ length: 12 }, () => { const s = document.createElement('span'); s.className = 'tag'; el.querySelector('.tags').appendChild(s); return s; });
     const tmp = new THREE.Vector3(); let tween = null, padIdx = [], sel = -1, allTags = false;
@@ -113,7 +124,7 @@ export default function Brain({ view, selTrack, selPad, onPick, sense }) {
       for (let i = 0; i < N; i++) aAct[i] *= k; for (let i = 0; i < eAct.length; i++) eAct[i] *= k;
       ng.attributes.aAct.needsUpdate = true; eg.attributes.aAct.needsUpdate = true;
       if (tween) { const u = Math.min(1, (now - tween.t0) / tween.dur), e = 1 - Math.pow(1 - u, 3); camera.position.lerpVectors(tween.from, tween.to, e); controls.target.lerpVectors(tween.tFrom, tween.tTo, e); if (u >= 1) tween = null; }
-      updOpto(now); controls.update(); depthU.uCam.value = camera.position.distanceTo(bs.center); renderer.render(scene, camera);
+      updOpto(now); updLearn(now); controls.update(); depthU.uCam.value = camera.position.distanceTo(bs.center); renderer.render(scene, camera);
       const w = el.clientWidth, h = el.clientHeight;
       padIdx.forEach((i, k) => { const t = tags[k]; tmp.fromArray(pos, i * 3).project(camera); const vis = tmp.z < 1 && (allTags || k === sel || aAct[i] > 0.85); t.style.display = vis ? 'block' : 'none'; if (vis) t.style.transform = `translate(${(tmp.x * 0.5 + 0.5) * w + 9}px,${(-tmp.y * 0.5 + 0.5) * h - 7}px)`; t.classList.toggle('hot', aAct[i] > 0.4); });
       raf = requestAnimationFrame(frame);
