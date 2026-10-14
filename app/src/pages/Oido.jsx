@@ -7,7 +7,7 @@ const BANDS = [['jon_ce', 'Graves', 'JO-CM', '#7D93B2'], ['jon_f', 'Medios', 'JO
 const bandOf = (i, n) => (i < n * 0.08 ? 0 : i < n * 0.4 ? 1 : 2);
 
 function useOidoTrack() {
-  useEffect(() => { session.set({ selTrack: 'oido' }); const t = session.track('oido'); if (t.mute) session.setTrack('oido', { mute: false }); }, []);
+  useEffect(() => { session.set({ selTrack: 'oido' }); const t = session.track('oido'); if (t.sense !== 'oido' && !session.s.tracks.some((x) => x.sense === 'oido')) session.setSense('oido', 'oido'); if (t.mute) session.setTrack('oido', { mute: false }); }, []);
 }
 // Espectro circular real (micrófono o archivo) con anillos
 function Radial({ on }) {

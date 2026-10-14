@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useState } from 'react';
-import { session, SENSES, SENSE_LABEL, HIST } from '../engine/session.js';
+import { session, SENSES, SENSE_LABEL, HIST, CIRCUITS } from '../engine/session.js';
 import { PAD_KEYS } from '../engine/midi.js';
 import { SCALES, NOTE_NAMES } from '../engine/devices.js';
 import { SoundRoute } from '../ui/SoundRoute.jsx';
@@ -12,18 +12,25 @@ import { Pads, Lanes } from '../ui/PadsLanes.jsx';
 import ScenesStrip from '../ui/Scenes.jsx';
 
 const PRESETS = { gusto: { dulce: ['Solo dulce', { dulce: 180, amargo: 0 }], veto: ['Veto amargo', { dulce: 150, amargo: 40 }], rampa: ['Mitad y mitad', { dulce: 90, amargo: 90 }] },
-  oido: { voz: ['Voz', { jon_ce: 40, jon_f: 150, jon_dm: 40 }], bajo: ['Bajo', { jon_ce: 180, jon_f: 30, jon_dm: 0 }], brillo: ['Brillos', { jon_ce: 0, jon_f: 40, jon_dm: 170 }] } };
+  oido: { voz: ['Voz', { jon_ce: 40, jon_f: 150, jon_dm: 40 }], bajo: ['Bajo', { jon_ce: 180, jon_f: 30, jon_dm: 0 }], brillo: ['Brillos', { jon_ce: 0, jon_f: 40, jon_dm: 170 }] },
+  olfato: { fruta: ['Fruta', { vinagre: 170, co2: 0, geosmina: 0 }], alerta: ['Alerta', { vinagre: 0, co2: 150, geosmina: 120 }], conflicto: ['Fruta podrida', { vinagre: 140, co2: 0, geosmina: 140 }] },
+  cortejo: { canto: ['Solo canto', { canto: 160, cva: 0, deseo: 0 }], cortejo: ['Canto + cVA', { canto: 150, cva: 120, deseo: 0 }], deseo: ['pC1 directo', { canto: 0, cva: 0, deseo: 150 }] } };
+// salida de cada circuito: etiqueta de la neurona y estado cuando dispara
+const OUT = { gusto: ['MN9 · comer', 'Comiendo'], oido: ['DNg35 · acicalar', 'Se acicala'], olfato: [null, 'Responde al olor'], cortejo: [null, 'Receptiva'] };
 const NT = { acetylcholine: 'ACh', gaba: 'GABA', glutamate: 'Glu', serotonin: '5-HT', dopamine: 'DA', octopamine: 'OA' };
-const SENSE_COLOR = { dulce: 'var(--acc)', amargo: 'var(--steel)', jon_ce: 'var(--steel)', jon_f: 'var(--white)', jon_dm: 'var(--acc)' };
+const SENSE_COLOR = { dulce: 'var(--acc)', amargo: 'var(--steel)', jon_ce: 'var(--steel)', jon_f: 'var(--white)', jon_dm: 'var(--acc)', vinagre: 'var(--acc)', co2: 'var(--steel)', geosmina: 'var(--white)', canto: 'var(--acc)', cva: 'var(--white)', deseo: 'var(--steel)' };
 
 function Hud() {
   useTick(8);
-  const L = session.live, on = session.s.playing, veto = on && session.s.inputs.amargo > session.s.inputs.dulce * 0.25 && L.mn9 < 15;
+  const L = session.live, on = session.s.playing, sense = session.track().sense, D = session.D;
+  const [lab, st] = OUT[sense] || OUT.gusto, outIdx = D.salidas?.[sense] ?? D.mn9, hz = sense === 'gusto' ? L.mn9 : L.out[sense] || 0;
+  const label = lab || `${session.pads(session.track())[11].tipo} · salida`;
+  const veto = sense === 'gusto' && on && session.s.inputs.amargo > session.s.inputs.dulce * 0.25 && L.mn9 < 15;
   return (
     <div className="hud">
-      <div><div className="label">Neuronas activas</div><div className="v">{on ? L.active : 0}<small> / 818</small></div></div>
-      <div><div className="label">MN9 · comer</div><div className="v" style={{ color: 'var(--acc)' }}>{on ? Math.round(L.mn9) : 0}<small> Hz</small></div></div>
-      <div><div className="label">Estado</div><div style={{ fontSize: 14, fontWeight: 500, marginTop: 5 }}>{!on ? 'En pausa' : L.mn9 > 15 ? 'Comiendo' : veto ? 'Rechaza · amargo' : 'Probando'}</div></div>
+      <div><div className="label">Neuronas activas</div><div className="v">{on ? L.active : 0}<small> / {D.n}</small></div></div>
+      <div><div className="label">{label}</div><div className="v" style={{ color: 'var(--acc)' }} data-out={outIdx}>{on ? Math.round(hz) : 0}<small> Hz</small></div></div>
+      <div><div className="label">Estado</div><div style={{ fontSize: 14, fontWeight: 500, marginTop: 5 }}>{!on ? 'En pausa' : hz > 15 ? st : veto ? 'Rechaza · amargo' : sense === 'gusto' ? 'Probando' : 'Escuchando'}</div></div>
     </div>
   );
 }
@@ -72,12 +79,16 @@ function NeuronCard({ track, k }) {
   );
 }
 function Inputs({ track }) {
-  const s = useS(), senses = SENSES[track.sense], pre = PRESETS[track.sense];
+  const s = useS(), senses = SENSES[track.sense] || [], pre = PRESETS[track.sense] || {};
   const cur = Object.entries(pre).find(([, [, v]]) => Object.entries(v).every(([k, x]) => s.inputs[k] === x))?.[0];
   const live = track.sense === 'oido' && s.oidoSource !== 'manual';
   return (
     <section className="panel">
       <div className="panel-head"><h2>Entrada · {track.name}</h2><a href={track.sense === 'oido' ? '#/oido' : '#/datos'} className="muted" style={{ fontSize: 11 }}>{track.sense === 'oido' ? 'Micrófono o archivo' : 'Usar datos'}</a></div>
+      <div className="field"><label htmlFor="circ">Circuito de la pista</label>
+        <select id="circ" className="input" style={{ height: 32 }} value={track.sense} onChange={(e) => session.setSense(track.id, e.target.value)} title={CIRCUITS[track.sense]?.desc}>
+          {Object.entries(CIRCUITS).filter(([id]) => session.D.modos[id]).map(([id, c]) => <option key={id} value={id}>{c.name}{id === 'olfato' || id === 'cortejo' ? ' · nuevo' : ''}</option>)}
+        </select></div>
       {live ? <p className="muted" style={{ margin: 0 }}>Escuchando {s.oidoSource === 'mic' ? 'el micrófono' : 'un archivo'}. <a href="#/oido" style={{ textDecoration: 'underline' }}>Abrir Oído</a></p> : (
         <div className="knobs">{senses.map((k) => <Knob key={k} id={`in-${k}`} label={SENSE_LABEL[k]} value={s.inputs[k]} color={SENSE_COLOR[k]} onChange={(v) => session.setInput(k, v)} />)}</div>
       )}

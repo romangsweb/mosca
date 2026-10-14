@@ -19,8 +19,15 @@ import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, s
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
 const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes'];
 
-export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'] };
-export const SENSE_LABEL = { dulce: 'Dulce', amargo: 'Amargo', jon_ce: 'Graves', jon_f: 'Medios', jon_dm: 'Agudos' };
+export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'], olfato: ['vinagre', 'co2', 'geosmina'], cortejo: ['canto', 'cva', 'deseo'] };
+// circuitos: cada uno es una parte real del mismo cerebro, con sus sensores y su neurona de salida
+export const CIRCUITS = {
+  gusto: { name: 'Gusto', desc: 'Neuronas del gusto en la probóscide. La salida, MN9, mueve el músculo para comer.' },
+  oido: { name: 'Oído', desc: 'Órgano de Johnston en la antena: graves, medios y agudos.' },
+  olfato: { name: 'Olfato', desc: 'Neuronas olfativas de la antena: vinagre (fruta), CO₂ y geosmina (alerta). Pasan por el lóbulo antenal hacia el cuerno lateral.' },
+  cortejo: { name: 'Cortejo', desc: 'Cómo una hembra escucha el canto del macho (antena, JO-B), huele su feromona (cVA) y decide: pC1 y vpoDN.' },
+};
+export const SENSE_LABEL = { dulce: 'Dulce', amargo: 'Amargo', jon_ce: 'Graves', jon_f: 'Medios', jon_dm: 'Agudos', vinagre: 'Vinagre', co2: 'CO₂', geosmina: 'Geosmina', canto: 'Canto', cva: 'cVA', deseo: 'pC1' };
 export const HIST = 128;
 // Qué abre Pro. El servidor aplica lo que importa (límite de tomas); la app solo muestra y bloquea la interfaz.
 export const PRO_FEATURES = {
@@ -40,7 +47,7 @@ const CURVES = { lineal: (x) => x, suave: (x) => Math.sqrt(x), dura: (x) => x * 
 
 const DEFAULTS = {
   bpm: 110, sessionName: 'Sesión sin título', theme: 'noche', guide: true, onboarded: false, alias: '',
-  inputs: { dulce: 150, amargo: 40, jon_ce: 0, jon_f: 0, jon_dm: 0 },
+  inputs: { dulce: 150, amargo: 40, jon_ce: 0, jon_f: 0, jon_dm: 0, vinagre: 0, co2: 0, geosmina: 0, canto: 0, cva: 0, deseo: 0 },
   tracks: [
     { id: 'gusto', name: 'Gusto', sense: 'gusto', group: 'C', ch: 1, mute: false, solo: false, level: 1, map: identity(), kit: [...DEFAULT_KIT], mode: 'ritmo', scale: 'menor_pent', root: 48, dest: 'auto', kitId: null, rev: 0.12, dly: 0, play: 'vivo', frozen: null, len: 16 },
     { id: 'oido', name: 'Oído', sense: 'oido', group: 'A', ch: 1, mute: true, solo: false, level: 0.85, map: identity(), kit: [...DEFAULT_KIT], mode: 'ritmo', scale: 'menor_pent', root: 60, dest: 'auto', kitId: null, rev: 0.2, dly: 0.1, play: 'vivo', frozen: null, len: 16 },
@@ -63,7 +70,7 @@ export class Session {
     this.s = structuredClone(DEFAULTS);
     this.s.playing = false; this.s.rec = false; this.s.ko = { input: null, output: null, error: null };
     this.s.takes = []; this.s.ready = false; this.s.user = null; Object.assign(this.s, NO_PLAN); this.s.sync = cloudEnabled ? 'local' : 'off'; this.s.mutHistory = {}; this.s.data = null; this.s.row = 0; this.s.saved = Date.now();
-    this.live = { step: 0, pos: 0, active: 0, mn9: 0, groom: 0, rate: {}, lanes: {}, hist: new Array(64).fill(0), counts: null, lastHitAt: {}, rowHist: [], rateHist: {}, spikes: {}, meter: {} };
+    this.live = { step: 0, pos: 0, active: 0, mn9: 0, groom: 0, rate: {}, lanes: {}, out: {}, hist: new Array(64).fill(0), counts: null, lastHitAt: {}, rowHist: [], rateHist: {}, spikes: {}, meter: {} };
     if (typeof window !== 'undefined') { addEventListener('pagehide', () => this.flush()); document.addEventListener('visibilitychange', () => document.hidden && this.flush()); }
     this.rec = null; this.ear = new Ear(); this.synth = new Synth(); this.capture = new Capture();
     this.ko = new KO2({
@@ -81,7 +88,8 @@ export class Session {
   }
   async loadCore() {
     const [D, cloud] = await Promise.all([
-      fetch(`${import.meta.env.BASE_URL}data/circuito-multi.json`).then((r) => r.json()),
+      // circuitos v783 (gusto, oído, olfato, cortejo); si aún no está publicado, el de siempre (gusto y oído)
+      fetch(`${import.meta.env.BASE_URL}data/circuito-v783.json`).then((r) => (r.ok ? r.json() : Promise.reject(r.status))).catch(() => fetch(`${import.meta.env.BASE_URL}data/circuito-multi.json`).then((r) => r.json())),
       fetch(`${import.meta.env.BASE_URL}data/cerebro-nube.bin`).then((r) => r.arrayBuffer()),
     ]);
     this.D = D; this.cloud = new Int16Array(cloud); this.sim = new Circuit(D);
@@ -95,7 +103,7 @@ export class Session {
     const restoreLocal = async () => {
       if (!(await dbOk())) throw new Error('indexeddb no disponible');
       const saved = await kvGet('settings');
-      if (saved) Object.assign(this.s, { ...saved, tracks: saved.tracks?.map((t, i) => ({ ...DEFAULTS.tracks[i], ...t })) || this.s.tracks });
+      if (saved) Object.assign(this.s, { ...saved, inputs: { ...DEFAULTS.inputs, ...saved.inputs }, tracks: saved.tracks?.map((t, i) => ({ ...DEFAULTS.tracks[i], ...t })) || this.s.tracks });
       this.ko.internalBpm = this.s.bpm; this.ko.clockOut = this.s.clockOut; this.ko.latency = this.s.latency;
       await this.refreshTakes();
     };
@@ -349,7 +357,8 @@ export class Session {
   setInput(k, v, persist = true) { this.set({ inputs: { ...this.s.inputs, [k]: v } }, persist); }
   setTrack(id, patch, persist = true) { this.set({ tracks: this.s.tracks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }, persist); if ('level' in patch) this.skFollow(this.track(id)); if ('rev' in patch || 'dly' in patch) { const t = this.track(id); this.synth.setSends(id, { rev: t.rev ?? 0, dly: t.dly ?? 0 }); } }
   track(id = this.s.selTrack) { return this.s.tracks.find((t) => t.id === id); }
-  pads(track) { return this.D.modos[track.sense].pads; }
+  pads(track) { return (this.D.modos[track.sense] || this.D.modos.gusto).pads; }
+  setSense(tid, sense) { if (!this.D.modos[sense]) return; this.setTrack(tid, { sense, frozen: null, play: 'vivo' }); }
   audible(t) { const solo = this.s.tracks.some((x) => x.solo); return solo ? t.solo : !t.mute; }
   // ---------- dispositivo ----------
   get profile() { return profileById(this.s.device); }
@@ -393,7 +402,9 @@ export class Session {
     }
     morphRates(this, r, this.live.step);
     // las pistas silenciadas no reciben estímulo de su sentido: así no ensucian el cerebro
-    for (const t of this.s.tracks) if (!this.audible(t)) for (const k of SENSES[t.sense]) r[k] = 0;
+    // solo estimulan los sentidos de las pistas que suenan (un circuito sin pista no se activa a escondidas)
+    const live = new Set(this.s.tracks.filter((t) => this.audible(t)).flatMap((t) => SENSES[t.sense] || []));
+    for (const k of Object.keys(r)) if (!live.has(k)) r[k] = 0;
     return r;
   }
   step(n, at) {
@@ -413,7 +424,7 @@ export class Session {
     L.active = active; L.hist.push(active); L.hist.shift(); L.step = n; L.stepAt = at;
     const pos = n % 16, swingMs = pos % 2 ? ((s.swing - 50) / 50) * stepMs : 0, curve = CURVES[s.curve];
     for (const t of s.tracks) {
-      const pads = D.modos[t.sense].pads, lanes = L.lanes[t.id], rate = L.rate[t.id], on = this.audible(t);
+      const pads = this.pads(t), lanes = L.lanes[t.id], rate = L.rate[t.id], on = this.audible(t);
       pads.forEach((p, k) => {
         const c = cnt[p.idx]; rate[k] = rate[k] * 0.9 + 0.1 * (c / (s.density / 1000));
         lanes[k][pos] = 0; L.rateHist[t.id][k][n % HIST] = rate[k]; L.spikes[t.id][k][n % HIST] = c;
@@ -436,6 +447,7 @@ export class Session {
     }
     L.mn9 = L.mn9 * 0.9 + 0.1 * (cnt[D.mn9] / (s.density / 1000));
     const g = D.modos.oido.pads[11].idx; L.groom = L.groom * 0.9 + 0.1 * (cnt[g] / (s.density / 1000));
+    for (const [m, i] of Object.entries(D.salidas || {})) L.out[m] = (L.out[m] || 0) * 0.9 + 0.1 * (cnt[i] / (s.density / 1000));
     const fx = this.profile.fx;
     if (s.fxAuto && fx && this.ko.connected && n % 2 === 0) { this.ko.cc(fx.x, Math.min(127, L.mn9 * 1.4)); this.ko.cc(fx.y, Math.min(127, active * 2)); }
     if (s.sk?.fxAuto && n % 2 === 0 && this.can('controles')) { // la mosca mueve los efectos del sidekick: MN9 → tira 1, acicalamiento → tira 2

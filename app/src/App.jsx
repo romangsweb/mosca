@@ -176,7 +176,7 @@ function StatusBar({ s }) {
       <span>{s.playing ? L.active : 0} NEURONAS ACTIVAS</span>
       <span>{s.ko.output ? `MIDI OUT · ${s.ko.output}` : `${session.profile.name.toUpperCase()} · ${session.monitorOn ? 'SONIDO INTERNO' : 'SIN CONEXIÓN'}`}</span>
       {s.latency > 0 && <span>LATENCIA −{s.latency} ms</span>}
-      <span className="right">818 NEURONAS · FLYWIRE v630 · SHIU ET AL. 2024</span>
+      <span className="right">{session.D?.n || ''} NEURONAS · FLYWIRE v783 · SHIU ET AL. 2024</span>
     </footer>
   );
 }

@@ -9,7 +9,7 @@ const DOCS = [
     <p>Conecta el K.O. II con un cable USB-C de datos <strong>directo a la computadora</strong> (los docks a veces bloquean el MIDI). Abre Fly Punch en Chrome o Edge y pulsa <code>Conectar K.O. II</code> arriba a la derecha.</p>
     <p>En el K.O. II elige un kit y deja el grupo <code>C</code> para la pista Gusto y el grupo <code>A</code> para Oído. Pulsa <code>Tocar</code> (o la barra espaciadora).</p></>],
   ['Cómo piensa la mosca', <>
-    <p>Fly Punch simula 818 neuronas reales del conectoma <strong>FlyWire</strong> (v630) con el modelo de Shiu et al. (Nature, 2024): cada neurona acumula voltaje, dispara al pasar un umbral y empuja a las neuronas a las que está conectada, con los pesos medidos en el conectoma.</p>
+    <p>Fly Punch simula {session.D?.n || 'cientos de'} neuronas reales del conectoma <strong>FlyWire</strong> (v783) con el modelo de Shiu et al. (Nature, 2024): cada neurona acumula voltaje, dispara al pasar un umbral y empuja a las neuronas a las que está conectada, con los pesos medidos en el conectoma. Son cuatro circuitos del mismo cerebro —gusto, oído, olfato y cortejo—, elegidos simulando el cerebro completo (138 639 neuronas) y quedándonos con las que responden a cada estímulo.</p>
     <p>Los sabores y sonidos entran como disparos al azar en los sensores. Lo que oyes es la respuesta del circuito: por ejemplo, el amargo activa inhibidoras que apagan a MN9, la neurona que hace comer a la mosca.</p>
     <p>Es un modelo simplificado: reproduce bien qué neuronas se activan, no su biología completa.</p></>],
   ['Pistas, grupos y Mutar', <>
