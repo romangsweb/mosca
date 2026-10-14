@@ -11,10 +11,11 @@ import { SLOTS, FREE_SLOTS, snapshot, applyScene, morphRates, onBar, exampleSong
 import { handleMidi, FREE_MAPPINGS } from './controls.js';
 import { Capture } from './capture.js';
 import { audioPut, audioGet, audioDel, dbOk } from './storage.js';
+import { SK_PRESET, skPorts, skSend } from './sidekick.js';
 import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
-const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol'];
+const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk'];
 
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'] };
 export const SENSE_LABEL = { dulce: 'Dulce', amargo: 'Amargo', jon_ce: 'Graves', jon_f: 'Medios', jon_dm: 'Agudos' };
@@ -47,6 +48,7 @@ const DEFAULTS = {
   device: 'ko2', port: null, devOverrides: {}, kitId: 'analogo',
   scenes: {}, song: [], songLoop: true, morph: true,
   mappings: [], audioIn: null, captureAudio: false, kitVol: 0.7,
+  sk: { follow: false, fxAuto: false, fx: [0, 1] },
   oidoSource: 'manual', dataMap: {}, perRow: 16,
 };
 
@@ -64,7 +66,8 @@ export class Session {
       onStart: () => { if (!this.s.playing) this.play(); },
       onStop: () => { if (this.s.playing) this.stop(); },
       onNote: (m) => this.onKoNote(m),
-      onAny: (m) => { this.live.lastMsg = { ...m, at: performance.now() }; handleMidi(this, m); },
+      onRaw: (m) => { this.live.lastRaw = { ...m, at: performance.now() }; },
+      onAny: (m) => { this._midiAt = performance.now(); this.live.lastMsg = { ...m, at: performance.now() }; handleMidi(this, m); },
       onState: (st) => this.set({ ko: { ...st, error: null } }),
     });
   }
@@ -150,6 +153,27 @@ export class Session {
   // ---------- controles aprendidos ----------
   get mappingsFull() { return !this.can('controles') && this.s.mappings.length >= FREE_MAPPINGS; }
   learn(target) { if (this.mappingsFull && !this.s.mappings.some((m) => m.target === target)) { location.hash = '#/cuenta?plan'; return; } if (!this.ko.access) this.connect(); this.set({ learn: this.s.learn === target ? null : target }); }
+  // ---------- sidekick (EP-136) ----------
+  get sidekick() { return skPorts(this.ko); }
+  applySkPreset() {
+    const port = this.sidekick.input?.name, n = this.can('controles') ? SK_PRESET.length : FREE_MAPPINGS;
+    const pick = SK_PRESET.slice(0, n), targets = new Set(pick.map((x) => x.target));
+    const keep = this.s.mappings.filter((m) => !targets.has(m.target) && !pick.some((x) => x.src.ch === m.src.ch && x.src.num === m.src.num && m.src.type === 'cc'));
+    this.set({ mappings: [...(this.can('controles') ? keep : []), ...pick.map((x) => ({ target: x.target, src: { ...x.src, port } }))], learn: null }, true);
+    return pick.length;
+  }
+  setSk(patch) {
+    const sk = { ...this.s.sk, ...patch }; this.set({ sk }, true);
+    const out = this.sidekick.output;
+    if (patch.fx) sk.fx.forEach((i, k) => skSend.fxType(out, k + 1, i));
+    if (patch.follow) this.s.tracks.slice(0, 2).forEach((t, k) => skSend.fader(out, k + 1, t.level));
+    if (patch.fxAuto === false) [1, 2].forEach((k) => skSend.fxAmount(out, k, 0));
+  }
+  skFollow(t) { // la mezcla de Fly Punch mueve el fader de la tira del sidekick (sin eco si el cambio vino del propio sidekick)
+    if (!this.s.sk?.follow || !this.can('controles') || performance.now() - (this._midiAt || 0) < 40) return;
+    const k = this.s.tracks.findIndex((x) => x.id === t.id); if (k < 0 || k > 1) return;
+    skSend.fader(this.sidekick.output, k + 1, t.level);
+  }
   unmap(target) { this.set({ mappings: this.s.mappings.filter((m) => m.target !== target) }, true); }
   getAudio(id) { return audioGet(id); }
   // ---------- escenas y canción ----------
@@ -217,7 +241,7 @@ export class Session {
     await this.refreshTakes();
   }
   setInput(k, v) { this.set({ inputs: { ...this.s.inputs, [k]: v } }, true); }
-  setTrack(id, patch) { this.set({ tracks: this.s.tracks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }, true); }
+  setTrack(id, patch) { this.set({ tracks: this.s.tracks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }, true); if ('level' in patch) this.skFollow(this.track(id)); }
   track(id = this.s.selTrack) { return this.s.tracks.find((t) => t.id === id); }
   pads(track) { return this.D.modos[track.sense].pads; }
   audible(t) { const solo = this.s.tracks.some((x) => x.solo); return solo ? t.solo : !t.mute; }
@@ -298,6 +322,10 @@ export class Session {
     const g = D.modos.oido.pads[11].idx; L.groom = L.groom * 0.9 + 0.1 * (cnt[g] / (s.density / 1000));
     const fx = this.profile.fx;
     if (s.fxAuto && fx && this.ko.connected && n % 2 === 0) { this.ko.cc(fx.x, Math.min(127, L.mn9 * 1.4)); this.ko.cc(fx.y, Math.min(127, active * 2)); }
+    if (s.sk?.fxAuto && n % 2 === 0 && this.can('controles')) { // la mosca mueve los efectos del sidekick: MN9 → tira 1, acicalamiento → tira 2
+      const out = this.sidekick.output, v = [Math.min(127, L.mn9 * 1.4), Math.min(127, L.groom * 1.4)];
+      this._skFx = this._skFx || [-9, -9]; v.forEach((x, k) => { if (Math.abs(x - this._skFx[k]) >= 2) { skSend.fxAmount(out, k + 1, x); this._skFx[k] = x; } });
+    }
     if (s.data) L.rowHist[s.row] = L.mn9;
     this.stepListeners.forEach((f) => f(n, cnt));
   }

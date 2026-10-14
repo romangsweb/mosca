@@ -27,7 +27,9 @@ export const TARGETS = [
 ];
 export const targetById = (id) => TARGETS.find((t) => t.id === id);
 export const FREE_MAPPINGS = 4;
-export const srcLabel = (m) => `${m.type === 'cc' ? 'CC' : 'Nota'} ${m.num} · canal ${m.ch}${m.port ? ` · ${m.port}` : ''}`;
+const TYPE_LABEL = { cc: 'CC', note: 'Nota', pb: 'Palanca (pitch bend)', at: 'Presión' };
+export const srcLabel = (m) => `${TYPE_LABEL[m.type] || m.type}${m.type === 'pb' || (m.type === 'at' && !m.num) ? '' : ` ${m.num}`} · canal ${m.ch}${m.port ? ` · ${m.port}` : ''}`;
+const continuous = (t) => t === 'cc' || t === 'pb' || t === 'at';
 const same = (a, b) => a.type === b.type && a.ch === b.ch && a.num === b.num && (!a.port || !b.port || a.port === b.port);
 
 // mensaje entrante → aprender o aplicar
@@ -35,7 +37,7 @@ export function handleMidi(session, msg) {
   const s = session.s;
   if (s.learn) {
     const t = targetById(s.learn); if (!t) return;
-    if (t.kind === 'range' && msg.type !== 'cc') return; // un rango necesita una perilla o fader
+    if (t.kind === 'range' && !continuous(msg.type)) return; // un rango necesita una perilla, fader, palanca o presión
     const src = { type: msg.type, ch: msg.ch, num: msg.num, port: msg.port };
     const mappings = [...s.mappings.filter((m) => m.target !== t.id && !same(m.src, src)), { target: t.id, src }];
     session.set({ mappings, learn: null }, true);

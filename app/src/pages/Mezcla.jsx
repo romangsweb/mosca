@@ -5,6 +5,8 @@ import { KITS } from '../engine/kits.js';
 import { audioInputs, rawConstraints } from '../engine/capture.js';
 import { useS, useTick, Icon, Seg } from '../ui/kit.jsx';
 import { DeviceArt } from '../ui/DeviceArt.jsx';
+import { SK_PRESET, SK_FX } from '../engine/sidekick.js';
+import { TARGETS } from '../engine/controls.js';
 
 // Mezcla: una tira por pista (a dónde va, nivel, silencio, solo), la compu (kit interno) y la entrada de audio
 // (el sidekick o tu interfaz). Es el mapa de cómo suena todo junto.
@@ -135,6 +137,63 @@ function InputStrip() {
   );
 }
 
+// el sidekick como superficie de control y como mezclador que Fly Punch puede mover
+function SidekickPanel() {
+  const s = useS(), sk = session.sidekick, pro = session.can('controles'), [done, setDone] = useState(null);
+  const mapped = SK_PRESET.filter((x) => s.mappings.some((m) => m.target === x.target && m.src.type === 'cc' && m.src.ch === x.src.ch && m.src.num === x.src.num)).length;
+  const label = (id) => TARGETS.find((t) => t.id === id)?.label || id;
+  const Toggle = ({ k, children }) => (
+    <label className="row" style={{ gap: 10, fontSize: 13, opacity: pro && sk.output ? 1 : 0.55 }}>
+      <input type="checkbox" disabled={!pro || !sk.output} checked={!!s.sk?.[k]} onChange={(e) => session.setSk({ [k]: e.target.checked })} style={{ width: 18, height: 18, accentColor: 'var(--acc)' }} />{children}
+    </label>
+  );
+  return (
+    <section className="panel" style={{ gap: 12 }}>
+      <div className="panel-head">
+        <div className="row" style={{ gap: 12 }}>
+          <span style={{ flex: 'none', display: 'grid', placeItems: 'center', width: 64, height: 46, borderRadius: 9, background: 'var(--screen)', color: '#ECECEE' }}><Icon name="mezcla" size={22} /></span>
+          <div><h2 style={{ fontSize: 15 }}>K.O.–sidekick · EP-136</h2>
+            <p className="row muted" style={{ margin: '3px 0 0', gap: 6, fontSize: 12 }}><span className={`status-dot${sk.input ? ' on' : ''}`} />{sk.input ? `Conectado: ${sk.input.name}` : session.ko.access ? 'No detectado por MIDI: conéctalo por USB-C directo a la Mac' : 'Permite MIDI para detectarlo'}</p></div>
+        </div>
+        {!session.ko.access && session.ko.supported && <button type="button" className="btn primary" onClick={() => session.connect()}>Permitir MIDI</button>}
+      </div>
+      <div className="cols" style={{ alignItems: 'stretch' }}>
+        <div className="well" style={{ flex: '999 1 420px', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <span className="label" style={{ flex: 1 }}>Perillas y botones → Fly Punch · {mapped}/{SK_PRESET.length} asignados</span>
+            <button type="button" className="btn acc" onClick={() => setDone(session.applySkPreset())}>Usar el mapa del sidekick</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: '4px 14px' }}>
+            {SK_PRESET.map((x, i) => (
+              <span key={x.target} className="row mono" style={{ gap: 6, fontSize: 10.5, opacity: !pro && i >= 4 ? 0.45 : 1 }}>
+                <span style={{ color: 'var(--acc)', minWidth: 78 }}>{x.label}</span><span className="muted">→ {label(x.target)}</span>
+              </span>
+            ))}
+          </div>
+          {done != null && <p role="status" style={{ margin: 0, fontSize: 12, color: '#3DD68C' }}>Listo: {done} controles asignados. Mueve una perilla del sidekick y mira cómo cambia Fly Punch.{!pro && ' En Free son los primeros 4; Pro asigna los 16.'}</p>}
+          <p className="dim" style={{ margin: 0, fontSize: 11, lineHeight: 1.5 }}>Tira 1 = pista Gusto, tira 2 = pista Oído. Las perillas siguen moviendo también el sonido del sidekick. Puedes cambiar cualquier asignación en Equipo → Controles.</p>
+        </div>
+        <div className="well" style={{ flex: '1 1 300px', padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <span className="row label" style={{ gap: 8 }}>Fly Punch → sidekick{!pro && <a href="#/cuenta?plan" className="badge-pro">PRO</a>}</span>
+          <Toggle k="follow">Los faders de esta Mezcla mueven los del sidekick</Toggle>
+          <Toggle k="fxAuto">La mosca mueve los efectos del sidekick</Toggle>
+          {s.sk?.fxAuto && (
+            <div className="row" style={{ gap: 8 }}>
+              {[0, 1].map((k) => (
+                <label key={k} className="field" style={{ flex: 1 }}><span className="label">Efecto tira {k + 1}</span>
+                  <select className="input" value={s.sk.fx?.[k] ?? k} onChange={(e) => { const fx = [...(s.sk.fx || [0, 1])]; fx[k] = +e.target.value; session.setSk({ fx }); }}>
+                    {SK_FX.map((n, i) => <option key={n} value={i}>{n}</option>)}
+                  </select></label>
+              ))}
+            </div>
+          )}
+          <p className="dim" style={{ margin: 0, fontSize: 11, lineHeight: 1.5 }}>{s.sk?.fxAuto ? 'La neurona MN9 abre el efecto de la tira 1; el acicalamiento, el de la tira 2.' : 'La actividad de la mosca abre y cierra los efectos del sidekick, al ritmo de sus neuronas.'}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function Mezcla() {
   const s = useS(); useTick(30);
   const anySolo = s.tracks.some((t) => t.solo);
@@ -151,6 +210,7 @@ export default function Mezcla() {
       <div className="well mono" style={{ padding: '10px 14px', fontSize: 11, lineHeight: 1.7, color: 'var(--sub)', overflowX: 'auto', whiteSpace: 'nowrap' }} aria-label="Flujo de la señal">
         MOSCA → {s.tracks.map((t) => { const p = session.portFor(t), dv = session.toDevice(t, p), k = session.toKit(t, p); return `${t.name.toUpperCase()} → ${[dv && (p?.name || session.profileFor(t).name), k && 'COMPU'].filter(Boolean).join(' + ') || '—'}`; }).join('   ·   ')}   ·   APARATOS → SIDEKICK → ENTRADA
       </div>
+      <SidekickPanel />
       <div className="cols" style={{ alignItems: 'stretch' }}>
         {s.tracks.map((t) => <TrackStrip key={t.id} t={t} />)}
         <KitStrip />

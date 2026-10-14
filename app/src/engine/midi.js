@@ -57,6 +57,11 @@ export class KO2 {
     const type = st & 0xF0, ch = (st & 0x0F) + 1, port = inp?.name;
     if (type === 0x90 && d2 > 0) { this.h.onNote?.({ ch, note: d1, vel: d2, port, main }); this.h.onAny?.({ type: 'note', ch, num: d1, val: d2, port }); }
     if (type === 0xB0) this.h.onAny?.({ type: 'cc', ch, num: d1, val: d2, port });
+    // perillas que no mandan CC: la palanca suele mandar pitch bend; los pads de presión, aftertouch
+    if (type === 0xE0) this.h.onAny?.({ type: 'pb', ch, num: 0, val: d2, port });
+    if (type === 0xD0) this.h.onAny?.({ type: 'at', ch, num: 0, val: d1, port });
+    if (type === 0xA0) this.h.onAny?.({ type: 'at', ch, num: d1, val: d2, port });
+    if (type !== 0x80) this.h.onRaw?.({ bytes: [...e.data].slice(0, 3), port });
   }
   send(bytes, at, port = this.output) { if (port) port.send(bytes, at ? at - this.latency : undefined); }
   hit(note, vel = 100, ch = 1, len = 60, at = performance.now(), port = this.output) {

@@ -57,8 +57,8 @@ function NeuronCard({ track, k }) {
   return (
     <section className="panel" style={{ flex: 1 }}>
       <div className="panel-head"><h2>Neurona</h2><span className="mono muted" style={{ fontSize: 10 }}>PAD {PAD_KEYS[off]} · NOTA {session.route(track, k).note ?? '—'}</span></div>
-      <div className="between"><span className="mono" style={{ fontSize: 20, fontWeight: 600, color: roleColor(p) }}>{p.tipo}</span><span className="mono" style={{ fontSize: 20 }}>{rate}<small className="muted" style={{ fontSize: 11 }}> Hz</small></span></div>
-      <RateChart track={track} k={k} color={roleColor(p)} />
+      <div className="between"><span className="mono" style={{ fontSize: 20, fontWeight: 600, color: p.clase === 'sensor' ? 'var(--text)' : roleColor(p) }}>{p.tipo}</span><span className="mono" style={{ fontSize: 20 }}>{rate}<small className="muted" style={{ fontSize: 11 }}> Hz</small></span></div>
+      <RateChart track={track} k={k} color={p.clase === 'sensor' ? 'var(--acc)' : roleColor(p)} />
       <span className="muted" style={{ fontSize: 12, lineHeight: 1.5 }}>{ROLE_DESC[p.clase]}{p.inhibidora ? ' Es inhibidora: frena a las que conecta.' : ''}{p.idx === D.mn9 ? ' MN9 es la que hace comer a la mosca: la salida del circuito.' : ''}</span>
       <div className="row"><div className="stat"><div className="label">Entradas</div><div className="v">{ins}</div></div><div className="stat"><div className="label">Salidas</div><div className="v">{outs}</div></div><div className="stat"><div className="label">Transmisor</div><div className="v">{NT[p.nt] || p.nt}</div></div></div>
       <div className="row">

@@ -15,7 +15,7 @@ const ProNote = ({ feature, children }) => (
 export function Controles() {
   const s = useS(); useTick(10);
   const msg = session.live.lastMsg, fresh = msg && performance.now() - msg.at < 1500, groups = [...new Set(TARGETS.map((t) => t.group))];
-  const full = session.mappingsFull;
+  const full = session.mappingsFull, ins = session.ko.ports().inputs, raw = session.live.lastRaw && performance.now() - session.live.lastRaw.at < 4000 ? session.live.lastRaw : null;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div className="cols" style={{ alignItems: 'stretch' }}>
@@ -24,6 +24,8 @@ export function Controles() {
           <span className="label" style={{ color: '#77777F' }}>Último mensaje recibido</span>
           <span className="mono" style={{ fontSize: 13, color: fresh ? '#FF6A1A' : '#8C8C94', transition: 'color .3s' }}>{msg ? srcLabel(msg) + ` · valor ${msg.val}` : session.ko.access ? 'Mueve algo en tu controlador…' : 'Permite MIDI para escuchar tus aparatos'}</span>
           {!session.ko.access && <button type="button" className="btn" style={{ alignSelf: 'flex-start', color: '#ECECEE', borderColor: 'rgba(255,255,255,.14)' }} onClick={() => session.connect()}>Permitir MIDI</button>}
+          {raw && <span className="mono" style={{ fontSize: 10, color: '#77777F' }}>crudo: {raw.bytes.map((x) => x.toString(16).toUpperCase().padStart(2, '0')).join(' ')} · {raw.port}</span>}
+          {session.ko.access && <span className="mono" style={{ fontSize: 10, color: '#77777F', lineHeight: 1.5 }}>Entradas MIDI que ve el navegador: {ins.length ? ins.join(' · ') : 'ninguna'}</span>}
         </div>
       </div>
       {full && <ProNote feature="controles">En Free puedes asignar {FREE_MAPPINGS} controles. Pro no tiene límite.</ProNote>}
@@ -53,6 +55,8 @@ export function Controles() {
 export function AudioIn() {
   const s = useS(), [inputs, setInputs] = useState([]), [level, setLevel] = useState(0), [err, setErr] = useState(null), pro = session.can('audio');
   const refresh = async () => setInputs(await audioInputs());
+  const named = inputs.length > 0 && !inputs.every((d) => /^Entrada \d/.test(d.label)), hasSk = inputs.some((d) => /side|ep-?136|k\.?o/i.test(d.label));
+  const scan = async () => { try { const st = await navigator.mediaDevices.getUserMedia({ audio: true }); st.getTracks().forEach((t) => t.stop()); } catch { setErr('El navegador no dio permiso de micrófono. Actívalo en el candado de la barra de direcciones.'); } refresh(); };
   useEffect(() => { refresh(); navigator.mediaDevices?.addEventListener?.('devicechange', refresh); return () => navigator.mediaDevices?.removeEventListener?.('devicechange', refresh); }, []);
   const test = async () => {
     setErr(null);
@@ -78,7 +82,12 @@ export function AudioIn() {
         </div>
         <div className="well" style={{ height: 10, overflow: 'hidden' }} aria-label="Nivel de entrada"><div style={{ height: '100%', width: `${Math.min(100, level * 110)}%`, background: level > 0.9 ? '#E5484D' : 'var(--acc)', transition: 'width .08s linear' }} /></div>
         <label className="row" style={{ gap: 10 }}><input type="checkbox" disabled={!pro} checked={!!s.captureAudio} onChange={(e) => session.set({ captureAudio: e.target.checked }, true)} style={{ width: 18, height: 18, accentColor: 'var(--acc)' }} />Grabar el audio real con cada toma</label>
-        {inputs.length > 0 && inputs.every((d) => /^Entrada \d/.test(d.label)) && <p className="dim" style={{ margin: 0, fontSize: 11 }}>Los nombres de las entradas aparecen después de dar permiso: pulsa «Probar».</p>}
+        <div className="well" style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span className="label">Entradas que ve el navegador</span>
+          {named ? <span className="mono" style={{ fontSize: 11, lineHeight: 1.6 }}>{inputs.map((d) => d.label).join(' · ') || 'ninguna'}</span>
+            : <button type="button" className="btn" style={{ alignSelf: 'flex-start' }} onClick={scan}>Dar permiso y buscar entradas</button>}
+          {named && !hasSk && <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.5, color: '#FF8A4D' }}>No aparece el sidekick. Si tampoco sale en «Configuración de Audio MIDI» de tu Mac, el problema está en la conexión: usa un cable USB-C de datos (no solo de carga) directo a la Mac y revisa en el sidekick el modo USB (botón de sistema bajo la tapa de pilas).</p>}
+        </div>
         {err && <p role="alert" style={{ margin: 0, color: '#FF8A4D' }}>{err}</p>}
       </section>
       <p className="dim" style={{ margin: 0, fontSize: 11, lineHeight: 1.5 }}>El audio se guarda en este navegador (no en la nube) para no gastar espacio de tu cuenta. Las notas de la toma sí se sincronizan.</p>

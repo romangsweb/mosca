@@ -7,7 +7,7 @@ import { GROUP_BASE } from './midi.js';
 export const VOICE_LIST = ['bombo', 'caja', 'palmas', 'hat', 'hat abierto', 'aro', 'tom', 'perc', 'bajo', 'zap'];
 
 export const PROFILES = [
-  { id: 'ko2', name: 'EP-133 K.O. II', maker: 'Teenage Engineering', art: 'bolsillo', kind: 'grupos', ch: 1, match: /EP-?133|K\.?O|teenage/i, fx: { x: 12, y: 13 }, clock: true, tags: ['Ritmo', 'Reloj', 'Efectos'],
+  { id: 'ko2', name: 'EP-133 K.O. II', maker: 'Teenage Engineering', art: 'bolsillo', kind: 'grupos', ch: 1, match: /^(?!.*(136|sidekick)).*(EP-?133|K\.?O|teenage)/i, fx: { x: 12, y: 13 }, clock: true, tags: ['Ritmo', 'Reloj', 'Efectos'],
     setup: ['Conéctalo por USB-C directo a la computadora, sin dock.', 'En el K.O. II: SHIFT + ERASE, código 110 y ENTER (recibir en todos los canales).', 'Cada pista toca un grupo: Gusto en C, Oído en A.'] },
   { id: 'tr8s', name: 'TR-8S', maker: 'Roland', art: 'ritmos', kind: 'voces', ch: 10, match: /TR-?8S/i, clock: true, tags: ['Ritmo', 'Reloj'],
     notes: { bombo: 36, caja: 38, palmas: 39, hat: 42, 'hat abierto': 46, aro: 37, tom: 47, perc: 50, bajo: 43, zap: 49 },
