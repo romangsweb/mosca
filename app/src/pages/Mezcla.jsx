@@ -144,8 +144,8 @@ function SidekickPanel() {
   const mapped = SK_PRESET.filter((x) => s.mappings.some((m) => m.target === x.target && m.src.type === 'cc' && m.src.ch === x.src.ch && m.src.num === x.src.num)).length;
   const label = (id) => TARGETS.find((t) => t.id === id)?.label || id;
   const Toggle = ({ k, children }) => (
-    <label className="row" style={{ gap: 10, fontSize: 13, opacity: pro && sk.output ? 1 : 0.55 }}>
-      <input type="checkbox" disabled={!pro || !sk.output} checked={!!s.sk?.[k]} onChange={(e) => session.setSk({ [k]: e.target.checked })} style={{ width: 18, height: 18, accentColor: 'var(--acc)' }} />{children}
+    <label className="row" style={{ gap: 10, fontSize: 13, opacity: pro ? 1 : 0.55 }}>
+      <input type="checkbox" disabled={!pro} checked={!!s.sk?.[k]} onChange={(e) => session.setSk({ [k]: e.target.checked })} style={{ width: 18, height: 18, accentColor: 'var(--acc)' }} />{children}
     </label>
   );
   if (!sk.input) return (
@@ -183,6 +183,15 @@ function SidekickPanel() {
         </div>
         <div className="well" style={{ flex: '1 1 300px', padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <span className="row label" style={{ gap: 8 }}>Fly Punch → sidekick{!pro && <a href="#/cuenta?plan" className="badge-pro">PRO</a>}</span>
+          {!pro && <p style={{ margin: 0, fontSize: 11.5, color: '#FF8A4D' }}>Mover el sidekick desde Fly Punch es parte de Pro.</p>}
+          {pro && !sk.output && (
+            <div className="field"><span className="label" style={{ color: '#FF8A4D' }}>No encontramos la salida MIDI del sidekick: elígela</span>
+              <select className="input" value={s.sk?.outPort || ''} onChange={(e) => session.setSk({ outPort: e.target.value || null })}>
+                <option value="">Elige un puerto…</option>
+                {session.ko.ports().outputs.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select></div>
+          )}
+          {pro && sk.output && <span className="mono dim" style={{ fontSize: 10 }}>SALIDA: {sk.output.name}</span>}
           <Toggle k="follow">Los faders de esta Mezcla mueven los del sidekick</Toggle>
           <Toggle k="fxAuto">La mosca mueve los efectos del sidekick</Toggle>
           {s.sk?.fxAuto && (

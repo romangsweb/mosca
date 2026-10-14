@@ -157,7 +157,7 @@ export class Session {
   get mappingsFull() { return !this.can('controles') && this.s.mappings.length >= FREE_MAPPINGS; }
   learn(target) { if (this.mappingsFull && !this.s.mappings.some((m) => m.target === target)) { location.hash = '#/cuenta?plan'; return; } if (!this.ko.access) this.connect(); this.set({ learn: this.s.learn === target ? null : target }); }
   // ---------- sidekick (EP-136) ----------
-  get sidekick() { return skPorts(this.ko); }
+  get sidekick() { return skPorts(this.ko, this.s.sk?.outPort); }
   applySkPreset() {
     const port = this.sidekick.input?.name, n = this.can('controles') ? SK_PRESET.length : FREE_MAPPINGS;
     const pick = SK_PRESET.slice(0, n), targets = new Set(pick.map((x) => x.target));

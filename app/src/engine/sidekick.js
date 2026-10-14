@@ -28,9 +28,12 @@ export const SK_PRESET = [
   { target: 'rec', src: cc(2, 21), label: 'Botón gain 2' },
 ];
 
-export const skPorts = (ko) => {
+// salida: la elegida a mano → la que se llama como el sidekick → la que se llama igual que su entrada
+export const skPorts = (ko, outName = null) => {
   if (!ko.access) return { input: null, output: null };
-  return { input: [...ko.access.inputs.values()].find((p) => SK_MATCH.test(p.name)) || null, output: [...ko.access.outputs.values()].find((p) => SK_MATCH.test(p.name)) || null };
+  const ins = [...ko.access.inputs.values()], outs = [...ko.access.outputs.values()], input = ins.find((p) => SK_MATCH.test(p.name)) || null;
+  const output = (outName && outs.find((p) => p.name === outName)) || outs.find((p) => SK_MATCH.test(p.name)) || (input && outs.find((p) => p.name === input.name)) || null;
+  return { input, output };
 };
 
 // Fly Punch → sidekick: mover su mezcla y sus efectos
