@@ -29,3 +29,30 @@ export async function saveProfile(uid, patch) {
   const { error } = await cloud.from('profiles').update(patch).eq('id', uid);
   if (error) throw error;
 }
+
+// ---------- tomas ----------
+const META = 'id, name, created_at, bpm, dur_ms, steps, source, tracks, inputs, n_events';
+const fromRow = (r) => ({ id: r.id, name: r.name, date: new Date(r.created_at).getTime(), bpm: r.bpm, durMs: r.dur_ms, steps: r.steps, source: r.source, tracks: r.tracks, inputs: r.inputs, events: r.events ?? null, nEvents: r.n_events ?? r.events?.length ?? 0 });
+export async function listTakes() {
+  const { data, error } = await cloud.from('takes').select(META).order('created_at', { ascending: false });
+  if (error) throw error;
+  return data.map(fromRow);
+}
+export async function getTake(id) {
+  const { data, error } = await cloud.from('takes').select(`${META}, events`).eq('id', id).single();
+  if (error) throw error;
+  return fromRow(data);
+}
+// devuelve 'ok' | 'existe' | 'limite'
+export async function uploadTake(t) {
+  const { error } = await cloud.from('takes').insert({
+    id: t.id, name: t.name.slice(0, 80), created_at: new Date(t.date).toISOString(), bpm: Math.round(t.bpm), dur_ms: Math.round(t.durMs),
+    steps: t.steps || 0, source: t.source || null, tracks: t.tracks, inputs: t.inputs, events: t.events,
+  });
+  if (!error) return 'ok';
+  if (error.code === '23505') return 'existe';
+  if (error.code === 'P0001' || /limite_free/.test(error.message)) return 'limite';
+  throw error;
+}
+export async function renameTakeCloud(id, name) { const { error } = await cloud.from('takes').update({ name: name.slice(0, 80) }).eq('id', id); if (error) throw error; }
+export async function deleteTakeCloud(id) { const { error } = await cloud.from('takes').delete().eq('id', id); if (error) throw error; }

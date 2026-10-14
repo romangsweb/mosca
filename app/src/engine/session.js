@@ -5,7 +5,7 @@ import { Ear } from './ear.js';
 import { Synth, DEFAULT_KIT } from './synth.js';
 import { mutate, identity } from './mutate.js';
 import { kvGet, kvSet, takePut, takesAll, takeDel, FREE_TAKES } from './storage.js';
-import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut } from './cloud.js';
+import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
 const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow'];
@@ -58,10 +58,10 @@ export class Session {
     const saved = await kvGet('settings');
     if (saved) Object.assign(this.s, { ...saved, tracks: saved.tracks?.map((t, i) => ({ ...DEFAULTS.tracks[i], ...t })) || this.s.tracks });
     this.ko.internalBpm = this.s.bpm; this.ko.clockOut = this.s.clockOut; this.ko.latency = this.s.latency;
-    this.s.takes = await takesAll();
+    await this.refreshTakes();
     if (cloudEnabled) {
       try { const u = await currentUser(); if (u) await this.adoptUser(u); } catch (e) { console.warn('cuenta', e); }
-      onAuth((u) => { if (u && u.id !== this.s.user?.id) this.adoptUser(u); if (!u && this.s.user) this.set({ user: null, plan: 'free', sync: 'local' }); });
+      onAuth((u) => { if (u && u.id !== this.s.user?.id) this.adoptUser(u); if (!u && this.s.user) { this.set({ user: null, plan: 'free', sync: 'local' }); this.refreshTakes(); } });
     }
     this.s.ready = true; this.emit();
     if (navigator.requestMIDIAccess) this.connect(true);
@@ -97,6 +97,7 @@ export class Session {
         this.s.onboarded = true; await saveProfile(user.id, { settings: this.snapshot(), alias: this.s.alias || p?.alias || null });
       }
       this.set({ alias: this.s.alias || p?.alias || '', plan: p?.plan || 'free', sync: 'sincronizado' });
+      await this.refreshTakes();
     } catch (e) { console.warn('perfil', e); this.set({ sync: 'error' }); }
   }
   async pushCloud() {
@@ -105,7 +106,7 @@ export class Session {
     try { await saveProfile(this.s.user.id, { settings: this.snapshot(), alias: this.s.alias || null }); this.set({ sync: 'sincronizado' }); }
     catch (e) { console.warn('sincronizar', e); this.set({ sync: 'error' }); }
   }
-  async logout() { await signOut(); this.set({ user: null, plan: 'free', sync: 'local' }); }
+  async logout() { await signOut(); this.set({ user: null, plan: 'free', sync: 'local' }); await this.refreshTakes(); }
   setInput(k, v) { this.set({ inputs: { ...this.s.inputs, [k]: v } }, true); }
   setTrack(id, patch) { this.set({ tracks: this.s.tracks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }, true); }
   track(id = this.s.selTrack) { return this.s.tracks.find((t) => t.id === id); }
@@ -191,7 +192,38 @@ export class Session {
     this.setTrack(id, { map: hist[hist.length - 1] }); this.set({ mutHistory: { ...this.s.mutHistory, [id]: hist.slice(0, -1) } });
   }
   // ---------- grabación ----------
-  get takesLimitReached() { return this.s.takes.length >= FREE_TAKES; }
+  // ---------- tomas: navegador + nube ----------
+  // Cada toma local lleva owner (id de la cuenta que la creó, o null si se grabó sin cuenta) y cloud (ya subida).
+  // Con sesión: se suben las locales pendientes, se listan las de la nube y se descargan sus notas al abrirlas.
+  get takesLimitReached() { return this.s.plan !== 'pro' && this.s.takes.length >= FREE_TAKES; }
+  async refreshTakes() {
+    const uid = this.s.user?.id, local = await takesAll();
+    if (!uid) { this.set({ takes: local.filter((t) => !t.owner).map((t) => ({ ...t, where: 'local' })) }); return; }
+    let remote = [];
+    try { remote = await listTakes(); } catch (e) { console.warn('tomas', e); this.set({ takes: local.filter((t) => !t.owner || t.owner === uid).map((t) => ({ ...t, where: t.cloud ? 'nube' : 'local' })), sync: 'error' }); return; }
+    const remoteIds = new Set(remote.map((t) => t.id)); let blocked = false;
+    for (const t of local) {
+      if (t.owner && t.owner !== uid) continue;
+      if (remoteIds.has(t.id)) { if (!t.cloud || !t.owner) await takePut({ ...t, owner: uid, cloud: true }); continue; }
+      if (t.cloud && t.owner === uid) { await takeDel(t.id); continue; } // se borró en otro dispositivo
+      if (blocked) continue;
+      const r = await uploadTake(t).catch((e) => { console.warn('subir toma', e); return 'error'; });
+      if (r === 'ok' || r === 'existe') { await takePut({ ...t, owner: uid, cloud: true }); remote.unshift({ ...t, nEvents: t.events.length }); }
+      if (r === 'limite') blocked = true;
+    }
+    const byId = new Map((await takesAll()).map((t) => [t.id, t]));
+    const merged = remote.map((r) => { const l = byId.get(r.id); return { ...r, events: l?.events || null, nEvents: r.nEvents ?? l?.events?.length ?? 0, where: 'nube' }; });
+    for (const t of byId.values()) if ((!t.owner || t.owner === uid) && !remoteIds.has(t.id) && !merged.some((m) => m.id === t.id)) merged.push({ ...t, where: 'local' });
+    merged.sort((a, b) => b.date - a.date);
+    this.set({ takes: merged, ...(blocked ? { notice: 'limite' } : {}) });
+  }
+  // notas de una toma que solo está en la nube
+  async ensureEvents(id) {
+    const t = this.s.takes.find((x) => x.id === id); if (!t || t.events) return t;
+    const full = await getTake(id); await takePut({ ...full, owner: this.s.user?.id || null, cloud: true });
+    this.set({ takes: this.s.takes.map((x) => (x.id === id ? { ...x, events: full.events } : x)) });
+    return { ...t, events: full.events };
+  }
   toggleRec() {
     if (this.rec) {
       const r = this.rec; this.rec = null;
@@ -201,7 +233,8 @@ export class Session {
         const take = { id: crypto.randomUUID(), name: `Toma ${n}`, date: Date.now(), bpm: Math.round(this.ko.bpm), durMs, steps: this.live.step - r.n0,
           tracks: this.s.tracks.filter((t) => r.events.some((e) => e.track === t.id)).map(({ id, name, group, ch, sense }) => ({ id, name, group, ch, sense })),
           inputs: { ...this.s.inputs }, source: this.s.data ? 'datos' : this.s.oidoSource, events: r.events };
-        takePut(take).then(async () => this.set({ takes: await takesAll(), lastTake: take.id }));
+        take.owner = this.s.user?.id || null; take.cloud = false;
+        takePut(take).then(async () => { this.set({ lastTake: take.id }); await this.refreshTakes(); });
       }
       this.set({ rec: false }); return;
     }
@@ -209,8 +242,17 @@ export class Session {
     if (!this.s.playing) this.play();
     this.rec = { t0: performance.now(), n0: this.live.step, events: [] }; this.set({ rec: true });
   }
-  async renameTake(id, name) { const t = this.s.takes.find((x) => x.id === id); if (!t) return; await takePut({ ...t, name }); this.set({ takes: await takesAll() }); }
-  async deleteTake(id) { await takeDel(id); this.set({ takes: await takesAll() }); }
+  async renameTake(id, name) {
+    const t = this.s.takes.find((x) => x.id === id); if (!t) return;
+    if (t.where === 'nube') await renameTakeCloud(id, name).catch((e) => console.warn(e));
+    const local = (await takesAll()).find((x) => x.id === id); if (local) await takePut({ ...local, name });
+    this.set({ takes: this.s.takes.map((x) => (x.id === id ? { ...x, name } : x)) });
+  }
+  async deleteTake(id) {
+    const t = this.s.takes.find((x) => x.id === id);
+    if (t?.where === 'nube') await deleteTakeCloud(id).catch((e) => console.warn(e));
+    await takeDel(id); this.set({ takes: this.s.takes.filter((x) => x.id !== id) });
+  }
   // reproducir una toma: re-envía notas al K.O. y/o voces internas
   playTake(take, onEnd) {
     this.stopTake(); this.synth.ensure();

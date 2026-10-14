@@ -57,7 +57,7 @@ export default function Cuenta() {
           <>
             <div className="between" style={{ flexWrap: 'wrap' }}><div><h1>Plan</h1><p className="muted" style={{ margin: '4px 0 0' }}>Gusto, Oído y la exportación MIDI son gratis.</p></div><Seg label="Facturación" items={[['m', 'Mensual'], ['a', 'Anual']]} value={yearly ? 'a' : 'm'} onChange={(v) => setYearly(v === 'a')} /></div>
             <div className="cols" style={{ gap: 16 }}>
-              {[['Free', s.plan === 'free' ? 'TU PLAN' : '', '$0', 'para siempre', ['Gusto y Oído (micrófono y archivos)', '2 pistas en el K.O. II', '5 tomas en este navegador', 'Exportar a MIDI y CSV'], 'Plan actual', false],
+              {[['Free', s.plan === 'free' ? 'TU PLAN' : '', '$0', 'para siempre', ['Gusto y Oído (micrófono y archivos)', '2 pistas en el K.O. II', '5 tomas (en la nube con cuenta)', 'Exportar a MIDI y CSV'], 'Plan actual', false],
                 ['Pro', s.plan === 'pro' ? 'TU PLAN' : 'PRÓXIMAMENTE', '[PRECIO]', yearly ? '/ año' : '/ mes', ['Modo Datos (CSV → sentidos)', '4 pistas (grupos A–D)', 'Tomas ilimitadas en la nube', 'Exportar WAV y presets de kit', 'Más circuitos: agua, olfato, novedad'], 'Avísame', true]].map(([n, tag, price, per, feats, cta, pro]) => (
                 <article key={n} className="panel" style={{ flex: '1 1 300px', padding: 22, gap: 14, borderColor: pro ? 'var(--acc)' : undefined }}>
                   <div className="between"><h2 style={{ fontSize: 18 }}>{n}</h2><span className="label" style={{ color: pro ? 'var(--acc)' : undefined }}>{tag}</span></div>

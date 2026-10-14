@@ -33,8 +33,11 @@ function Roll({ take, playing, t0 }) {
 
 export default function Tomas() {
   const s = useS(), [sel, setSel] = useState(s.lastTake || s.takes[0]?.id), [playing, setPlaying] = useState(false), [exp, setExp] = useState(false), [fmtSel, setFmt] = useState('mid'), [busy, setBusy] = useState(false), [editing, setEditing] = useState(false);
-  const take = s.takes.find((t) => t.id === sel) || s.takes[0];
+  const take = s.takes.find((t) => t.id === sel) || s.takes[0], [loadErr, setLoadErr] = useState(null);
   useEffect(() => () => session.stopTake(), []);
+  useEffect(() => { setLoadErr(null); if (take && !take.events) session.ensureEvents(take.id).catch(() => setLoadErr('No pudimos descargar esta toma. Revisa tu conexión.')); }, [take?.id, take?.events]);
+  const ready = !!take?.events;
+  const count = s.user && s.plan === 'pro' ? `${s.takes.length} TOMAS · PRO` : `${s.takes.length} DE ${FREE_TAKES} · FREE`;
   const play = () => { if (playing) { session.stopTake(); setPlaying(false); return; } session.playTake(take, () => setPlaying(false)); setPlaying(true); };
   const doExport = async () => {
     setBusy(true);
@@ -47,8 +50,8 @@ export default function Tomas() {
   return (
     <div className="page">
       <div className="page-head">
-        <div><h1>Tomas</h1><p>Cada toma guarda las notas que tocó la mosca en todas las pistas, con su tiempo exacto. Se guardan en este navegador.</p></div>
-        <span className="chip">{s.takes.length} DE {FREE_TAKES} · FREE</span>
+        <div><h1>Tomas</h1><p>Cada toma guarda las notas que tocó la mosca en todas las pistas, con su tiempo exacto. {s.user ? 'Con tu cuenta se guardan en la nube y las ves en cualquier dispositivo.' : 'Sin cuenta se guardan solo en este navegador.'}</p></div>
+        <div className="row">{!s.user && s.sync !== 'off' && <a href="#/bienvenida" className="btn">Iniciar sesión para guardarlas en la nube</a>}<span className="chip">{count}</span></div>
       </div>
       {!s.takes.length ? (
         <div className="stage" style={{ minHeight: 380, flexDirection: 'column', gap: 14, textAlign: 'center' }}>
@@ -63,7 +66,8 @@ export default function Tomas() {
             {s.takes.map((t) => (
               <button key={t.id} type="button" className="list-item" aria-pressed={t.id === take.id} onClick={() => { session.stopTake(); setPlaying(false); setSel(t.id); }}>
                 <span style={{ display: 'flex', gap: 3 }}>{t.tracks.map((tr) => <span key={tr.id} style={{ width: 4, height: 28, borderRadius: 2, background: COL[tr.id] }} />)}</span>
-                <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.name}</span><span className="mono muted" style={{ fontSize: 11 }}>{when(t.date)} · {fmt(t.durMs)} · {t.bpm} BPM · {t.events.length} notas</span></span>
+                <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.name}</span><span className="mono muted" style={{ fontSize: 11 }}>{when(t.date)} · {fmt(t.durMs)} · {t.bpm} BPM · {t.events?.length ?? t.nEvents} notas</span></span>
+                <span className="chip" title={t.where === 'nube' ? 'Guardada en tu cuenta' : 'Solo en este navegador'} style={t.where === 'nube' ? { color: 'var(--text)' } : undefined}>{t.where === 'nube' ? 'NUBE' : 'LOCAL'}</span>
               </button>
             ))}
             <div className="panel" style={{ borderStyle: 'dashed', background: 'transparent' }}>
@@ -79,14 +83,15 @@ export default function Tomas() {
                   <p className="mono muted" style={{ margin: '4px 0 0', fontSize: 11 }}>{when(take.date).toUpperCase()} · {fmt(take.durMs)} · {take.bpm} BPM · {take.tracks.map((t) => `${t.name} (grupo ${t.group})`).join(' + ')}</p>
                 </div>
                 <div className="row">
-                  <button type="button" className="btn lg primary" onClick={play}><Icon name={playing ? 'stop' : 'play'} size={12} fill="currentColor" />{playing ? 'Detener' : 'Reproducir'}</button>
-                  <button type="button" className="btn lg" onClick={() => setExp(true)}><Icon name="bajar" size={14} />Exportar</button>
+                  <button type="button" className="btn lg primary" onClick={play} disabled={!ready}><Icon name={playing ? 'stop' : 'play'} size={12} fill="currentColor" />{playing ? 'Detener' : 'Reproducir'}</button>
+                  <button type="button" className="btn lg" onClick={() => setExp(true)} disabled={!ready}><Icon name="bajar" size={14} />Exportar</button>
                 </div>
               </div>
-              <div style={{ borderRadius: 12, background: 'var(--screen)', padding: 12 }}><Roll take={take} playing={playing} t0={session.takeT0} /></div>
+              <div style={{ borderRadius: 12, background: 'var(--screen)', padding: 12, minHeight: 140, display: 'grid', placeItems: ready ? 'stretch' : 'center', color: '#8C8C94' }}>{ready ? <Roll take={take} playing={playing} t0={session.takeT0} /> : <span>{loadErr || 'Descargando notas de la nube…'}</span>}</div>
+              {take.where === 'local' && s.user && <p className="muted" style={{ margin: 0, fontSize: 12 }}>Esta toma está solo en este navegador{s.takes.filter((t) => t.where === 'nube').length >= FREE_TAKES && s.plan !== 'pro' ? ': tu cuenta Free ya tiene 5 tomas en la nube.' : '; se subirá en la próxima sincronización.'}</p>}
               <div className="row" style={{ flexWrap: 'wrap' }}>
-                <div className="stat"><div className="label">Notas</div><div className="v">{take.events.length}</div></div>
-                <div className="stat"><div className="label">Neurona más activa</div><div className="v">{Object.entries(take.events.reduce((a, e) => ((a[e.neuron] = (a[e.neuron] || 0) + 1), a), {})).sort((a, b) => b[1] - a[1])[0]?.[0]}</div></div>
+                <div className="stat"><div className="label">Notas</div><div className="v">{take.events?.length ?? take.nEvents}</div></div>
+                <div className="stat"><div className="label">Neurona más activa</div><div className="v">{ready ? Object.entries(take.events.reduce((a, e) => ((a[e.neuron] = (a[e.neuron] || 0) + 1), a), {})).sort((a, b) => b[1] - a[1])[0]?.[0] : '—'}</div></div>
                 <div className="stat"><div className="label">Fuente</div><div className="v">{take.source}</div></div>
                 <div className="stat"><div className="label">Entradas</div><div className="v" style={{ fontSize: 11 }}>D {take.inputs.dulce} · A {take.inputs.amargo}</div></div>
               </div>
