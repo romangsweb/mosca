@@ -6,110 +6,205 @@
 <title>Fly Punch · peso mosca para K.O. II</title>
 <script type="importmap">{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }</script>
 <style>
-:root{--bg:#0C0D0F;--s1:#16181B;--s2:#1E2125;--line:rgba(255,255,255,.08);--fg:#F3F3F0;--mut:#9AA0A9;--acc:#FF5B1F;--ok:#34C77B;--inh:#6F8BFF;
-  --body:#D3D4CF;--body2:#C4C5C0;--ink:#16171A;--ink2:#4A4D52;--key:#2A2C30}
-*{box-sizing:border-box}html,body{margin:0}body{background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,sans-serif}
-.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.04em}
-button{font:600 14px system-ui;cursor:pointer;border:0;border-radius:10px;min-height:44px;padding:0 16px}
-header{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;padding:14px clamp(16px,3vw,32px);border-bottom:1px solid var(--line)}
-.brand{display:flex;align-items:baseline;gap:12px}.brand b{font-size:22px;letter-spacing:-.03em}
-.dot{width:9px;height:9px;border-radius:50%;background:#444;display:inline-block}.dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
-.btn{background:var(--s2);color:var(--fg)}.btn.pri{background:var(--acc);color:#0C0D0F}
-main{display:flex;flex-wrap:wrap;gap:16px;padding:16px clamp(16px,3vw,32px) 32px;max-width:1500px;margin:0 auto}
-/* visor 3D */
-.viewer{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:10px}
-#viewport{position:relative;height:clamp(380px,62vh,720px);border-radius:22px;overflow:hidden;background:radial-gradient(ellipse at 50% 45%,#1A1D22 0%,#0C0D0F 70%);border:1px solid var(--line)}
-#gl{width:100%;height:100%;display:block}
-#tags{position:absolute;inset:0;pointer-events:none}
-.tag{position:absolute;left:0;top:0;padding:2px 6px;border-radius:6px;background:rgba(12,13,15,.75);color:var(--fg);font:11px ui-monospace,Menlo,monospace;white-space:nowrap}
-.vbar{position:absolute;left:12px;right:12px;top:12px;display:flex;flex-wrap:wrap;gap:6px;justify-content:space-between}
-.seg{display:flex;flex-wrap:wrap;gap:4px;padding:4px;border-radius:12px;background:rgba(12,13,15,.7);backdrop-filter:blur(8px)}
-.seg button{min-height:36px;padding:0 12px;background:transparent;color:var(--mut);font-size:13px}
-.seg button[aria-pressed=true]{background:var(--fg);color:#0C0D0F}
-.cap{position:absolute;left:14px;bottom:12px;color:var(--mut)}
-.legend{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--mut);font-size:12px}.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
-.card{background:var(--s1);border:1px solid var(--line);border-radius:20px;padding:14px}
-#raster{width:100%;height:120px;display:block;border-radius:10px;background:#000;image-rendering:pixelated}
-/* aparato */
-.device{flex:1 1 380px;min-width:0;max-width:520px;background:var(--body);color:var(--ink);border-radius:26px;padding:16px;display:flex;flex-direction:column;gap:14px;box-shadow:inset 0 -6px 0 var(--body2),0 30px 80px rgba(0,0,0,.45)}
-.dev-top{display:flex;justify-content:space-between;align-items:center}.dev-top .mono{color:var(--ink2)}
-.screen{padding:10px;border-radius:14px;background:#08090A;box-shadow:inset 0 0 0 2px #2A2C30}
-#lcd{width:100%;aspect-ratio:2/1;display:block;image-rendering:pixelated;border-radius:6px}
-.transport{display:flex;gap:8px}.transport button{flex:1;background:var(--key);color:var(--fg);box-shadow:inset 0 -3px 0 #121315}
-.transport button[aria-pressed=true]{background:var(--acc);color:#0C0D0F;box-shadow:inset 0 -3px 0 #B23E12}
-.pads{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.pad{position:relative;aspect-ratio:1.15;min-height:84px;background:var(--key);color:var(--fg);border-radius:12px;padding:8px 9px;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;text-align:left;box-shadow:inset 0 -4px 0 #121315}
-.pad .key{font:700 18px ui-monospace,Menlo,monospace}.pad .type{font:600 12px ui-monospace,Menlo,monospace}
-.pad .role{font-size:10px;line-height:1.2;color:#A9AEB6}.pad .hz{position:absolute;right:9px;top:9px;font:11px ui-monospace,Menlo,monospace;color:#A9AEB6}
-.pad.inh{box-shadow:inset 0 -4px 0 #121315,inset 0 0 0 1px rgba(111,139,255,.55)}
-.pad.hit{background:var(--acc);color:#0C0D0F}.pad.hit .role,.pad.hit .hz{color:#0C0D0F}.pad.inh.hit{background:var(--inh)}
-.pad.off{opacity:.45;background:repeating-linear-gradient(-45deg,#2A2C30 0 6px,#1E2023 6px 12px)}
-.knobs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 14px}
-.knobs label{display:flex;justify-content:space-between;font-size:12px;color:var(--ink2)}.knobs input[type=range]{width:100%;accent-color:var(--acc);min-height:30px}
-.opts{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}.opts label{font-size:12px;color:var(--ink2);display:block}
-select,input[type=number]{min-height:40px;border-radius:9px;border:1px solid rgba(0,0,0,.15);background:#E4E5E0;color:var(--ink);padding:0 8px;font:inherit}
-.grille{height:40px;border-radius:10px;background-color:var(--body2);background-image:radial-gradient(circle,#8E918B 1.6px,transparent 2px);background-size:10px 10px}
-footer{padding:0 clamp(16px,3vw,32px) 32px;max-width:1500px;margin:0 auto;color:var(--mut);line-height:1.8}
-a{color:var(--fg)}
-:focus-visible{outline:2px solid var(--inh);outline-offset:2px}
+:root{--bg:#000;--ghost:rgba(255,255,255,.13);--ghost2:rgba(255,255,255,.3);--on:#F2F4F7;--rojo:#FF3B30;--azul:#2F80FF;--naranja:#FF8A1F;--mono:ui-monospace,"SF Mono",Menlo,monospace}
+*{box-sizing:border-box}html,body{margin:0;background:#050506;color:var(--on);font:14px/1.4 system-ui,-apple-system,sans-serif}
+button,select,input{font:inherit;color:inherit}button{background:none;border:0;cursor:pointer;padding:0}
+:focus-visible{outline:2px solid var(--azul);outline-offset:2px;border-radius:6px}
+.wrap{max-width:1560px;margin:0 auto;padding:clamp(8px,2vw,24px)}
+.bezel{padding:clamp(8px,1.2vw,16px);border-radius:26px;background:#141517;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06),0 40px 100px rgba(0,0,0,.6)}
+.screen{background:var(--bg);border-radius:16px;display:grid;gap:1px;overflow:hidden;
+  grid-template-columns:76px minmax(0,1fr) minmax(300px,390px);
+  grid-template-areas:"rail view pads" "rail boards boards" "rail settings settings";box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
+.screen>*{background:var(--bg)}
+.lbl{font:600 10px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ghost2)}
+.on-text{color:var(--on)}
+/* ---------- riel ---------- */
+.rail{grid-area:rail;display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 6px;border-right:1px solid rgba(255,255,255,.06)}
+.ico{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:56px;min-height:52px;justify-content:center;border-radius:10px;color:var(--ghost)}
+.ico svg{width:26px;height:26px}.ico span{font:600 9px var(--mono);letter-spacing:.12em}
+.ico:hover{color:var(--ghost2)}
+#brainBtn{color:var(--on)}#brainBtn svg{width:34px;height:34px}
+body[data-menu=true] #brainBtn{color:var(--naranja);filter:drop-shadow(0 0 8px rgba(255,138,31,.6))}
+body[data-menu=true] .modes .ico{color:var(--on);animation:blink .35s steps(2) 2}
+.modes{display:flex;flex-direction:column;gap:4px}
+.modes .ico[data-dash=gusto][aria-pressed=true]{color:var(--rojo)}.modes .ico[data-dash=oido][aria-pressed=true]{color:var(--azul)}.modes .ico[data-dash=datos][aria-pressed=true]{color:var(--naranja)}
+.sep{width:36px;height:1px;background:var(--ghost);margin:6px 0}
+#playBtn{color:var(--on)}#playBtn[aria-pressed=true]{color:var(--rojo)}
+@keyframes blink{50%{opacity:.25}}
+/* ---------- visor ---------- */
+#view{grid-area:view;position:relative;min-height:clamp(380px,58vh,640px)}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block}
+#tags{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.tag{position:absolute;left:0;top:0;font:600 10px var(--mono);letter-spacing:.06em;color:var(--on);background:rgba(0,0,0,.65);padding:1px 5px;border-radius:4px;white-space:nowrap}
+.hud{position:absolute;display:flex;gap:14px;align-items:flex-start}
+.hud-tl{left:14px;top:12px}.hud-tr{right:14px;top:12px;gap:10px}.hud-bl{left:12px;bottom:46px;flex-direction:column;gap:2px;align-items:center}.hud-br{right:14px;bottom:46px;flex-direction:column;align-items:flex-end;gap:2px}
+.segbox{display:flex;align-items:flex-end;gap:6px}.segbox b{font:600 10px var(--mono);letter-spacing:.12em;color:var(--ghost2);padding-bottom:4px}
+.seg{height:42px;width:auto;display:block}.seg rect.on{fill:currentColor}.seg rect.off{fill:var(--ghost);opacity:.6}
+.small .seg{height:22px}#bigSeg .seg{height:56px;color:var(--naranja)}
+.stat{display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--ghost)}.stat svg{width:20px;height:20px}.stat span{font:600 8px var(--mono);letter-spacing:.12em}
+.stat.on{color:var(--on)}#st-nota.on{color:var(--rojo)}#st-sync.on{color:var(--azul)}
+.hud-views{left:50%;transform:translateX(-50%);top:12px;flex-wrap:wrap;justify-content:center;gap:2px}
+.hud-views button{font:600 10px var(--mono);letter-spacing:.12em;color:var(--ghost);padding:6px 8px;min-height:32px}
+.hud-views button[aria-pressed=true]{color:var(--on)}
+#fly{width:88px;color:var(--on)}#fly svg{width:100%;height:auto;display:block}
+#fly [data-p]{opacity:.11;transition:opacity .04s}#fly [data-p].on{opacity:1}
+#fly [data-p=gota].on,#fly [data-p=proboscide].on{color:var(--naranja)}#fly [data-p=ondas].on{color:var(--azul)}#fly [data-p=notas].on{color:var(--rojo)}#fly [data-p=hoja].on{color:var(--naranja)}
+#flyCap{font:600 10px var(--mono);letter-spacing:.14em;color:var(--on)}
+#msg{position:absolute;left:50%;bottom:48px;transform:translateX(-50%);font:600 11px var(--mono);letter-spacing:.16em;color:var(--on);white-space:nowrap}
+.hist{position:absolute;left:14px;right:14px;bottom:10px;height:26px;display:grid;grid-template-columns:repeat(48,1fr);gap:2px;align-items:end}
+.hist i{display:block;height:var(--h);min-height:2px;background:var(--on);opacity:.85}
+/* ---------- pads ---------- */
+.padzone{grid-area:pads;padding:14px;display:flex;flex-direction:column;gap:10px;border-left:1px solid rgba(255,255,255,.06)}
+.padhead{display:flex;justify-content:space-between;align-items:baseline}.padhead b{font:700 13px var(--mono);letter-spacing:.16em}
+#pads{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;flex:1}
+.pad{--c:var(--on);position:relative;min-height:74px;border:1px solid var(--ghost);border-radius:8px;padding:7px 8px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;text-align:left;color:var(--ghost2)}
+.pad[data-role=rojo]{--c:var(--rojo)}.pad[data-role=azul]{--c:var(--azul)}.pad[data-role=naranja]{--c:var(--naranja)}.pad[data-role=blanco]{--c:var(--on)}
+.pad .key{font:700 15px var(--mono);color:var(--c)}.pad .type{font:600 11px var(--mono);color:var(--on)}.pad .role{font:9px var(--mono);letter-spacing:.06em;text-transform:uppercase}
+.pad .hz{position:absolute;right:8px;top:7px;font:10px var(--mono)}
+.pad.hit{background:var(--c);border-color:var(--c);color:#000}.pad.hit .key,.pad.hit .type{color:#000}
+.pad.off{border-style:dashed;opacity:.45}.pad.off .type{text-decoration:line-through}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px}.legend span{font:600 9px var(--mono);letter-spacing:.1em;color:var(--ghost2)}.legend i{display:inline-block;width:8px;height:8px;margin-right:5px;border-radius:2px;vertical-align:0}
+/* ---------- tableros ---------- */
+.boards{grid-area:boards;padding:14px 16px;min-height:150px}
+.board[hidden]{display:none!important}
+.board{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px 22px;align-items:center}
+.board.boot>*{animation:boot .45s steps(3) both}.board.boot>*:nth-child(2){animation-delay:.08s}.board.boot>*:nth-child(3){animation-delay:.16s}.board.boot>*:nth-child(4){animation-delay:.24s}
+@keyframes boot{0%{opacity:0}50%{opacity:.4}100%{opacity:1}}
+.row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center}
+.row .ico{min-width:auto;min-height:auto;color:var(--on)}.row .ico svg{width:20px;height:20px}
+.barwrap{display:flex;flex-direction:column;gap:4px;min-width:0}.barwrap:focus-within{outline:2px solid var(--azul);outline-offset:3px;border-radius:4px}
+input.bar{-webkit-appearance:none;appearance:none;width:100%;height:20px;margin:0;cursor:pointer;background:linear-gradient(90deg,var(--c,var(--on)) 0 var(--p,0%),var(--ghost) var(--p,0%) 100%);
+  -webkit-mask:repeating-linear-gradient(90deg,#000 0 6px,transparent 6px 9px);mask:repeating-linear-gradient(90deg,#000 0 6px,transparent 6px 9px)}
+input.bar:focus-visible{outline:none}
+input.bar::-webkit-slider-thumb{-webkit-appearance:none;width:8px;height:20px;background:transparent}input.bar::-moz-range-thumb{width:8px;height:20px;background:transparent;border:0}
+input.bar:disabled{cursor:default}
+.out .seg{height:20px}
+.ind{font:700 12px var(--mono);letter-spacing:.18em;padding:8px 10px;border:1px solid var(--ghost);border-radius:6px;color:var(--ghost);text-align:center}
+.ind.on{color:#000;background:var(--c);border-color:var(--c)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{display:flex;align-items:center;gap:6px;min-height:40px;padding:0 12px;border:1px solid var(--ghost);border-radius:8px;color:var(--ghost2);font:600 10px var(--mono);letter-spacing:.12em}
+.chip svg{width:18px;height:18px}.chip[aria-pressed=true]{color:var(--on);border-color:var(--on)}.chip:hover{color:var(--on)}
+.maprow{display:grid;grid-template-columns:130px minmax(0,1fr) 90px;gap:10px;align-items:center;margin:4px 0}
+.maprow select{width:100%;min-width:0}
+#mapRows{min-width:min(100%,420px)}
+.maprow label{font:600 10px var(--mono);letter-spacing:.1em;color:var(--on)}
+select,input[type=number]{background:#000;border:1px solid var(--ghost);border-radius:8px;min-height:38px;padding:0 8px;font:12px var(--mono);color:var(--on)}
+.mini{height:10px;background:linear-gradient(90deg,var(--naranja) 0 var(--p,0%),var(--ghost) var(--p,0%));-webkit-mask:repeating-linear-gradient(90deg,#000 0 5px,transparent 5px 7px);mask:repeating-linear-gradient(90deg,#000 0 5px,transparent 5px 7px)}
+.note{font:10px var(--mono);color:var(--ghost2);letter-spacing:.04em}
+/* ---------- ajustes ---------- */
+.settings{grid-area:settings;padding:10px 16px;display:flex;flex-wrap:wrap;gap:10px 24px;align-items:center;border-top:1px solid rgba(255,255,255,.06)}
+.settings .set{display:flex;align-items:center;gap:10px;min-width:200px;flex:1 1 200px}
+.settings .set .barwrap{flex:1}
+footer{color:#6B7078;font:11px/1.8 var(--mono);padding:14px 4px}footer a{color:#9AA0A9}
+@media (max-width:980px){
+  .screen{grid-template-columns:minmax(0,1fr);grid-template-areas:"rail" "view" "pads" "boards" "settings"}
+  .rail{flex-direction:row;flex-wrap:wrap;justify-content:center;border-right:0;border-bottom:1px solid rgba(255,255,255,.06);padding:8px}
+  .modes{flex-direction:row}.sep{width:1px;height:36px;margin:0 4px}
+  .padzone{border-left:0}#pads .pad{min-height:68px}
+  .hud-views{top:auto;bottom:84px}.hud-bl{bottom:46px}#fly{width:64px}.seg{height:32px}#bigSeg .seg{height:40px}
+  .maprow{grid-template-columns:100px minmax(0,1fr)}.maprow .mini{grid-column:1/-1}
+}
 </style>
 </head>
-<body>
-<header>
-  <div class="brand"><b>Fly Punch</b><span class="mono" style="color:var(--mut)">PESO MOSCA PARA K.O. II · CIRCUITO DEL AZÚCAR</span></div>
-  <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
-    <span><span class="dot" id="dot"></span> <span class="mono" id="status">sin conectar · modo visual</span></span>
-    <button class="btn pri" id="connect">Conectar K.O. II</button>
-  </div>
-</header>
+<body data-menu="false">
+<div class="wrap">
+ <div class="bezel">
+  <div class="screen">
+   <nav class="rail" aria-label="Menú">
+    <button id="brainBtn" class="ico" data-icon="cerebro" aria-expanded="false" aria-label="Abrir menú de modos"><span>FLY</span></button>
+    <div class="modes" role="group" aria-label="Modos">
+      <button class="ico" data-dash="gusto" data-icon="gusto" aria-pressed="true"><span>GUSTO</span></button>
+      <button class="ico" data-dash="oido" data-icon="oido" aria-pressed="false"><span>OÍDO</span></button>
+      <button class="ico" data-dash="datos" data-icon="datos" aria-pressed="false"><span>DATOS</span></button>
+    </div>
+    <div class="sep" aria-hidden="true"></div>
+    <button id="playBtn" class="ico" data-icon="play" aria-pressed="false" aria-label="Iniciar"></button>
+    <button id="resetBtn" class="ico" data-icon="reset"><span>RESET</span></button>
+   </nav>
 
-<main>
-  <section class="viewer" aria-label="Visor 3D del cerebro">
-    <div id="viewport">
-      <canvas id="gl" aria-label="Cerebro de Drosophila con las 356 neuronas del circuito del azúcar"></canvas>
-      <div id="tags"></div>
-      <div class="vbar">
-        <div class="seg" role="group" aria-label="Vista">
-          <button data-view="frontal" aria-pressed="true">Frontal</button><button data-view="dorsal" aria-pressed="false">Dorsal</button>
-          <button data-view="lateral" aria-pressed="false">Lateral</button><button data-view="iso" aria-pressed="false">Iso</button>
-          <button data-view="circuito" aria-pressed="false">Circuito</button>
-        </div>
-        <div class="seg"><button id="rotate" aria-pressed="true">Rotar</button><label class="mono" style="display:flex;align-items:center;gap:6px;padding:0 10px;color:var(--mut)"><input type="checkbox" id="showTags" checked> pads</label></div>
+   <section id="view" aria-label="Cerebro de la mosca">
+    <canvas id="gl" aria-label="Cerebro de Drosophila: 40 000 neuronas de silueta y 818 del circuito"></canvas>
+    <div id="tags"></div>
+    <div class="hud hud-tl">
+      <div class="segbox on-text"><span id="bpmSeg"></span><b>BPM</b></div>
+      <div class="segbox small on-text"><span id="actSeg"></span><b>ACT</b></div>
+    </div>
+    <div class="hud hud-views" role="group" aria-label="Vista">
+      <button data-view="frontal" aria-pressed="true">FRONT</button><button data-view="dorsal" aria-pressed="false">DORSAL</button><button data-view="lateral" aria-pressed="false">LAT</button><button data-view="iso" aria-pressed="false">ISO</button><button data-view="circuito" aria-pressed="false">CIRC</button>
+      <button id="rotBtn" aria-pressed="true">ROT</button><button id="tagsBtn" aria-pressed="true">PADS</button>
+    </div>
+    <div class="hud hud-tr" aria-label="Estado">
+      <span class="stat" id="st-midi" data-icon="midi"><span>MIDI</span></span>
+      <span class="stat" id="st-sync" data-icon="sync"><span>SYNC</span></span>
+      <span class="stat" id="st-nota" data-icon="nota"><span>NOTA</span></span>
+      <span class="stat" id="st-mic" data-icon="mic"><span>MIC</span></span>
+      <span class="stat" id="st-archivo" data-icon="archivo"><span>ARCH</span></span>
+    </div>
+    <div class="hud hud-bl"><div id="fly"></div><div id="flyCap">LISTA</div></div>
+    <div class="hud hud-br"><span id="bigSeg"></span><span class="lbl" id="bigLbl">MN9 HZ</span></div>
+    <div id="msg" role="status">LISTA</div>
+    <div id="hist" class="hist" aria-hidden="true"></div>
+   </section>
+
+   <section class="padzone" aria-label="Pads">
+    <div class="padhead"><b id="padMode">GUSTO</b><span class="lbl">GRUPO C · NOTAS 60–71</span></div>
+    <div id="pads" role="group" aria-label="Pads: clic para silenciar la neurona"></div>
+    <div class="legend"><span><i style="background:var(--on)"></i>SENSOR</span><span><i style="background:var(--rojo)"></i>EXCITA</span><span><i style="background:var(--azul)"></i>INHIBE</span><span><i style="background:var(--naranja)"></i>MN9</span></div>
+   </section>
+
+   <section class="boards" aria-label="Tablero">
+    <div class="board" id="board-gusto">
+      <div class="row"><span class="ico" data-icon="gusto"></span><div class="barwrap" style="--c:var(--on)"><label class="lbl" for="gD">DULCE · HZ</label><input class="bar" id="gD" type="range" min="0" max="200" value="150"></div><span class="out on-text" data-out="gD"></span></div>
+      <div class="row"><span class="ico" data-icon="gusto" style="color:var(--rojo)"></span><div class="barwrap" style="--c:var(--rojo)"><label class="lbl" for="gA">AMARGO · HZ</label><input class="bar" id="gA" type="range" min="0" max="200" value="0" style="--c:var(--rojo)"></div><span class="out" data-out="gA" style="color:var(--rojo)"></span></div>
+      <div class="chips"><span class="ind" id="eatLbl" style="--c:var(--naranja)">COMER</span><span class="ind" id="vetoLbl" style="--c:var(--azul)">VETO AMARGO</span><span class="note">El amargo frena a MN9: así lo reporta el modelo publicado.</span></div>
+    </div>
+    <div class="board" id="board-oido" hidden>
+      <div class="chips" role="group" aria-label="Fuente de sonido">
+        <button class="chip" data-source="manual" data-icon="mano" aria-pressed="true">MANUAL</button>
+        <button class="chip" data-source="mic" data-icon="mic" aria-pressed="false">MIC</button>
+        <button class="chip" data-source="archivo" data-icon="archivo" aria-pressed="false">AUDIO</button>
+        <span class="lbl on-text" id="srcName">MANUAL</span>
+        <input type="file" id="audioFile" accept="audio/*" hidden>
       </div>
-      <span class="cap mono">SILUETA: 40 000 NEURONAS REALES DE FLYWIRE · CIRCUITO: 356 NEURONAS · 15 584 SINAPSIS</span>
+      <div class="row"><span class="ico" data-icon="oido" style="color:var(--azul)"></span><div class="barwrap" style="--c:var(--azul)"><label class="lbl" for="oCE">GRAVES → JO-CM</label><input class="bar" id="oCE" type="range" min="0" max="200" value="120" style="--c:var(--azul)"></div><span class="out" data-out="oCE" style="color:var(--azul)"></span></div>
+      <div class="row"><span class="ico" data-icon="oido"></span><div class="barwrap"><label class="lbl" for="oF">MEDIOS → JO-FV</label><input class="bar" id="oF" type="range" min="0" max="200" value="80"></div><span class="out on-text" data-out="oF"></span></div>
+      <div class="row"><span class="ico" data-icon="oido" style="color:var(--rojo)"></span><div class="barwrap" style="--c:var(--rojo)"><label class="lbl" for="oDM">AGUDOS → JO-DA</label><input class="bar" id="oDM" type="range" min="0" max="200" value="60" style="--c:var(--rojo)"></div><span class="out" data-out="oDM" style="color:var(--rojo)"></span></div>
+      <div class="chips"><span class="ind" id="groomLbl" style="--c:var(--azul)">ACICALADO</span><span class="note">Bandas → grupos del órgano de Johnston: asignación de diseño, no medición fisiológica.</span></div>
     </div>
-    <div class="legend"><span><i style="background:#FF5B1F"></i>sensores de azúcar</span><span><i style="background:#F5B800"></i>capa 1</span><span><i style="background:#34C77B"></i>capa 2 (incluye MN9)</span><span><i style="background:#6F8BFF"></i>capa 3</span><span><i style="background:#6B7280"></i>resto del cerebro</span></div>
-    <div class="card">
-      <p class="mono" style="color:var(--mut);margin:0 0 8px">ACTIVIDAD DE LAS 356 NEURONAS · UNA COLUMNA POR SEMICORCHEA</p>
-      <canvas id="raster" width="320" height="356"></canvas>
+    <div class="board" id="board-datos" hidden>
+      <div class="chips">
+        <button class="chip" id="csvBtn" data-icon="archivo">CARGAR CSV</button>
+        <button class="chip" id="demoBtn" data-icon="tabla">EJEMPLO</button>
+        <input type="file" id="csvFile" accept=".csv,text/csv,.tsv,.txt" hidden>
+        <span class="note" id="csvName">sin archivo</span>
+      </div>
+      <div class="chips" role="group" aria-label="Sentido destino">
+        <span class="lbl">LA MOSCA LO PRUEBA CON</span>
+        <button class="chip" data-target="gusto" data-icon="gusto" aria-pressed="true">GUSTO</button>
+        <button class="chip" data-target="oido" data-icon="oido" aria-pressed="false">OÍDO</button>
+        <label class="lbl" for="perRow" style="margin-left:8px">PASOS/FILA</label>
+        <select id="perRow"><option value="4">4</option><option value="8">8</option><option value="16" selected>16</option></select>
+      </div>
+      <div id="mapRows"></div>
+      <span class="note">Cada columna estimula un sentido; tú decides cuál. La mosca no entiende tus datos: reacciona al estímulo. Los datos no salen de tu navegador.</span>
     </div>
-  </section>
+   </section>
 
-  <section class="device" aria-label="Controles">
-    <div class="dev-top"><b style="letter-spacing:-.02em">FP-01</b><span class="mono">FLY PUNCH · GRUPO C</span></div>
-    <div class="screen"><canvas id="lcd" aria-label="Pantalla de estado"></canvas></div>
-    <div class="transport">
-      <button id="play" aria-pressed="false">▶ Iniciar</button>
-      <button id="reset">Restablecer</button>
-    </div>
-    <div class="pads" id="pads" role="group" aria-label="Pads: clic para silenciar la neurona"></div>
-    <div class="knobs">
-      <div><label for="sugar"><span>Azúcar</span><span class="mono" id="sugarV"></span></label><input id="sugar" type="range" min="0" max="200" value="150"></div>
-      <div><label for="scale"><span>Tiempo neuronal</span><span class="mono" id="scaleV"></span></label><input id="scale" type="range" min="1" max="20" value="4"></div>
-      <div><label for="ibpm"><span>BPM interno</span><span class="mono" id="ibpmV"></span></label><input id="ibpm" type="range" min="60" max="180" value="110"></div>
-    </div>
-    <div class="opts">
-      <div><label for="ch">Canal</label><select id="ch"></select></div>
-      <div><label for="base">Nota base</label><input id="base" type="number" min="0" max="116" value="60" style="width:90px"></div>
-      <label style="display:flex;gap:6px;align-items:center;min-height:40px"><input type="checkbox" id="send" checked> mandar al K.O. II</label>
-    </div>
-    <div class="grille" aria-hidden="true"></div>
-  </section>
-</main>
-
-<footer class="mono">
-  Conectoma: FlyWire v630 · modelo LIF de Shiu et al., Nature 2024 (<a href="https://github.com/philshiu/Drosophila_brain_model">github</a>, MIT) · posiciones y tipos: <a href="https://github.com/flyconnectome/flywire_annotations">flywire_annotations</a> (Schlegel et al. 2024; Dorkenwald et al. 2024). 41 de 356 posiciones son aproximadas. Modelo simplificado, no una mosca viva. Fly Punch no está afiliado a teenage engineering.
-</footer>
+   <section class="settings" aria-label="Ajustes">
+    <div class="set"><div class="barwrap"><label class="lbl" for="scale">TIEMPO NEURONAL · MS/PASO</label><input class="bar" id="scale" type="range" min="1" max="20" value="4"></div><span class="out on-text" data-out="scale"></span></div>
+    <div class="set"><div class="barwrap"><label class="lbl" for="ibpm">BPM INTERNO</label><input class="bar" id="ibpm" type="range" min="60" max="180" value="110"></div><span class="out on-text" data-out="ibpm"></span></div>
+    <label class="lbl" for="ch">CANAL</label><select id="ch"></select>
+    <label class="lbl" for="base">NOTA</label><input id="base" type="number" min="0" max="116" value="60" style="width:76px">
+    <button class="chip" id="sendBtn" data-icon="nota" aria-pressed="true">ENVIAR</button>
+    <button class="chip" id="connectBtn" data-icon="midi" aria-pressed="false">CONECTAR</button>
+    <span class="lbl on-text" id="midiState">SIN K.O. II</span>
+   </section>
+  </div>
+ </div>
+ <footer>
+  Fly Punch · conectoma FlyWire v630 · modelo LIF de Shiu et al., Nature 2024 (<a href="https://github.com/philshiu/Drosophila_brain_model">github</a>, MIT) · posiciones y tipos: <a href="https://github.com/flyconnectome/flywire_annotations">flywire_annotations</a> (Schlegel et al. 2024; Dorkenwald et al. 2024). 95 de 818 posiciones son aproximadas. Modelo simplificado, no una mosca viva. No afiliado a teenage engineering.
+ </footer>
+</div>
 <script type="module" src="./app.js"></script>
 </body>
 </html>
