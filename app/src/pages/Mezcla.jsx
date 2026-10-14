@@ -7,6 +7,7 @@ import { useS, useTick, Icon, Seg } from '../ui/kit.jsx';
 import { DeviceArt } from '../ui/DeviceArt.jsx';
 import { SK_PRESET, SK_FX } from '../engine/sidekick.js';
 import { TARGETS } from '../engine/controls.js';
+import { Acompanar } from '../ui/Acompanar.jsx';
 
 // Mezcla: una tira por pista (a dónde va, nivel, silencio, solo), la compu (kit interno) y la entrada de audio
 // (el sidekick o tu interfaz). Es el mapa de cómo suena todo junto.
@@ -147,6 +148,13 @@ function SidekickPanel() {
       <input type="checkbox" disabled={!pro || !sk.output} checked={!!s.sk?.[k]} onChange={(e) => session.setSk({ [k]: e.target.checked })} style={{ width: 18, height: 18, accentColor: 'var(--acc)' }} />{children}
     </label>
   );
+  if (!sk.input) return (
+    <section className="panel" style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '10px 14px' }}>
+      <span className="row" style={{ gap: 8, fontSize: 13, fontWeight: 600 }}><Icon name="mezcla" size={16} />K.O.–sidekick</span>
+      <span className="row muted" style={{ gap: 6, fontSize: 12, flex: 1, minWidth: 240 }}><span className="status-dot" />{session.ko.access ? 'No conectado. Conéctalo por USB-C directo a la Mac para usar sus perillas y mover su mezcla desde aquí.' : 'Permite MIDI para detectarlo.'}</span>
+      {!session.ko.access && session.ko.supported && <button type="button" className="btn primary" onClick={() => session.connect()}>Permitir MIDI</button>}
+    </section>
+  );
   return (
     <section className="panel" style={{ gap: 12 }}>
       <div className="panel-head">
@@ -200,16 +208,17 @@ export default function Mezcla() {
   return (
     <div className="page">
       <div className="page-head">
-        <div><h1>Mezcla</h1><p>Cómo suena todo junto. Cada pista de la mosca va a un aparato, al kit de la compu o a ambos. Con el sidekick, los dos K.O. II se mezclan en el aparato y vuelven aquí por la entrada.</p></div>
+        <div><h1>Mezcla</h1><p>Cómo suena todo junto: acompaña una canción, decide a dónde va cada pista (aparato, kit de la compu o ambos) y usa el sidekick como mezclador.</p></div>
         <div className="row" style={{ flexWrap: 'wrap' }}>
           {anySolo && <button type="button" className="btn" onClick={() => s.tracks.forEach((t) => t.solo && session.setTrack(t.id, { solo: false }))}>Quitar solos</button>}
           {!session.ko.access && session.ko.supported && <button type="button" className="btn lg primary" onClick={() => session.connect()}>Permitir MIDI</button>}
           <button type="button" className={`btn lg ${s.playing ? 'primary' : 'acc'}`} onClick={() => session.toggle()}><Icon name={s.playing ? 'stop' : 'play'} size={12} fill="currentColor" />{s.playing ? 'Detener' : 'Tocar'}</button>
         </div>
       </div>
-      <div className="well mono" style={{ padding: '10px 14px', fontSize: 11, lineHeight: 1.7, color: 'var(--sub)', overflowX: 'auto', whiteSpace: 'nowrap' }} aria-label="Flujo de la señal">
+      <div className="well mono" style={{ flex: 'none', padding: '10px 14px', fontSize: 11, lineHeight: 1.7, color: 'var(--sub)', overflowX: 'auto', whiteSpace: 'nowrap' }} aria-label="Flujo de la señal">
         MOSCA → {s.tracks.map((t) => { const p = session.portFor(t), dv = session.toDevice(t, p), k = session.toKit(t, p); return `${t.name.toUpperCase()} → ${[dv && (p?.name || session.profileFor(t).name), k && 'COMPU'].filter(Boolean).join(' + ') || '—'}`; }).join('   ·   ')}   ·   APARATOS → SIDEKICK → ENTRADA
       </div>
+      <Acompanar />
       <SidekickPanel />
       <div className="cols" style={{ alignItems: 'stretch' }}>
         {s.tracks.map((t) => <TrackStrip key={t.id} t={t} />)}

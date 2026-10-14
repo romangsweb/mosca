@@ -221,3 +221,5 @@ details.doc-item .doc { padding-bottom: 14px; }
   .hide-sm { display: none !important; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0s !important; animation-iteration-count: 1 !important; transition: none !important; } }
+.rail-sep { width: 28px; height: 1px; background: var(--line); margin: 6px 0; flex: none; }
+@media (max-width: 760px) { .rail-sep { display: none; } }

@@ -12,10 +12,12 @@ import { handleMidi, FREE_MAPPINGS } from './controls.js';
 import { Capture } from './capture.js';
 import { audioPut, audioGet, audioDel, dbOk } from './storage.js';
 import { SK_PRESET, skPorts, skSend } from './sidekick.js';
+import { Follower } from './follow.js';
+import { SCALES } from './devices.js';
 import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
-const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk'];
+const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow'];
 
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'] };
 export const SENSE_LABEL = { dulce: 'Dulce', amargo: 'Amargo', jon_ce: 'Graves', jon_f: 'Medios', jon_dm: 'Agudos' };
@@ -49,6 +51,7 @@ const DEFAULTS = {
   scenes: {}, song: [], songLoop: true, morph: true,
   mappings: [], audioIn: null, captureAudio: false, kitVol: 0.7,
   sk: { follow: false, fxAuto: false, fx: [0, 1] },
+  follow: { source: 'entrada', tempo: true, key: true, autoPlay: true, offset: 0 },
   oidoSource: 'manual', dataMap: {}, perRow: 16,
 };
 
@@ -173,6 +176,39 @@ export class Session {
     if (!this.s.sk?.follow || !this.can('controles') || performance.now() - (this._midiAt || 0) < 40) return;
     const k = this.s.tracks.findIndex((x) => x.id === t.id); if (k < 0 || k > 1) return;
     skSend.fader(this.sidekick.output, k + 1, t.level);
+  }
+  // ---------- acompañar: seguir el tempo, los golpes y el tono de una canción ----------
+  get follower() { return (this._fol ||= new Follower((st) => this.onFollow(st))); }
+  async startFollow(source, opt = {}) {
+    const f = { ...DEFAULTS.follow, ...this.s.follow, source }; this.set({ follow: f }, true); this._folPlayed = false;
+    try { await this.follower.start(this.synth.ensure(), source, { deviceId: this.s.audioIn, ...opt }); }
+    catch (e) { console.warn('acompañar', e); this.live.follow = { ...this.follower.state, on: false, error: e?.name === 'NotAllowedError' ? 'permiso' : e?.message === 'sin-audio' ? 'sin-audio' : 'error' }; this.emit(); }
+  }
+  stopFollow() { this._fol?.stop(); this.live.follow = { ...(this._fol?.state || {}), on: false }; this.emit(); }
+  setFollow(patch) { this.set({ follow: { ...DEFAULTS.follow, ...this.s.follow, ...patch } }, true); }
+  get followLocked() { const st = this.live.follow; return !!(st?.on && st.bpm && st.conf > 0.22 && st.secs >= 5); }
+  onFollow(st) {
+    this.live.follow = { ...st }; const f = { ...DEFAULTS.follow, ...this.s.follow };
+    if (this.followLocked) {
+      if (f.tempo && !this.ko.hasExternalClock) {
+        this.ko.internalBpm = st.bpm; if (Math.round(st.bpm) !== this.s.bpm) this.s.bpm = Math.round(st.bpm);
+        if (f.autoPlay && !this.s.playing && !this._folPlayed) { this._folPlayed = true; this.play(); }
+        this.followPhase(st.beatAt + (f.offset || 0), st.periodMs);
+      }
+      if (f.key && st.key && st.keyConf > 0.35 && this.can('melodia')) {
+        const scale = st.key.mode === 'menor' ? 'menor_pent' : 'mayor_pent', base = { gusto: 48, oido: 60 };
+        const tracks = this.s.tracks.map((t) => { if (t.mode !== 'melodia' || !SCALES[scale]) return t; const root = (base[t.id] ?? 48) + st.key.root; return t.root === root && t.scale === scale ? t : { ...t, root, scale }; });
+        if (tracks.some((t, i) => t !== this.s.tracks[i])) this.s.tracks = tracks;
+      }
+    }
+    this.emit();
+  }
+  // corre la rejilla de pasos para que cada 4 pasos (un tiempo) caiga en el golpe de la canción, poco a poco
+  followPhase(beatAt, periodMs) {
+    const ko = this.ko; if (!this.s.playing || !ko.timer || ko.hasExternalClock || !beatAt || !periodMs) return;
+    const dur = ko.stepMs, m = (4 - (ko.step % 4)) % 4, tStep = ko.nextAt + m * dur;
+    const err = ((((beatAt - tStep) % periodMs) + periodMs * 1.5) % periodMs) - periodMs / 2;
+    ko.nextAt += Math.max(-dur * 0.5, Math.min(dur * 0.5, err * 0.35)); this.live.followErr = err;
   }
   unmap(target) { this.set({ mappings: this.s.mappings.filter((m) => m.target !== target) }, true); }
   getAudio(id) { return audioGet(id); }

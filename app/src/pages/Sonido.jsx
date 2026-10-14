@@ -1,3 +1,4 @@
+import { SoundRoute } from '../ui/SoundRoute.jsx';
 import Libreria from '../ui/Libreria.jsx';
 import { useState } from 'react';
 import { session } from '../engine/session.js';
@@ -24,16 +25,19 @@ function Toggle({ label, desc, checked, onChange, children }) {
 }
 
 export default function Sonido() {
-  const s = useS(), [tab, setTab] = useState('libreria'), track = session.track();
+  const s = useS(), [tab, setTabS] = useState(() => { const t = location.hash.split('?')[1]; return ['libreria', 'ritmo', 'din', 'kit', 'midi'].includes(t) ? t : 'libreria'; }), track = session.track();
+  const setTab = (t) => { setTabS(t); history.replaceState(null, '', `#/sonido?${t}`); };
   const curve = { lineal: (x) => x, suave: (x) => Math.sqrt(x), dura: (x) => x * x }[s.curve];
   const pts = Array.from({ length: 21 }, (_, i) => `${40 + i * 17},${220 - (s.velMin + (s.velMax - s.velMin) * curve(i / 20)) / 127 * 190}`).join(' ');
   const swingX = (i) => 20 + i * 37.5 + (i % 2 ? ((s.swing - 50) / 50) * 37.5 : 0);
   return (
     <div className="page">
       <div className="page-head">
-        <div><h1>Sonido</h1><p>Los kits de la librería, cómo se traducen los disparos en notas y la configuración MIDI.</p></div>
-        <Seg role="tab" label="Secciones" items={[['libreria', 'Librería'], ['ritmo', 'Ritmo'], ['din', 'Dinámica'], ['kit', 'Kit y pistas'], ['midi', 'MIDI y reloj']]} value={tab} onChange={setTab} />
+        <div><h1>Sonido</h1><p>Qué sonidos usa la mosca: los kits de la compu, cómo se convierte cada disparo en un golpe y la conexión MIDI.</p></div>
+        <Seg role="tab" label="Secciones" items={[['libreria', 'Kits'], ['kit', 'Pads y voces'], ['ritmo', 'Ritmo'], ['din', 'Dinámica'], ['midi', 'MIDI y reloj']]} value={tab} onChange={setTab} />
       </div>
+
+      <div className="well" style={{ flex: 'none', padding: '8px 10px' }}><SoundRoute sounds={false} /></div>
 
       {tab === 'libreria' && <Libreria />}
 
@@ -112,7 +116,7 @@ export default function Sonido() {
           <Toggle label="Enviar notas al aparato" desc={`Cada disparo toca una nota en ${session.profile.name}. Cámbialo en Equipo.`} checked={s.sendMidi} onChange={(v) => session.set({ sendMidi: v }, true)} />
           <Toggle label="Fly Punch marca el tempo (maestro)" desc="Manda reloj y Start/Stop: el secuenciador del K.O. II arranca junto con la mosca y puedes grabar sus patrones encima. En el K.O. II: SHIFT + ERASE, código 101, ENTER. Si lo dejas apagado y el K.O. manda reloj (código 102), Fly Punch lo sigue." checked={s.clockOut} onChange={(v) => session.setClockOut(v)} />
           {session.profile.fx && <Toggle label="La mosca mueve los efectos" desc="MN9 controla la perilla X de efectos (CC 12) y la actividad total la perilla Y (CC 13). Elige un efecto en el K.O. II para oírlo." checked={s.fxAuto} onChange={(v) => session.set({ fxAuto: v }, true)} />}
-          <Toggle label="Sonido interno" desc="Voces de batería simples para escuchar sin K.O. II. No imitan tu kit.">
+          <Toggle label="Sonido interno" desc="Cuándo suena el kit de la compu en las pistas en «Auto». Para elegirlo por pista, usa Mezcla.">
             <Seg label="Sonido interno" items={[['auto', 'Solo sin K.O.'], ['siempre', 'Siempre'], ['nunca', 'Nunca']]} value={s.monitor} onChange={(v) => session.set({ monitor: v }, true)} />
           </Toggle>
           <Toggle label="Compensar latencia" desc="Adelanta las notas MIDI si el K.O. II suena tarde.">

@@ -39,12 +39,6 @@ export default function Libreria() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <p className="muted" style={{ margin: 0, maxWidth: 760, lineHeight: 1.55 }}>Los sonidos de la compu: suenan cuando una pista va a «Compu» o «Ambos» en Mezcla (o cuando no hay aparato), y son los que se usan al exportar a WAV. Todos se sintetizan en la app: son originales y libres de derechos.</p>
-      {(() => { const users = s.tracks.filter((t) => session.audible(t) && session.toKit(t)); return (
-        <div className="well row" style={{ padding: '10px 12px', gap: 10, fontSize: 12.5, flexWrap: 'wrap' }}>
-          <span className={`status-dot${users.length ? ' on' : ''}`} />
-          <span style={{ flex: 1, minWidth: 220 }}>{users.length ? `Este kit suena ahora en: ${users.map((t) => t.name).join(' y ')}.` : 'Ahora ninguna pista usa el kit: todas van a tu aparato. Pon una en «Compu» o «Ambos» para oírlo junto al K.O. II.'}</span>
-          <a href="#/mezcla" className="btn">Abrir Mezcla</a>
-        </div>); })()}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
         {KITS.map((k) => {
           const on = activeKit === k.id, locked = k.pro && !pro;
@@ -56,9 +50,9 @@ export default function Libreria() {
               </div>
               <div className="between"><h3 style={{ fontSize: 15 }}>{k.name}</h3>{k.pro ? <span className="badge-pro">PRO</span> : <span className="chip">FREE</span>}</div>
               <p className="muted" style={{ margin: 0, fontSize: 12, lineHeight: 1.5, minHeight: 36 }}>{k.desc}</p>
-              <div className="row">
+              <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
                 <button type="button" className="btn" onClick={() => listen(k.id)} disabled={playing === k.id}><Icon name="play" size={11} fill="currentColor" />Escuchar</button>
-                <button type="button" className={`btn ${on ? '' : locked ? '' : 'primary'}`} style={{ marginLeft: 'auto' }} disabled={on} onClick={() => session.setKit(k.id)}>{on ? 'En uso' : locked ? 'Desbloquear con Pro' : 'Usar este kit'}</button>
+                <button type="button" className={`btn ${on ? '' : locked ? '' : 'primary'}`} style={{ marginLeft: 'auto' }} disabled={on} onClick={() => session.setKit(k.id)}>{on ? 'En uso' : locked ? 'Pro' : 'Usar este kit'}</button>
               </div>
             </article>
           );

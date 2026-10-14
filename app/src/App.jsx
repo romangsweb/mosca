@@ -14,7 +14,9 @@ import Cancion from './pages/Cancion.jsx';
 import Mezcla from './pages/Mezcla.jsx';
 
 const NAV = [
-  ['estudio', 'Estudio', 'estudio'], ['equipo', 'Equipo', 'usb'], ['mezcla', 'Mezcla', 'mezcla'], ['oido', 'Oído', 'oido'], ['datos', 'Datos', 'datos', true], ['cancion', 'Canción', 'cancion', true], ['sonido', 'Sonido', 'sonido'], ['tomas', 'Tomas', 'tomas'],
+  ['estudio', 'Estudio', 'estudio'], ['mezcla', 'Mezcla', 'mezcla'], ['cancion', 'Canción', 'cancion', true], null,
+  ['sonido', 'Sonido', 'sonido'], ['oido', 'Oído', 'oido'], ['datos', 'Datos', 'datos', true], null,
+  ['tomas', 'Tomas', 'tomas'], ['equipo', 'Equipo', 'usb'],
 ];
 const PAGES = { estudio: Estudio, equipo: Equipo, mezcla: Mezcla, cancion: Cancion, oido: Oido, datos: Datos, sonido: Sonido, tomas: Tomas, cuenta: Cuenta };
 const TIPS = {
@@ -24,7 +26,7 @@ const TIPS = {
   equipo: ['Aparato principal: elige en la galería (K.O. II, TR-8S, Digitakt, Ableton…).', 'Controles: aprende las perillas del sidekick o de cualquier controlador.', 'Audio: graba la mezcla real de tus aparatos con cada toma.'],
   mezcla: ['Destino: cada pista va al aparato, al kit de la compu o a ambos.', 'Pro: un aparato por pista, p. ej. dos K.O. II.', 'Entrada: la mezcla del sidekick vuelve aquí y se graba con cada toma.'],
   cancion: ['Ajusta lo que suena y guárdalo en una casilla de Escenas (o crea la canción de ejemplo).', 'Pulsa una escena para añadirla al Arreglo y elige sus compases.', 'Toca: la mosca cambia de escena al compás.'],
-  sonido: ['Librería: elige un kit y pulsa Escuchar.', 'Kit: qué voz tiene cada pad. Mutar respeta estos roles.', 'MIDI: reloj, latencia y control de efectos del K.O. II.'],
+  sonido: ['Kits: pulsa Escuchar y luego «Usar este kit».', 'Pads y voces: qué golpe toca cada pad. Mutar respeta estos roles.', 'MIDI y reloj: tempo compartido, latencia y efectos del K.O. II.'],
   tomas: ['Graba con el punto rojo o la tecla R.', 'Cada toma guarda las notas de todas las pistas.', 'Exporta a MIDI para tu DAW, o a WAV con los sonidos internos.'],
   cuenta: ['Inicia sesión para llevar tus ajustes a cualquier dispositivo.', 'Con cuenta, tus tomas se guardan en la nube.', 'Pro: modo Datos, tomas ilimitadas y WAV. Pruébalo 7 días gratis.'],
 };
@@ -68,7 +70,7 @@ function Transport({ s }) {
         <button type="button" aria-label="Subir tempo" onClick={() => session.setBpm(s.bpm + 1)} disabled={ext}>+</button>
         <span className="mono muted" style={{ fontSize: 10, marginRight: 6 }}>BPM</span>
       </div>
-      <span className={`chip hide-sm${ext || s.clockOut ? ' acc' : ''}`} title="Fuente del reloj">{ext ? 'SIGUE K.O.' : s.clockOut ? 'MAESTRO' : 'INTERNO'}</span>
+      <span className={`chip hide-sm${ext || s.clockOut || session.followLocked ? ' acc' : ''}`} title="Fuente del reloj">{ext ? 'SIGUE K.O.' : session.followLocked && s.follow?.tempo !== false ? 'ACOMPAÑA' : s.clockOut ? 'MAESTRO' : 'INTERNO'}</span>
     </div>
   );
 }
@@ -126,7 +128,8 @@ export default function App() {
       )}
       <div className="body">
         <nav className="rail" aria-label="Secciones">
-          {NAV.map(([id, label, icon, pro]) => <a key={id} href={`#/${id}`} aria-current={page === id ? 'page' : undefined}><Icon name={icon} size={20} />{label}{pro && <span className="pro" title="Pro" />}</a>)}
+          {NAV.map((n, i) => (!n ? <span key={`sep${i}`} className="rail-sep" aria-hidden="true" />
+            : <a key={n[0]} href={`#/${n[0]}`} aria-current={page === n[0] ? 'page' : undefined}><Icon name={n[2]} size={20} />{n[1]}{n[3] && <span className="pro" title="Pro" />}</a>))}
           <span className="spacer" />
           <a href="#/cuenta?ayuda" aria-current={undefined}><Icon name="docs" size={20} />Docs</a>
           <a href="#/cuenta?ajustes" aria-current={page === 'cuenta' ? 'page' : undefined}><Icon name="ajustes" size={20} />Ajustes</a>

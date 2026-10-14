@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { session, SENSES, SENSE_LABEL, HIST } from '../engine/session.js';
 import { PAD_KEYS } from '../engine/midi.js';
 import { SCALES, NOTE_NAMES } from '../engine/devices.js';
+import { SoundRoute } from '../ui/SoundRoute.jsx';
 import { useS, useTick, Icon, Knob, Seg, roleColor, ROLE_DESC } from '../ui/kit.jsx';
 import Brain from '../ui/Brain.jsx';
 import CircuitMap from '../ui/CircuitMap.jsx';
@@ -134,10 +135,10 @@ export default function Estudio() {
             <div className="row" style={{ gap: 6 }}>
               <button type="button" className="btn" onClick={() => session.mutateTrack()} title="Reparte las neuronas entre los pads respetando graves, medios y agudos"><Icon name="dado" size={14} />Mutar</button>
               <button type="button" className="iconbtn" disabled={!canUndo} aria-label="Deshacer mutación" onClick={() => session.undoMutate()}><Icon name="deshacer" size={14} /></button>
-              <a href="#/sonido" className="btn ghost">Sonido</a>
             </div>
           </div>
           <Lanes track={track} selPad={selPad} />
+          <SoundRoute tracks={[track]} compact />
         </section>
       </div>
     </div>
