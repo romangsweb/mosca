@@ -87,6 +87,12 @@ export class Synth {
     if (this.ctx.state === 'suspended') this.ctx.resume();
     return this.ctx;
   }
+  // clic del metrónomo: directo a la salida, sin efectos ni volumen del kit
+  click(at = performance.now(), accent = false) {
+    const ctx = this.ensure(), t = Math.max(ctx.currentTime, ctx.currentTime + (at - performance.now()) / 1000), o = ctx.createOscillator(), g = ctx.createGain();
+    o.frequency.value = accent ? 1760 : 1175; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(accent ? 0.35 : 0.22, t + 0.002); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+    o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 0.06);
+  }
   setFx(fx, bpm) { this.ensure(); this.chain.set(fx, bpm); }
   setSends(id, sends) { this.sends[id] = sends; if (this.chain) this.chain.bus(id, sends); }
   // at: performance.now() en ms · track: id de la pista (su bus, su kit y sus envíos)

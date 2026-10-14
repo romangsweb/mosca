@@ -135,6 +135,11 @@ export default function Estudio() {
             </div>
             <div className="row" style={{ gap: 6 }}>
               <Seg label="Quién toca la pista" items={[['vivo', 'Mosca'], ['congelado', 'Patrón'], ['ambos', 'Ambos']]} value={track.play || 'vivo'} onChange={(v) => { if (v !== 'vivo' && !track.frozen && !session.freeze(track.id)) session.setTrack(track.id, { play: v, frozen: Array.from({ length: 12 }, () => new Array(16).fill(0)) }); else session.setTrack(track.id, { play: v }); }} />
+              {track.play && track.play !== 'vivo' && (
+                <select className="input" aria-label="Largo del patrón" title="Largo del patrón: menos de 16 pasos crea polirritmos contra el compás" style={{ height: 34, width: 'auto' }} value={track.len || 16} onChange={(e) => session.setTrack(track.id, { len: +e.target.value })}>
+                  {[16, 15, 14, 12, 10, 9, 8, 7, 6, 5, 3].map((n) => <option key={n} value={n}>{n} pasos</option>)}
+                </select>
+              )}
               <button type="button" className="btn" onClick={() => { if (!session.freeze(track.id)) session.set({ notice: 'congelar' }); }} title="Guarda el último compás de la mosca como patrón editable"><Icon name="nieve" size={14} />Congelar</button>
               <button type="button" className="btn" onClick={() => session.mutateTrack()} title="Reparte las neuronas entre los pads respetando graves, medios y agudos"><Icon name="dado" size={14} />Mutar</button>
               <button type="button" className="iconbtn" disabled={!canUndo} aria-label="Deshacer mutación" onClick={() => session.undoMutate()}><Icon name="deshacer" size={14} /></button>

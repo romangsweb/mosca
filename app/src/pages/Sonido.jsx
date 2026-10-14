@@ -119,6 +119,10 @@ export default function Sonido() {
           <Toggle label="Sonido interno" desc="Cuándo suena el kit de la compu en las pistas en «Auto». Para elegirlo por pista, usa Mezcla.">
             <Seg label="Sonido interno" items={[['auto', 'Solo sin K.O.'], ['siempre', 'Siempre'], ['nunca', 'Nunca']]} value={s.monitor} onChange={(v) => session.set({ monitor: v }, true)} />
           </Toggle>
+          <Toggle label="Metrónomo" desc="Un clic en cada tiempo, más agudo en el primero del compás. Atajo: tecla M." checked={!!s.metro} onChange={(v) => session.set({ metro: v }, true)} />
+          <Toggle label="Cuenta de entrada al grabar" desc="Si grabas con todo detenido, suena un clic antes de empezar para que entres a tiempo.">
+            <Seg label="Cuenta de entrada" items={[['0', 'Sin cuenta'], ['1', '1 compás'], ['2', '2 compases']]} value={String(s.countIn ?? 1)} onChange={(v) => session.set({ countIn: +v }, true)} />
+          </Toggle>
           <Toggle label="Compensar latencia" desc="Adelanta las notas MIDI si el K.O. II suena tarde.">
             <div className="row" style={{ minWidth: 240 }}><input type="range" min="0" max="60" value={s.latency} onChange={(e) => session.setLatency(+e.target.value)} aria-label="Latencia en milisegundos" style={{ flex: 1 }} /><span className="mono" style={{ width: 48, textAlign: 'right' }}>{s.latency} ms</span></div>
           </Toggle>

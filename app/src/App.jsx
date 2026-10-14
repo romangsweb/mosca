@@ -71,6 +71,9 @@ function Transport({ s }) {
         <button type="button" aria-label="Subir tempo" onClick={() => session.setBpm(s.bpm + 1)} disabled={ext}>+</button>
         <span className="mono muted" style={{ fontSize: 10, marginRight: 6 }}>BPM</span>
       </div>
+      <button type="button" className="tbtn hide-sm" style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.06em', padding: '0 8px' }} title="Toca al ritmo para marcar el tempo (T)" disabled={ext} onClick={() => session.tap()}>TAP</button>
+      <button type="button" className="tbtn" aria-pressed={!!s.metro} aria-label="Metrónomo" title="Metrónomo (M)" onClick={() => session.set({ metro: !s.metro }, true)} style={s.metro ? { color: 'var(--acc)' } : undefined}><Icon name="metro" size={16} /></button>
+      {s.counting && <span className="chip acc" aria-live="polite">CUENTA</span>}
       <span className={`chip hide-sm${ext || s.clockOut || session.followLocked ? ' acc' : ''}`} title="Fuente del reloj">{ext ? 'SIGUE K.O.' : session.followLocked && s.follow?.tempo !== false ? 'ACOMPAÑA' : s.clockOut ? 'MAESTRO' : 'INTERNO'}</span>
     </div>
   );
@@ -86,7 +89,11 @@ export default function App() {
     const k = (e) => {
       if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
       if (e.code === 'Space') { e.preventDefault(); session.toggle(); }
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); e.shiftKey ? session.redo() : session.undo(); return; }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === 'r' || e.key === 'R') session.toggleRec();
+      if (e.key === 'm' || e.key === 'M') session.set({ metro: !session.s.metro }, true);
+      if (e.key === 't' || e.key === 'T') session.tap();
     };
     addEventListener('keydown', k); return () => removeEventListener('keydown', k);
   }, []);
@@ -116,6 +123,8 @@ export default function App() {
             <span className={`status-dot${s.ko.output || session.profile.kind === 'interno' ? ' on' : ''}`} />{session.profile.kind === 'interno' ? 'Sonido interno' : s.ko.output ? session.profile.name : `Conectar ${session.profile.name}`}
           </a>
           <TrialBadge />
+          <button type="button" className="iconbtn" aria-label="Deshacer" title="Deshacer (⌘Z)" disabled={!s.canUndo} onClick={() => session.undo()}><Icon name="deshacer" size={15} /></button>
+          <button type="button" className="iconbtn" aria-label="Rehacer" title="Rehacer (⇧⌘Z)" disabled={!s.canRedo} onClick={() => session.redo()}><Icon name="deshacer" size={15} style={{ transform: 'scaleX(-1)' }} /></button>
           <button type="button" className="btn" aria-pressed={s.guide} onClick={() => session.set({ guide: !s.guide }, true)}>Guía</button>
           <button type="button" className="iconbtn" aria-label={night ? 'Cambiar a tema día' : 'Cambiar a tema noche'} onClick={() => session.set({ theme: night ? 'dia' : 'noche' }, true)}><Icon name={night ? 'sol' : 'luna'} size={15} /></button>
           <a href="#/cuenta" className="avatar" aria-label={`Cuenta, plan ${s.plan}`}><span className="mono muted" style={{ fontSize: 9, letterSpacing: '.1em' }}>{!s.user ? 'INVITADO' : session.onTrial ? 'PRUEBA' : s.plan.toUpperCase()}</span><span>{initials(s)}</span></a>

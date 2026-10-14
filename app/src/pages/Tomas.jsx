@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { session } from '../engine/session.js';
+import { makeZip } from '../engine/zip.js';
 import { takeToMidi, takeToCsv, download, slug } from '../engine/midifile.js';
 import { renderWav, wavBlob } from '../engine/synth.js';
 import { FREE_TAKES } from '../engine/storage.js';
@@ -52,6 +53,15 @@ export default function Tomas() {
     if (fmtSel === 'mid') download(takeToMidi(take), `${base}.mid`);
     if (fmtSel === 'csv') download(takeToCsv(take), `${base}-disparos.csv`);
     if (fmtSel === 'real') { const blob = await session.getAudio(take.id); if (blob) { try { const buf = await session.synth.ensure().decodeAudioData(await blob.arrayBuffer()); download(wavBlob(buf), `${base}-audio-real.wav`); } catch { download(blob, `${base}-audio-real.webm`); } } }
+    if (fmtSel === 'stems') { // una pista = un WAV con su kit y efectos + su MIDI, todo en un .zip con el mismo inicio para alinearlos en tu DAW
+      const files = [];
+      for (const tr of take.tracks) {
+        const sub = { ...take, tracks: [tr], events: take.events.filter((e) => e.track === tr.id) }; if (!sub.events.length) continue;
+        files.push({ name: `${base}-${slug(tr.name)}.wav`, blob: await renderWav({ ...sub, durMs: take.durMs }, (e) => e.voice, session.synth.kit, session.wavOptions) });
+        files.push({ name: `${base}-${slug(tr.name)}.mid`, blob: takeToMidi(sub) });
+      }
+      download(await makeZip(files), `${base}-pistas.zip`);
+    }
     if (fmtSel === 'wav') download(await renderWav(take, (e) => e.voice, session.synth.kit, session.wavOptions), `${base}-${session.s.kitActive || 'kit'}.wav`);
     setBusy(false); setExp(false);
   };
@@ -118,8 +128,8 @@ export default function Tomas() {
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="exp-t">
             <h2 id="exp-t" style={{ fontSize: 18 }}>Exportar «{take.name}»</h2>
             <div role="radiogroup" aria-label="Formato" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {[...(take.hasAudio ? [['real', 'Audio real (.wav)', 'Lo que sonó en tus aparatos, grabado desde tu interfaz.']] : []), ['mid', 'MIDI (.mid)', 'Una pista por pista de Fly Punch. Ábrelo en Ableton, Logic o FL Studio.'], ['csv', 'CSV de disparos', 'Tiempo, neurona, nota y velocidad de cada disparo.'], ['wav', 'Audio (.wav)', 'Con el kit de la librería que tengas elegido (no con los sonidos de tu aparato).']].map(([id, l, d]) => (
-                <button key={id} type="button" role="radio" aria-checked={fmtSel === id} className="radio-card" disabled={id === 'wav' && !session.can('wav')} style={id === 'wav' && !session.can('wav') ? { opacity: 0.55, cursor: 'not-allowed' } : undefined} onClick={() => setFmt(id)}><span className="o" /><span style={{ flex: 1 }}><span style={{ display: 'block', fontWeight: 600 }}>{l}</span><span className="muted" style={{ fontSize: 12 }}>{d}</span></span>{id === 'wav' && !session.can('wav') && <span className="badge-pro">PRO</span>}</button>
+              {[...(take.hasAudio ? [['real', 'Audio real (.wav)', 'Lo que sonó en tus aparatos, grabado desde tu interfaz.']] : []), ['stems', 'Pistas separadas (.zip)', 'Un WAV y un MIDI por pista, alineados, para terminar la canción en tu DAW.'], ['mid', 'MIDI (.mid)', 'Una pista por pista de Fly Punch. Ábrelo en Ableton, Logic o FL Studio.'], ['csv', 'CSV de disparos', 'Tiempo, neurona, nota y velocidad de cada disparo.'], ['wav', 'Audio (.wav)', 'Con el kit de la librería que tengas elegido (no con los sonidos de tu aparato).']].map(([id, l, d]) => (
+                <button key={id} type="button" role="radio" aria-checked={fmtSel === id} className="radio-card" disabled={(id === 'wav' || id === 'stems') && !session.can('wav')} style={(id === 'wav' || id === 'stems') && !session.can('wav') ? { opacity: 0.55, cursor: 'not-allowed' } : undefined} onClick={() => setFmt(id)}><span className="o" /><span style={{ flex: 1 }}><span style={{ display: 'block', fontWeight: 600 }}>{l}</span><span className="muted" style={{ fontSize: 12 }}>{d}</span></span>{id === 'wav' && !session.can('wav') && <span className="badge-pro">PRO</span>}</button>
               ))}
             </div>
             {!session.can('wav') && <a href="#/cuenta?plan" className="muted" style={{ fontSize: 12 }}>WAV es parte de Pro · {session.canTrial ? 'pruébalo 7 días gratis' : 'ver planes'} →</a>}

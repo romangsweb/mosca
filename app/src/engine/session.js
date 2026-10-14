@@ -17,7 +17,7 @@ import { SCALES } from './devices.js';
 import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
-const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint'];
+const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn'];
 
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'] };
 export const SENSE_LABEL = { dulce: 'Dulce', amargo: 'Amargo', jon_ce: 'Graves', jon_f: 'Medios', jon_dm: 'Agudos' };
@@ -41,8 +41,8 @@ const DEFAULTS = {
   bpm: 110, sessionName: 'Sesión sin título', theme: 'noche', guide: true, onboarded: false, alias: '',
   inputs: { dulce: 150, amargo: 40, jon_ce: 0, jon_f: 0, jon_dm: 0 },
   tracks: [
-    { id: 'gusto', name: 'Gusto', sense: 'gusto', group: 'C', ch: 1, mute: false, solo: false, level: 1, map: identity(), kit: [...DEFAULT_KIT], mode: 'ritmo', scale: 'menor_pent', root: 48, dest: 'auto', kitId: null, rev: 0.12, dly: 0, play: 'vivo', frozen: null },
-    { id: 'oido', name: 'Oído', sense: 'oido', group: 'A', ch: 1, mute: true, solo: false, level: 0.85, map: identity(), kit: [...DEFAULT_KIT], mode: 'ritmo', scale: 'menor_pent', root: 60, dest: 'auto', kitId: null, rev: 0.2, dly: 0.1, play: 'vivo', frozen: null },
+    { id: 'gusto', name: 'Gusto', sense: 'gusto', group: 'C', ch: 1, mute: false, solo: false, level: 1, map: identity(), kit: [...DEFAULT_KIT], mode: 'ritmo', scale: 'menor_pent', root: 48, dest: 'auto', kitId: null, rev: 0.12, dly: 0, play: 'vivo', frozen: null, len: 16 },
+    { id: 'oido', name: 'Oído', sense: 'oido', group: 'A', ch: 1, mute: true, solo: false, level: 0.85, map: identity(), kit: [...DEFAULT_KIT], mode: 'ritmo', scale: 'menor_pent', root: 60, dest: 'auto', kitId: null, rev: 0.2, dly: 0.1, play: 'vivo', frozen: null, len: 16 },
   ],
   selTrack: 'gusto', selPad: 11,
   density: 4, swing: 54, humanize: 4, curve: 'suave', velMin: 70, velMax: 127, ghost: true,
@@ -51,7 +51,7 @@ const DEFAULTS = {
   scenes: {}, song: [], songLoop: true, morph: true,
   mappings: [], audioIn: null, captureAudio: false, kitVol: 0.7,
   sk: { follow: false, fxAuto: false, fx: [0, 1] },
-  fx: { ...FX_DEFAULT },
+  fx: { ...FX_DEFAULT }, metro: false, countIn: 1,
   follow: { source: 'entrada', tempo: true, key: true, autoPlay: true, offset: 0 },
   oidoSource: 'manual', dataMap: {}, perRow: 16,
 };
@@ -100,7 +100,7 @@ export class Session {
     };
     try { await Promise.race([restoreLocal(), new Promise((_, rej) => setTimeout(() => rej(new Error('guardado local lento')), 5000))]); }
     catch (e) { console.warn('Fly Punch arrancó sin restaurar todo:', e); this.s.notice = 'restauracion'; }
-    this.s.ready = true; this.emit();
+    this.s.ready = true; this.emit(); this.remember();
     try { this.loadKit(); } catch (e) { console.warn('kit', e); }
     if (cloudEnabled) {
       (async () => {
@@ -123,9 +123,28 @@ export class Session {
   flush() { if (this._pt) { clearTimeout(this._pt); this._pt = null; kvSet('settings', this.snapshot()); } }
   snapshot() { return Object.fromEntries(KEEP.map((k) => [k, this.s[k]])); }
   persist() {
+    if (!this._restoring) { clearTimeout(this._ht); this._ht = setTimeout(() => this.remember(), 500); }
     clearTimeout(this._pt);
     this._pt = setTimeout(() => { this._pt = null; kvSet('settings', this.snapshot()); this.set({ saved: Date.now() }); }, 400);
     if (this.s.user) { clearTimeout(this._ct); this._ct = setTimeout(() => this.pushCloud(), 1500); }
+  }
+  // ---------- deshacer / rehacer (todo lo que se guarda: estímulos, pistas, patrones, escenas, mezcla…) ----------
+  remember() {
+    const snap = JSON.stringify(this.snapshot()); this.hist ||= []; if (this.hist[this.hist.length - 1] === snap) return;
+    this.hist.push(snap); if (this.hist.length > 60) this.hist.shift(); this.fut = []; this.set({ canUndo: this.hist.length > 1, canRedo: false });
+  }
+  restoreSnap(snap) {
+    this._restoring = true; const v = JSON.parse(snap);
+    Object.assign(this.s, v, { tracks: v.tracks.map((t, i) => ({ ...DEFAULTS.tracks[i], ...t })) });
+    this.ko.internalBpm = this.s.bpm; this.persist(); this.loadKit(); this._restoring = false;
+    this.set({ canUndo: this.hist.length > 1, canRedo: this.fut.length > 0 });
+  }
+  undo() { if (!this.hist || this.hist.length < 2) return; clearTimeout(this._ht); this.fut.push(this.hist.pop()); this.restoreSnap(this.hist[this.hist.length - 1]); }
+  redo() { if (!this.fut?.length) return; const snap = this.fut.pop(); this.hist.push(snap); this.restoreSnap(snap); }
+  // ---------- tempo con golpecitos ----------
+  tap() {
+    const now = performance.now(); this._taps = (this._taps || []).filter((t) => now - t < 2500); this._taps.push(now);
+    if (this._taps.length >= 2) { const d = this._taps.slice(-5), iv = (d[d.length - 1] - d[0]) / (d.length - 1); this.setBpm(60000 / iv); }
   }
   // ---------- cuenta ----------
   async adoptUser(user) {
@@ -338,8 +357,8 @@ export class Session {
   setKitVol(v) { this.set({ kitVol: v }, true); if (this.synth.out) this.synth.out.gain.value = v; }
   get monitorOn() { return this.s.monitor === 'siempre' || (this.s.monitor === 'auto' && (!this.ko.connected || this.profile.kind === 'interno')); }
   // ---------- transporte ----------
-  play() { this.synth.ensure(); this.sim.reset(); this.live.step = 0; this.s.row = 0; this.morphState = null; if (this.s.songOn) this.songPos = { row: 0, bars: 0 }; this.ko.start(); this.set({ playing: true }); }
-  stop() { this.ko.stop(); if (this.s.rec) this.toggleRec(); this.morphState = null; this.set({ playing: false, pendingScene: null }); }
+  play() { this.synth.ensure(); this.sim.reset(); this.live.step = 0; this.live.countIn = 0; this.s.row = 0; this.morphState = null; if (this.s.songOn) this.songPos = { row: 0, bars: 0 }; this.ko.start(); this.set({ playing: true }); }
+  stop() { this.ko.stop(); if (this._recArm) { this._recArm = false; this.set({ rec: false, counting: false }); } else if (this.s.rec) this.toggleRec(); this.morphState = null; this.set({ playing: false, pendingScene: null }); }
   toggle() { this.s.playing ? this.stop() : this.play(); }
   // ---------- un paso de semicorchea ----------
   rates() {
@@ -355,6 +374,12 @@ export class Session {
   }
   step(n, at) {
     const s = this.s, D = this.D, L = this.live, stepMs = this.ko.stepMs;
+    if (L.countIn > 0) { // compás de cuenta: solo clic, la mosca espera
+      if (n % 4 === 0) this.synth.click(at, n % 16 === 0); L.step = n; L.stepAt = at; L.countIn--;
+      if (!L.countIn) { this.ko.step = 0; if (this._recArm) { this._recArm = false; this.startRec(at + stepMs, 0); } } // el compás 1 empieza después de la cuenta
+      return;
+    }
+    if (s.metro && n % 4 === 0) this.synth.click(at, n % 16 === 0);
     if (s.data && n > 0 && n % s.perRow === 0) { s.row = (s.row + 1) % s.data.rows; queueMicrotask(() => this.emit()); }
     this.live.step = n; if (n % 16 === 0) onBar(this, n / 16);
     const R = this.rates(); L.lastRates = R;
@@ -368,7 +393,7 @@ export class Session {
         const c = cnt[p.idx]; rate[k] = rate[k] * 0.9 + 0.1 * (c / (s.density / 1000));
         lanes[k][pos] = 0; L.rateHist[t.id][k][n % HIST] = rate[k]; L.spikes[t.id][k][n % HIST] = c;
         // vivo = toca la mosca · congelado = toca el patrón · ambos = el patrón más lo que agregue la mosca
-        const mode = t.play || 'vivo', fz = mode !== 'vivo' && t.frozen ? t.frozen[k][pos] : 0;
+        const mode = t.play || 'vivo', fz = mode !== 'vivo' && t.frozen ? t.frozen[k][n % (t.len || 16)] : 0;
         let vel = 0;
         if (c && on && mode !== 'congelado') { const x = Math.min(1, c / 3), ghost = s.ghost && p.inhibidora ? 0.6 : 1; vel = Math.round((s.velMin + (s.velMax - s.velMin) * curve(x)) * ghost * t.level); }
         if (fz && on) vel = Math.max(vel, Math.round(fz * t.level));
@@ -469,9 +494,15 @@ export class Session {
       this.set({ rec: false }); return;
     }
     if (this.takesLimitReached) { this.set({ notice: 'limite' }); return; }
+    if (this._recArm) { this._recArm = false; this.live.countIn = 0; this.set({ rec: false, counting: false }); return; }
+    // cuenta de entrada: si no está tocando, un compás (o dos) de clic antes de grabar
+    if (!this.s.playing && this.s.countIn > 0) { this.play(); this.live.countIn = this.s.countIn * 16; this._recArm = true; this.set({ rec: true, counting: true }); return; }
     if (!this.s.playing) this.play();
+    this.startRec();
+  }
+  startRec(t0 = performance.now(), n0 = this.live.step) {
     if (this.s.captureAudio && this.can('audio')) this.capture.start(this.s.audioIn).catch((e) => { console.warn('audio', e); this.set({ notice: 'audio' }); });
-    this.rec = { t0: performance.now(), n0: this.live.step, events: [] }; this.set({ rec: true });
+    this.rec = { t0, n0, events: [] }; this.set({ rec: true, counting: false });
   }
   async renameTake(id, name) {
     const t = this.s.takes.find((x) => x.id === id); if (!t) return;
