@@ -13,9 +13,9 @@ export class Ear {
     this.stream?.getTracks().forEach((t) => t.stop()); this.stream = null;
     this.kind = null; this.levels = [0, 0, 0];
   }
-  async mic() {
+  async mic(deviceId) {
     await this.ensure(); this.stop();
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    this.stream = await navigator.mediaDevices.getUserMedia(deviceId ? { audio: { deviceId: { exact: deviceId }, echoCancellation: false, noiseSuppression: false, autoGainControl: false } } : { audio: true });
     this.src = this.ctx.createMediaStreamSource(this.stream); this.src.connect(this.an);
     this.kind = 'mic'; this.name = 'micrófono';
   }

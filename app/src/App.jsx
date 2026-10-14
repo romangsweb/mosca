@@ -11,17 +11,19 @@ import Cuenta from './pages/Cuenta.jsx';
 import Bienvenida from './pages/Bienvenida.jsx';
 import Equipo from './pages/Equipo.jsx';
 import Cancion from './pages/Cancion.jsx';
+import Mezcla from './pages/Mezcla.jsx';
 
 const NAV = [
-  ['estudio', 'Estudio', 'estudio'], ['equipo', 'Equipo', 'usb'], ['oido', 'Oído', 'oido'], ['datos', 'Datos', 'datos', true], ['cancion', 'Canción', 'cancion', true], ['sonido', 'Sonido', 'sonido'], ['tomas', 'Tomas', 'tomas'],
+  ['estudio', 'Estudio', 'estudio'], ['equipo', 'Equipo', 'usb'], ['mezcla', 'Mezcla', 'mezcla'], ['oido', 'Oído', 'oido'], ['datos', 'Datos', 'datos', true], ['cancion', 'Canción', 'cancion', true], ['sonido', 'Sonido', 'sonido'], ['tomas', 'Tomas', 'tomas'],
 ];
-const PAGES = { estudio: Estudio, equipo: Equipo, cancion: Cancion, oido: Oido, datos: Datos, sonido: Sonido, tomas: Tomas, cuenta: Cuenta };
+const PAGES = { estudio: Estudio, equipo: Equipo, mezcla: Mezcla, cancion: Cancion, oido: Oido, datos: Datos, sonido: Sonido, tomas: Tomas, cuenta: Cuenta };
 const TIPS = {
   estudio: ['Gira Dulce y Amargo: es lo que prueba la mosca.', 'Pulsa Tocar (o la barra espaciadora). Cada neurona que dispara toca su pad.', 'Toca un pad o una neurona del cerebro para inspeccionarla.'],
   oido: ['Elige micrófono, un archivo o los deslizadores.', 'Graves, medios y agudos estimulan tres grupos de sensores de la antena.', 'La pista Oído suena en el grupo A del K.O. II.'],
   datos: ['Sube un CSV o usa el ejemplo.', 'Asigna columnas a sabores o sonidos.', 'Cada fila dura un compás: escucha cómo cambian tus datos.'],
-  equipo: ['Elige tu aparato en la galería: K.O. II, TR-8S, Digitakt, Ableton y más.', 'Si no aparece, usa Personalizado y escribe sus notas.', 'Pulsa «Probar» para oír 8 notas antes de tocar.'],
-  cancion: ['Guarda escenas en la tira del Estudio.', 'Ordénalas aquí con sus compases.', 'Tocar la canción: la mosca cambia de escena al compás.'],
+  equipo: ['Aparato principal: elige en la galería (K.O. II, TR-8S, Digitakt, Ableton…).', 'Controles: aprende las perillas del sidekick o de cualquier controlador.', 'Audio: graba la mezcla real de tus aparatos con cada toma.'],
+  mezcla: ['Destino: cada pista va al aparato, al kit de la compu o a ambos.', 'Pro: un aparato por pista, p. ej. dos K.O. II.', 'Entrada: la mezcla del sidekick vuelve aquí y se graba con cada toma.'],
+  cancion: ['Ajusta lo que suena y guárdalo en una casilla de Escenas (o crea la canción de ejemplo).', 'Pulsa una escena para añadirla al Arreglo y elige sus compases.', 'Toca: la mosca cambia de escena al compás.'],
   sonido: ['Librería: elige un kit y pulsa Escuchar.', 'Kit: qué voz tiene cada pad. Mutar respeta estos roles.', 'MIDI: reloj, latencia y control de efectos del K.O. II.'],
   tomas: ['Graba con el punto rojo o la tecla R.', 'Cada toma guarda las notas de todas las pistas.', 'Exporta a MIDI para tu DAW, o a WAV con los sonidos internos.'],
   cuenta: ['Inicia sesión para llevar tus ajustes a cualquier dispositivo.', 'Con cuenta, tus tomas se guardan en la nube.', 'Pro: modo Datos, tomas ilimitadas y WAV. Pruébalo 7 días gratis.'],
@@ -133,7 +135,10 @@ export default function App() {
       </div>
       <StatusBar s={s} />
       {s.notice === 'restauracion' && (
-        <div className="toast" role="status">No se pudo leer todo el guardado local (¿otra pestaña de Fly Punch abierta?). Cierra las demás pestañas y recarga.<button type="button" className="btn" onClick={() => location.reload()}>Recargar</button><button type="button" className="iconbtn" aria-label="Cerrar" onClick={() => session.set({ notice: null })}><Icon name="x" size={14} /></button></div>
+        <div className="toast" role="status">No se pudo abrir el guardado de este navegador. Si tienes otra pestaña de Fly Punch abierta, ciérrala y recarga.<button type="button" className="btn" onClick={() => location.reload()}>Recargar</button><button type="button" className="iconbtn" aria-label="Cerrar" onClick={() => session.set({ notice: null })}><Icon name="x" size={14} /></button></div>
+      )}
+      {s.notice === 'audio' && (
+        <div className="toast" role="alert">No pudimos abrir la entrada de audio: la toma se grabó solo con notas. Revisa Equipo → Audio.<button type="button" className="iconbtn" aria-label="Cerrar" onClick={() => session.set({ notice: null })}><Icon name="x" size={14} /></button></div>
       )}
       {s.notice === 'limite' && (
         <div className="toast" role="status">Llegaste a 5 tomas guardadas en el plan Free. <a href="#/tomas" className="btn" onClick={() => session.set({ notice: null })}>Ver tomas</a><button type="button" className="iconbtn" aria-label="Cerrar" onClick={() => session.set({ notice: null })}><Icon name="x" size={14} /></button></div>

@@ -1,4 +1,6 @@
-// Fly Punch · MIDI para el K.O. II (EP-133). Web MIDI: Chrome / Edge.
+// Fly Punch · MIDI. Web MIDI: Chrome / Edge.
+// Un puerto principal (perfil de Equipo) + salidas extra por pista. Se escuchan TODAS las entradas:
+// notas y CC de cualquier aparato (para aprender controles); el reloj solo del puerto principal.
 // Reloj: sigue el reloj del K.O. II si llega (ajuste 102 en el K.O.); si no, reloj interno.
 // Con clockOut activo, Fly Punch es el maestro: manda reloj 24 ppqn y Start/Stop (ajuste 101 en el K.O.).
 export const GROUP_BASE = { A: 36, B: 48, C: 60, D: 72 };
@@ -36,13 +38,14 @@ export class KO2 {
   bind(want = this.want || {}) {
     this.want = want; if (!this.access) return;
     const pick = (m) => { const ps = [...m.values()]; if (want.none) return null; if (want.port) return ps.find((p) => p.name === want.port) || null; return want.match ? ps.find((p) => want.match.test(p.name)) || null : null; };
-    if (this.input) this.input.onmidimessage = null;
     this.input = pick(this.access.inputs); this.output = pick(this.access.outputs);
-    if (this.input) this.input.onmidimessage = (e) => this.onMsg(e);
+    for (const inp of this.access.inputs.values()) inp.onmidimessage = (e) => this.onMsg(e, inp);
     this.h.onState?.({ input: this.input?.name || null, output: this.output?.name || null });
   }
-  onMsg(e) {
-    const [st, d1, d2] = e.data;
+  outPort(name) { if (!this.access || !name) return null; return [...this.access.outputs.values()].find((p) => p.name === name) || null; }
+  onMsg(e, inp) {
+    const [st, d1, d2] = e.data, main = inp === this.input;
+    if (st >= 0xF8 && !main) return; // reloj y transporte solo del puerto principal
     if (st === 0xF8) {
       if (this.clockOut) return;
       this.extClockAt = performance.now(); this.clocks.push(e.timeStamp); if (this.clocks.length > 49) this.clocks.shift();
@@ -51,14 +54,16 @@ export class KO2 {
     }
     if (st === 0xFA) { if (this.clockOut) return; this.ticks = 0; this.step = 0; this.h.onStart?.(); return; }
     if (st === 0xFC) { if (this.clockOut) return; this.h.onStop?.(); return; }
-    if ((st & 0xF0) === 0x90 && d2 > 0) this.h.onNote?.({ ch: (st & 0x0F) + 1, note: d1, vel: d2 });
+    const type = st & 0xF0, ch = (st & 0x0F) + 1, port = inp?.name;
+    if (type === 0x90 && d2 > 0) { this.h.onNote?.({ ch, note: d1, vel: d2, port, main }); this.h.onAny?.({ type: 'note', ch, num: d1, val: d2, port }); }
+    if (type === 0xB0) this.h.onAny?.({ type: 'cc', ch, num: d1, val: d2, port });
   }
-  send(bytes, at) { if (this.output) this.output.send(bytes, at ? at - this.latency : undefined); }
-  hit(note, vel = 100, ch = 1, len = 60, at = performance.now()) {
-    if (!this.output) return;
+  send(bytes, at, port = this.output) { if (port) port.send(bytes, at ? at - this.latency : undefined); }
+  hit(note, vel = 100, ch = 1, len = 60, at = performance.now(), port = this.output) {
+    if (!port) return;
     const c = (ch - 1) & 0x0F;
-    this.send([0x90 | c, note & 0x7F, Math.max(1, Math.min(127, vel | 0))], at);
-    this.send([0x80 | c, note & 0x7F, 0], at + len);
+    this.send([0x90 | c, note & 0x7F, Math.max(1, Math.min(127, vel | 0))], at, port);
+    this.send([0x80 | c, note & 0x7F, 0], at + len, port);
   }
   cc(num, val, ch = 1) { this.send([0xB0 | ((ch - 1) & 0x0F), num & 0x7F, Math.max(0, Math.min(127, val | 0))]); }
   start() {

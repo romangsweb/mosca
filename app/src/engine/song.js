@@ -47,3 +47,18 @@ export function onBar(session, bar) {
   }
   if (s.pendingScene) applyScene(session, s.pendingScene, { step: bar * 16 });
 }
+
+// Canción de ejemplo a partir de lo que suena ahora: cuatro partes que cambian lo que la mosca siente.
+export function exampleSong(s) {
+  const base = snapshot(s), mk = (name, inputs, density, mutes) => ({
+    name, data: { ...base, inputs: { ...base.inputs, ...inputs }, density: Math.max(1, Math.min(20, density)), tracks: Object.fromEntries(Object.entries(base.tracks).map(([id, t]) => [id, { ...t, mute: mutes[id] ?? t.mute }])) },
+  });
+  const d = base.density || 4;
+  const scenes = {
+    A: mk('Intro', { dulce: 45, amargo: 0, jon_ce: 0, jon_f: 0, jon_dm: 0 }, d - 1, { gusto: false, oido: true }),
+    B: mk('Subida', { dulce: 110, amargo: 15, jon_ce: 60, jon_f: 30, jon_dm: 0 }, d, { gusto: false, oido: false }),
+    C: mk('Clímax', { dulce: 185, amargo: 70, jon_ce: 120, jon_f: 90, jon_dm: 80 }, d + 3, { gusto: false, oido: false }),
+    D: mk('Caída', { dulce: 20, amargo: 150, jon_ce: 30, jon_f: 0, jon_dm: 40 }, d - 1, { gusto: true, oido: false }),
+  };
+  return { scenes, song: [{ scene: 'A', bars: 4 }, { scene: 'B', bars: 4 }, { scene: 'C', bars: 8 }, { scene: 'D', bars: 4 }] };
+}

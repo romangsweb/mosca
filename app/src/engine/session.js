@@ -7,11 +7,14 @@ import { Synth, DEFAULT_KIT } from './synth.js';
 import { mutate, identity } from './mutate.js';
 import { kvGet, kvSet, takePut, takesAll, takeDel, FREE_TAKES, sampleGet, samplePut, sampleDel } from './storage.js';
 import { VOICES as KIT_VOICES, kitData, toBuffers } from './kits.js';
-import { SLOTS, FREE_SLOTS, snapshot, applyScene, morphRates, onBar } from './song.js';
+import { SLOTS, FREE_SLOTS, snapshot, applyScene, morphRates, onBar, exampleSong } from './song.js';
+import { handleMidi, FREE_MAPPINGS } from './controls.js';
+import { Capture } from './capture.js';
+import { audioPut, audioGet, audioDel, dbOk } from './storage.js';
 import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
-const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph'];
+const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol'];
 
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'] };
 export const SENSE_LABEL = { dulce: 'Dulce', amargo: 'Amargo', jon_ce: 'Graves', jon_f: 'Medios', jon_dm: 'Agudos' };
@@ -24,6 +27,9 @@ export const PRO_FEATURES = {
   melodia: 'Modo melódico: escalas, bajo y melodía',
   kits: 'Librería completa de kits y tus propias muestras',
   cancion: 'Modo canción y 8 escenas',
+  multi: 'Un aparato distinto por pista (p. ej. dos K.O. II)',
+  audio: 'Grabar el audio real de tu interfaz con cada toma',
+  controles: 'Controles MIDI ilimitados (sidekick y cualquier controlador)',
 };
 const NO_PLAN = { plan: 'free', planBase: 'free', trialEnds: null, trialUsed: false };
 const CURVES = { lineal: (x) => x, suave: (x) => Math.sqrt(x), dura: (x) => x * x };
@@ -32,14 +38,15 @@ const DEFAULTS = {
   bpm: 110, sessionName: 'Sesión sin título', theme: 'noche', guide: true, onboarded: false, alias: '',
   inputs: { dulce: 150, amargo: 40, jon_ce: 0, jon_f: 0, jon_dm: 0 },
   tracks: [
-    { id: 'gusto', name: 'Gusto', sense: 'gusto', group: 'C', ch: 1, mute: false, solo: false, level: 1, map: identity(), kit: [...DEFAULT_KIT], mode: 'ritmo', scale: 'menor_pent', root: 48 },
-    { id: 'oido', name: 'Oído', sense: 'oido', group: 'A', ch: 1, mute: true, solo: false, level: 0.85, map: identity(), kit: [...DEFAULT_KIT], mode: 'ritmo', scale: 'menor_pent', root: 60 },
+    { id: 'gusto', name: 'Gusto', sense: 'gusto', group: 'C', ch: 1, mute: false, solo: false, level: 1, map: identity(), kit: [...DEFAULT_KIT], mode: 'ritmo', scale: 'menor_pent', root: 48, dest: 'auto' },
+    { id: 'oido', name: 'Oído', sense: 'oido', group: 'A', ch: 1, mute: true, solo: false, level: 0.85, map: identity(), kit: [...DEFAULT_KIT], mode: 'ritmo', scale: 'menor_pent', root: 60, dest: 'auto' },
   ],
   selTrack: 'gusto', selPad: 11,
   density: 4, swing: 54, humanize: 4, curve: 'suave', velMin: 70, velMax: 127, ghost: true,
   sendMidi: true, clockOut: false, fxAuto: false, monitor: 'auto', latency: 0,
   device: 'ko2', port: null, devOverrides: {}, kitId: 'analogo',
   scenes: {}, song: [], songLoop: true, morph: true,
+  mappings: [], audioIn: null, captureAudio: false, kitVol: 0.7,
   oidoSource: 'manual', dataMap: {}, perRow: 16,
 };
 
@@ -49,13 +56,15 @@ export class Session {
     this.s = structuredClone(DEFAULTS);
     this.s.playing = false; this.s.rec = false; this.s.ko = { input: null, output: null, error: null };
     this.s.takes = []; this.s.ready = false; this.s.user = null; Object.assign(this.s, NO_PLAN); this.s.sync = cloudEnabled ? 'local' : 'off'; this.s.mutHistory = {}; this.s.data = null; this.s.row = 0; this.s.saved = Date.now();
-    this.live = { step: 0, pos: 0, active: 0, mn9: 0, groom: 0, rate: {}, lanes: {}, hist: new Array(64).fill(0), counts: null, lastHitAt: {}, rowHist: [], rateHist: {}, spikes: {} };
-    this.rec = null; this.ear = new Ear(); this.synth = new Synth();
+    this.live = { step: 0, pos: 0, active: 0, mn9: 0, groom: 0, rate: {}, lanes: {}, hist: new Array(64).fill(0), counts: null, lastHitAt: {}, rowHist: [], rateHist: {}, spikes: {}, meter: {} };
+    if (typeof window !== 'undefined') { addEventListener('pagehide', () => this.flush()); document.addEventListener('visibilitychange', () => document.hidden && this.flush()); }
+    this.rec = null; this.ear = new Ear(); this.synth = new Synth(); this.capture = new Capture();
     this.ko = new KO2({
       onStep: (n, at) => this.step(n, at),
       onStart: () => { if (!this.s.playing) this.play(); },
       onStop: () => { if (this.s.playing) this.stop(); },
       onNote: (m) => this.onKoNote(m),
+      onAny: (m) => { this.live.lastMsg = { ...m, at: performance.now() }; handleMidi(this, m); },
       onState: (st) => this.set({ ko: { ...st, error: null } }),
     });
   }
@@ -73,21 +82,25 @@ export class Session {
       // historia por neurona (últimos HIST pasos): frecuencia suavizada y disparos crudos, para la gráfica del inspector
       this.live.rateHist[t.id] = [...Array(12)].map(() => new Float32Array(HIST)); this.live.spikes[t.id] = [...Array(12)].map(() => new Uint8Array(HIST));
     }
-    // Restaurar ajustes, tomas y cuenta. Nada de esto puede dejar la app en «Cargando»: máximo 6 s y seguimos.
-    const restore = async () => {
+    // 1) Lo local (ajustes y tomas de este navegador): rápido, con su propio límite. 2) La cuenta, después y sin bloquear:
+    // si Supabase tarda en despertar, la app ya está usable y solo el indicador de sincronía espera.
+    const restoreLocal = async () => {
+      if (!(await dbOk())) throw new Error('indexeddb no disponible');
       const saved = await kvGet('settings');
       if (saved) Object.assign(this.s, { ...saved, tracks: saved.tracks?.map((t, i) => ({ ...DEFAULTS.tracks[i], ...t })) || this.s.tracks });
       this.ko.internalBpm = this.s.bpm; this.ko.clockOut = this.s.clockOut; this.ko.latency = this.s.latency;
       await this.refreshTakes();
-      if (cloudEnabled) {
-        try { const u = await currentUser(); if (u) await this.adoptUser(u); } catch (e) { console.warn('cuenta', e); }
-        onAuth((u) => { if (u && u.id !== this.s.user?.id) this.adoptUser(u); if (!u && this.s.user) { this.set({ user: null, ...NO_PLAN, sync: 'local' }); this.refreshTakes(); } });
-      }
     };
-    try { await Promise.race([restore(), new Promise((_, rej) => setTimeout(() => rej(new Error('restaurar tardó demasiado')), 6000))]); }
+    try { await Promise.race([restoreLocal(), new Promise((_, rej) => setTimeout(() => rej(new Error('guardado local lento')), 5000))]); }
     catch (e) { console.warn('Fly Punch arrancó sin restaurar todo:', e); this.s.notice = 'restauracion'; }
     this.s.ready = true; this.emit();
     try { this.loadKit(); } catch (e) { console.warn('kit', e); }
+    if (cloudEnabled) {
+      (async () => {
+        try { const u = await currentUser(); if (u) await this.adoptUser(u); } catch (e) { console.warn('cuenta', e); if (this.s.user) this.set({ sync: 'error' }); }
+        onAuth((u) => { if (u && u.id !== this.s.user?.id) this.adoptUser(u); if (!u && this.s.user) { this.set({ user: null, ...NO_PLAN, sync: 'local' }); this.refreshTakes(); } });
+      })();
+    }
     if (navigator.requestMIDIAccess) this.connect(true);
   }
   // ---------- store ----------
@@ -99,10 +112,12 @@ export class Session {
     Object.assign(this.s, typeof patch === 'function' ? patch(this.s) : patch); this.emit();
     if (persist) this.persist();
   }
+  // si cierras o recargas antes de que pase el retraso, se guarda igual
+  flush() { if (this._pt) { clearTimeout(this._pt); this._pt = null; kvSet('settings', this.snapshot()); } }
   snapshot() { return Object.fromEntries(KEEP.map((k) => [k, this.s[k]])); }
   persist() {
     clearTimeout(this._pt);
-    this._pt = setTimeout(() => { kvSet('settings', this.snapshot()); this.set({ saved: Date.now() }); }, 400);
+    this._pt = setTimeout(() => { this._pt = null; kvSet('settings', this.snapshot()); this.set({ saved: Date.now() }); }, 400);
     if (this.s.user) { clearTimeout(this._ct); this._ct = setTimeout(() => this.pushCloud(), 1500); }
   }
   // ---------- cuenta ----------
@@ -132,6 +147,11 @@ export class Session {
     catch (e) { console.warn('sincronizar', e); this.set({ sync: 'error' }); }
   }
   async logout() { await signOut(); this.set({ user: null, ...NO_PLAN, sync: 'local' }); this.loadKit(); await this.refreshTakes(); }
+  // ---------- controles aprendidos ----------
+  get mappingsFull() { return !this.can('controles') && this.s.mappings.length >= FREE_MAPPINGS; }
+  learn(target) { if (this.mappingsFull && !this.s.mappings.some((m) => m.target === target)) { location.hash = '#/cuenta?plan'; return; } if (!this.ko.access) this.connect(); this.set({ learn: this.s.learn === target ? null : target }); }
+  unmap(target) { this.set({ mappings: this.s.mappings.filter((m) => m.target !== target) }, true); }
+  getAudio(id) { return audioGet(id); }
   // ---------- escenas y canción ----------
   slotAllowed(slot) { return SLOTS.indexOf(slot) < FREE_SLOTS || this.can('cancion'); }
   saveScene(slot, name) {
@@ -144,6 +164,13 @@ export class Session {
   // se aplica al inicio del siguiente compás si está tocando; si no, de inmediato
   launchScene(slot) { if (!this.s.scenes[slot]) return; if (this.s.playing) this.set({ pendingScene: slot }); else applyScene(this, slot, { morph: false }); }
   setSong(song) { this.set({ song }, true); }
+  // siguiente casilla libre que tu plan permite (o null)
+  get freeSlot() { return SLOTS.find((x) => !this.s.scenes[x] && this.slotAllowed(x)) || null; }
+  makeExampleSong() {
+    if (!this.can('cancion')) { location.hash = '#/cuenta?plan'; return; }
+    const { scenes, song } = exampleSong(this.s);
+    this.set({ scenes: { ...this.s.scenes, ...scenes }, song }, true);
+  }
   startSong() {
     if (!this.can('cancion')) { location.hash = '#/cuenta?plan'; return; }
     const rows = this.s.song.filter((r) => this.s.scenes[r.scene]); if (!rows.length) return;
@@ -156,6 +183,7 @@ export class Session {
   kitAllowed(id) { return id === 'analogo' || this.can('kits'); }
   async loadKit() {
     const want = this.kitAllowed(this.s.kitId) ? this.s.kitId : 'analogo', ctx = this.synth.ensure();
+    if (this.synth.out) this.synth.out.gain.value = this.s.kitVol ?? 0.7;
     const base = { ...kitData(want === 'propio' ? 'analogo' : want) }, custom = {};
     if (want === 'propio') for (const v of KIT_VOICES) {
       const smp = await sampleGet(v); if (!smp) continue;
@@ -204,8 +232,11 @@ export class Session {
   // cambiar de dispositivo o de puerto
   chooseDevice(id, port = null) { this.set({ device: id, port }, true); this.ko.bind(this.wantPort()); if (!this.ko.access && id !== 'interno') this.connect(); }
   setDevOverride(patch) { this.set({ devOverrides: { ...this.s.devOverrides, [this.s.device]: { ...this.devOverride, ...patch } } }, true); }
+  // salida por pista (Pro): cada pista puede ir a otro perfil y puerto; si no, la del Equipo principal
+  profileFor(t) { return t.out?.device && this.can('multi') ? profileById(t.out.device) : this.profile; }
+  portFor(t) { if (t.out?.port && this.can('multi')) return this.ko.outPort(t.out.port); return this.profileFor(t).kind === 'interno' ? null : this.ko.output; }
   route(t, k) {
-    const r = route(this.profile, t, k, this.pads(t), this.devOverride);
+    const prof = this.profileFor(t), r = route(prof, t, k, this.pads(t), this.s.devOverrides[prof.id] || {});
     // sin Pro, lo melódico no sale por MIDI y suena con la voz de batería del pad
     if (r.voice === 'tono' && !this.can('melodia')) return { note: null, ch: r.ch, voice: t.kit[t.map[k]] };
     return r;
@@ -214,6 +245,10 @@ export class Session {
   setBpm(b) { const bpm = Math.max(40, Math.min(240, Math.round(b))); this.ko.internalBpm = bpm; this.set({ bpm }, true); }
   setClockOut(v) { this.ko.clockOut = v; this.set({ clockOut: v }, true); }
   setLatency(v) { this.ko.latency = v; this.set({ latency: v }, true); }
+  // Mezcla: a dónde va cada pista. auto = al aparato si hay, si no a la compu (como siempre); aparato; kit (compu); ambos.
+  toDevice(t, port = this.portFor(t)) { return this.s.sendMidi && !!port && (t.dest || 'auto') !== 'kit'; }
+  toKit(t, port = this.portFor(t)) { const d = t.dest || 'auto'; return d === 'kit' || d === 'ambos' || (d === 'auto' && this.monitorOn) || (d === 'aparato' && !port && this.s.monitor !== 'nunca'); }
+  setKitVol(v) { this.set({ kitVol: v }, true); if (this.synth.out) this.synth.out.gain.value = v; }
   get monitorOn() { return this.s.monitor === 'siempre' || (this.s.monitor === 'auto' && (!this.ko.connected || this.profile.kind === 'interno')); }
   // ---------- transporte ----------
   play() { this.synth.ensure(); this.sim.reset(); this.live.step = 0; this.s.row = 0; this.morphState = null; if (this.s.songOn) this.songPos = { row: 0, bars: 0 }; this.ko.start(); this.set({ playing: true }); }
@@ -251,10 +286,12 @@ export class Session {
         const when = at + swingMs + (Math.random() * 2 - 1) * s.humanize;
         const r = this.route(t, k);
         lanes[k][pos] = vel;
-        if (s.sendMidi && this.ko.connected && r.note != null) this.ko.hit(r.note, vel, r.ch, r.voice === 'tono' ? stepMs * 0.9 : 60, when);
-        if (this.monitorOn) this.sound(r, vel, when, t);
+        const port = this.portFor(t);
+        if (this.toDevice(t, port) && r.note != null) this.ko.hit(r.note, vel, r.ch, r.voice === 'tono' ? stepMs * 0.9 : 60, when, port);
+        if (this.toKit(t, port)) this.sound(r, vel, when, t);
+        const mt = L.meter[t.id]; if (!mt || when - mt.at > 60 || vel > mt.vel) L.meter[t.id] = { at: when, vel };
         L.lastHitAt[t.id + k] = when;
-        if (this.rec) this.rec.events.push({ t: when - this.rec.t0, step: n - this.rec.n0, track: t.id, pad: k, neuron: p.tipo, note: r.note ?? 0, vel, ch: r.ch, voice: r.voice });
+        if (this.rec) this.rec.events.push({ t: when - this.rec.t0, step: n - this.rec.n0, track: t.id, pad: k, neuron: p.tipo, note: r.note ?? 0, vel, ch: r.ch, voice: r.voice, port: port?.name });
       });
     }
     L.mn9 = L.mn9 * 0.9 + 0.1 * (cnt[D.mn9] / (s.density / 1000));
@@ -271,8 +308,10 @@ export class Session {
   tapPad(k, track = this.track()) {
     this.sim.g[this.pads(track)[k].idx] += this.D.params.w_poi * 2;
     const r = this.route(track, k); this.synth.ensure();
-    if (this.s.sendMidi && this.ko.connected && r.note != null) this.ko.hit(r.note, 110, r.ch, 180);
-    else this.sound(r, 110, performance.now(), track);
+    const port = this.portFor(track);
+    const dev = this.toDevice(track, port) && r.note != null;
+    if (dev) this.ko.hit(r.note, 110, r.ch, 180, performance.now(), port);
+    if (!dev || this.toKit(track, port)) this.sound(r, 110, performance.now(), track);
   }
   // ---------- mutar ----------
   mutateTrack(id = this.s.selTrack) {
@@ -306,7 +345,7 @@ export class Session {
       if (r === 'limite') blocked = true;
     }
     const byId = new Map((await takesAll()).map((t) => [t.id, t]));
-    const merged = remote.map((r) => { const l = byId.get(r.id); return { ...r, events: l?.events || null, nEvents: r.nEvents ?? l?.events?.length ?? 0, where: 'nube' }; });
+    const merged = remote.map((r) => { const l = byId.get(r.id); return { ...r, events: l?.events || null, hasAudio: !!l?.hasAudio, nEvents: r.nEvents ?? l?.events?.length ?? 0, where: 'nube' }; });
     for (const t of byId.values()) if ((!t.owner || t.owner === uid) && !remoteIds.has(t.id) && !merged.some((m) => m.id === t.id)) merged.push({ ...t, where: 'local' });
     merged.sort((a, b) => b.date - a.date);
     this.set({ takes: merged, ...(blocked ? { notice: 'limite' } : {}) });
@@ -321,19 +360,23 @@ export class Session {
   toggleRec() {
     if (this.rec) {
       const r = this.rec; this.rec = null;
-      const durMs = performance.now() - r.t0;
+      const durMs = performance.now() - r.t0, audioP = this.capture.active ? this.capture.stop() : Promise.resolve(null);
       if (r.events.length) {
         const n = this.s.takes.length + 1;
         const take = { id: crypto.randomUUID(), name: `Toma ${n}`, date: Date.now(), bpm: Math.round(this.ko.bpm), durMs, steps: this.live.step - r.n0,
           tracks: this.s.tracks.filter((t) => r.events.some((e) => e.track === t.id)).map(({ id, name, group, ch, sense }) => ({ id, name, group, ch, sense })),
           inputs: { ...this.s.inputs }, source: this.s.data ? 'datos' : this.s.oidoSource, events: r.events };
         take.owner = this.s.user?.id || null; take.cloud = false;
-        takePut(take).then(async () => { this.set({ lastTake: take.id }); await this.refreshTakes(); });
+        audioP.then(async (blob) => {
+          if (blob && blob.size) { await audioPut(take.id, blob); take.hasAudio = true; }
+          await takePut(take); this.set({ lastTake: take.id }); await this.refreshTakes();
+        });
       }
       this.set({ rec: false }); return;
     }
     if (this.takesLimitReached) { this.set({ notice: 'limite' }); return; }
     if (!this.s.playing) this.play();
+    if (this.s.captureAudio && this.can('audio')) this.capture.start(this.s.audioIn).catch((e) => { console.warn('audio', e); this.set({ notice: 'audio' }); });
     this.rec = { t0: performance.now(), n0: this.live.step, events: [] }; this.set({ rec: true });
   }
   async renameTake(id, name) {
@@ -345,7 +388,7 @@ export class Session {
   async deleteTake(id) {
     const t = this.s.takes.find((x) => x.id === id);
     if (t?.where === 'nube') await deleteTakeCloud(id).catch((e) => console.warn(e));
-    await takeDel(id); this.set({ takes: this.s.takes.filter((x) => x.id !== id) });
+    await takeDel(id); audioDel(id); this.set({ takes: this.s.takes.filter((x) => x.id !== id) });
   }
   // reproducir una toma: re-envía notas al K.O. y/o voces internas
   playTake(take, onEnd) {
@@ -354,8 +397,10 @@ export class Session {
     for (const e of take.events) {
       timers.push(setTimeout(() => {
         const at = t0 + e.t;
-        if (this.s.sendMidi && this.ko.connected) this.ko.hit(e.note, e.vel, e.ch, 60, at);
-        if (this.monitorOn) e.voice === 'tono' ? this.synth.play('tono', e.vel, at, e.note) : this.synth.play(e.voice, e.vel, at, e.track === 'oido' ? 3 : 0);
+        const port = (e.port && this.ko.outPort(e.port)) || this.ko.output;
+        const tr = this.track(e.track) || this.track();
+        if (this.toDevice(tr, port)) this.ko.hit(e.note, e.vel, e.ch, 60, at, port);
+        if (this.toKit(tr, port)) e.voice === 'tono' ? this.synth.play('tono', e.vel, at, e.note) : this.synth.play(e.voice, e.vel, at, e.track === 'oido' ? 3 : 0);
       }, Math.max(0, e.t - 40)));
     }
     timers.push(setTimeout(() => { this.takeTimers = null; onEnd?.(); }, take.durMs + 100));

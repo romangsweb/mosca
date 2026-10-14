@@ -38,7 +38,13 @@ export default function Libreria() {
   const pro = session.can('kits'), activeKit = s.kitActive || 'analogo';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <p className="muted" style={{ margin: 0, maxWidth: 760, lineHeight: 1.55 }}>Los sonidos con los que toca Fly Punch cuando no hay aparato (o si activas «Sonido interno: siempre»), y los que usa al exportar a WAV. Todos se sintetizan en la app: son originales y libres de derechos.</p>
+      <p className="muted" style={{ margin: 0, maxWidth: 760, lineHeight: 1.55 }}>Los sonidos de la compu: suenan cuando una pista va a «Compu» o «Ambos» en Mezcla (o cuando no hay aparato), y son los que se usan al exportar a WAV. Todos se sintetizan en la app: son originales y libres de derechos.</p>
+      {(() => { const users = s.tracks.filter((t) => session.audible(t) && session.toKit(t)); return (
+        <div className="well row" style={{ padding: '10px 12px', gap: 10, fontSize: 12.5, flexWrap: 'wrap' }}>
+          <span className={`status-dot${users.length ? ' on' : ''}`} />
+          <span style={{ flex: 1, minWidth: 220 }}>{users.length ? `Este kit suena ahora en: ${users.map((t) => t.name).join(' y ')}.` : 'Ahora ninguna pista usa el kit: todas van a tu aparato. Pon una en «Compu» o «Ambos» para oírlo junto al K.O. II.'}</span>
+          <a href="#/mezcla" className="btn">Abrir Mezcla</a>
+        </div>); })()}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
         {KITS.map((k) => {
           const on = activeKit === k.id, locked = k.pro && !pro;

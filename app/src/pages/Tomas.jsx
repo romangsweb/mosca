@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { session } from '../engine/session.js';
 import { takeToMidi, takeToCsv, download, slug } from '../engine/midifile.js';
-import { renderWav } from '../engine/synth.js';
+import { renderWav, wavBlob } from '../engine/synth.js';
 import { FREE_TAKES } from '../engine/storage.js';
 import { useS, Icon } from '../ui/kit.jsx';
 
@@ -31,6 +31,13 @@ function Roll({ take, playing, t0 }) {
   );
 }
 
+function RealAudio({ id }) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => { let u; session.getAudio(id).then((b) => { if (b) { u = URL.createObjectURL(b); setUrl(u); } }); return () => u && URL.revokeObjectURL(u); }, [id]);
+  if (!url) return null;
+  return <div className="well row" style={{ padding: '8px 12px', gap: 12 }}><span className="chip acc">AUDIO REAL</span><audio controls src={url} style={{ flex: 1, height: 32 }} /></div>;
+}
+
 export default function Tomas() {
   const s = useS(), [sel, setSel] = useState(s.lastTake || s.takes[0]?.id), [playing, setPlaying] = useState(false), [exp, setExp] = useState(false), [fmtSel, setFmt] = useState('mid'), [busy, setBusy] = useState(false), [editing, setEditing] = useState(false);
   const take = s.takes.find((t) => t.id === sel) || s.takes[0], [loadErr, setLoadErr] = useState(null);
@@ -44,6 +51,7 @@ export default function Tomas() {
     const base = slug(take.name);
     if (fmtSel === 'mid') download(takeToMidi(take), `${base}.mid`);
     if (fmtSel === 'csv') download(takeToCsv(take), `${base}-disparos.csv`);
+    if (fmtSel === 'real') { const blob = await session.getAudio(take.id); if (blob) { try { const buf = await session.synth.ensure().decodeAudioData(await blob.arrayBuffer()); download(wavBlob(buf), `${base}-audio-real.wav`); } catch { download(blob, `${base}-audio-real.webm`); } } }
     if (fmtSel === 'wav') download(await renderWav(take, (e) => e.voice, session.synth.kit), `${base}-${session.s.kitActive || 'kit'}.wav`);
     setBusy(false); setExp(false);
   };
@@ -67,6 +75,7 @@ export default function Tomas() {
               <button key={t.id} type="button" className="list-item" aria-pressed={t.id === take.id} onClick={() => { session.stopTake(); setPlaying(false); setSel(t.id); }}>
                 <span style={{ display: 'flex', gap: 3 }}>{t.tracks.map((tr) => <span key={tr.id} style={{ width: 4, height: 28, borderRadius: 2, background: COL[tr.id] }} />)}</span>
                 <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.name}</span><span className="mono muted" style={{ fontSize: 11 }}>{when(t.date)} · {fmt(t.durMs)} · {t.bpm} BPM · {t.events?.length ?? t.nEvents} notas</span></span>
+                {t.hasAudio && <span className="chip" title="Incluye el audio real">AUDIO</span>}
                 <span className="chip" title={t.where === 'nube' ? 'Guardada en tu cuenta' : 'Solo en este navegador'} style={t.where === 'nube' ? { color: 'var(--text)' } : undefined}>{t.where === 'nube' ? 'NUBE' : 'LOCAL'}</span>
               </button>
             ))}
@@ -88,6 +97,7 @@ export default function Tomas() {
                 </div>
               </div>
               <div style={{ borderRadius: 12, background: 'var(--screen)', padding: 12, minHeight: 140, display: 'grid', placeItems: ready ? 'stretch' : 'center', color: '#8C8C94' }}>{ready ? <Roll take={take} playing={playing} t0={session.takeT0} /> : <span>{loadErr || 'Descargando notas de la nube…'}</span>}</div>
+              {take.hasAudio && <RealAudio id={take.id} />}
               {take.where === 'local' && s.user && <p className="muted" style={{ margin: 0, fontSize: 12 }}>Esta toma está solo en este navegador{s.takes.filter((t) => t.where === 'nube').length >= FREE_TAKES && s.plan !== 'pro' ? ': tu cuenta Free ya tiene 5 tomas en la nube.' : '; se subirá en la próxima sincronización.'}</p>}
               <div className="row" style={{ flexWrap: 'wrap' }}>
                 <div className="stat"><div className="label">Notas</div><div className="v">{take.events?.length ?? take.nEvents}</div></div>
@@ -108,7 +118,7 @@ export default function Tomas() {
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="exp-t">
             <h2 id="exp-t" style={{ fontSize: 18 }}>Exportar «{take.name}»</h2>
             <div role="radiogroup" aria-label="Formato" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {[['mid', 'MIDI (.mid)', 'Una pista por pista de Fly Punch. Ábrelo en Ableton, Logic o FL Studio.'], ['csv', 'CSV de disparos', 'Tiempo, neurona, nota y velocidad de cada disparo.'], ['wav', 'Audio (.wav)', 'Con el kit de la librería que tengas elegido (no con los sonidos de tu aparato).']].map(([id, l, d]) => (
+              {[...(take.hasAudio ? [['real', 'Audio real (.wav)', 'Lo que sonó en tus aparatos, grabado desde tu interfaz.']] : []), ['mid', 'MIDI (.mid)', 'Una pista por pista de Fly Punch. Ábrelo en Ableton, Logic o FL Studio.'], ['csv', 'CSV de disparos', 'Tiempo, neurona, nota y velocidad de cada disparo.'], ['wav', 'Audio (.wav)', 'Con el kit de la librería que tengas elegido (no con los sonidos de tu aparato).']].map(([id, l, d]) => (
                 <button key={id} type="button" role="radio" aria-checked={fmtSel === id} className="radio-card" disabled={id === 'wav' && !session.can('wav')} style={id === 'wav' && !session.can('wav') ? { opacity: 0.55, cursor: 'not-allowed' } : undefined} onClick={() => setFmt(id)}><span className="o" /><span style={{ flex: 1 }}><span style={{ display: 'block', fontWeight: 600 }}>{l}</span><span className="muted" style={{ fontSize: 12 }}>{d}</span></span>{id === 'wav' && !session.can('wav') && <span className="badge-pro">PRO</span>}</button>
               ))}
             </div>

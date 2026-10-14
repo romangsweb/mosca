@@ -35,6 +35,7 @@ export const ICONS = {
   check: 'M5 12.5l4.5 4.5L19 7.5',
   mas: 'M12 5v14M5 12h14', menos: 'M5 12h14', x: 'M6 6l12 12M18 6 6 18',
   chevron: 'M6 9l6 6 6-6',
+  mezcla: 'M6 4v16M12 4v16M18 4v16M4 15h4M10 8h4M16 12h4',
   cancion: 'M4 6h10M4 12h16M4 18h7M17 4v6M20 14v6',
 };
 export function Icon({ name, size = 18, stroke = 1.6, fill, style }) {

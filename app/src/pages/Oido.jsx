@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { session } from '../engine/session.js';
+import { audioInputs } from '../engine/capture.js';
 import { useS, useTick, Icon, Seg } from '../ui/kit.jsx';
 
 const BANDS = [['jon_ce', 'Graves', 'JO-CM', '#7D93B2'], ['jon_f', 'Medios', 'JO-FV', '#ECECEE'], ['jon_dm', 'Agudos', 'JO-DA', '#FF6A1A']];
@@ -109,7 +110,8 @@ function Side() {
 export default function Oido() {
   useOidoTrack();
   const s = useS(), [err, setErr] = useState(null), [peaks, setPeaks] = useState(null), [over, setOver] = useState(false), fileIn = useRef(null);
-  const src = s.oidoSource, ear = session.ear;
+  const src = s.oidoSource, ear = session.ear, [inputs, setInputs] = useState([]);
+  useEffect(() => { audioInputs().then(setInputs); }, []);
   const pick = async (id) => {
     setErr(null);
     if (id === 'manual') { ear.stop(); session.set({ oidoSource: 'manual' }, true); return; }
@@ -118,7 +120,7 @@ export default function Oido() {
   };
   const micOn = src === 'mic' && ear.kind === 'mic';
   const toggleMic = async () => {
-    try { if (micOn) { ear.stop(); session.emit(); } else { await ear.mic(); if (!session.s.playing) session.play(); session.emit(); } }
+    try { if (micOn) { ear.stop(); session.emit(); } else { await ear.mic(s.audioIn || undefined); setInputs(await audioInputs()); if (!session.s.playing) session.play(); session.emit(); } }
     catch { setErr('No pudimos usar el micrófono. Revisa el permiso del navegador.'); }
   };
   const loadFile = async (f) => {
@@ -150,6 +152,11 @@ export default function Oido() {
                 <button type="button" onClick={toggleMic} aria-pressed={micOn} aria-label={micOn ? 'Detener micrófono' : 'Activar micrófono'} style={{ position: 'relative', width: 132, height: 132, borderRadius: '50%', border: `1px solid ${micOn ? '#FF6A1A' : 'rgba(255,255,255,.14)'}`, background: micOn ? '#FF6A1A' : '#131315', color: micOn ? '#0B0B0C' : '#ECECEE', display: 'grid', placeItems: 'center', boxShadow: micOn ? '0 0 60px rgba(255,106,26,.35)' : 'none', transition: 'all .3s' }}><Icon name="mic" size={40} /></button>
               </div>
               <div style={{ textAlign: 'center' }}><p style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{micOn ? 'Escuchando' : 'Micrófono apagado'}</p><p style={{ margin: '6px 0 0', color: '#8C8C94', maxWidth: 380, lineHeight: 1.55 }}>{micOn ? 'Habla, aplaude o pon música cerca. La mosca reacciona en tiempo real.' : 'Pulsa el micrófono. El navegador te pedirá permiso; el audio nunca sale de tu computadora.'}</p></div>
+              <label className="row" style={{ gap: 8, fontSize: 12, color: '#8C8C94' }}>Entrada
+                <select aria-label="Dispositivo de entrada" value={s.audioIn || ''} onChange={async (e) => { session.set({ audioIn: e.target.value || null }, true); if (micOn) { await ear.mic(e.target.value || undefined); session.emit(); } }} style={{ height: 32, maxWidth: 240, borderRadius: 8, border: '1px solid rgba(255,255,255,.1)', background: '#131315', color: '#ECECEE', padding: '0 10px', fontSize: 12 }}>
+                  <option value="">Predeterminada del sistema</option>{inputs.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+                </select>
+              </label>
             </div>
           )}
           {src === 'archivo' && !peaks && (

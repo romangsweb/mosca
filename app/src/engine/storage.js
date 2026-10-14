@@ -1,5 +1,5 @@
 // Fly Punch · guardado local (IndexedDB). Más adelante se sincroniza con la cuenta.
-const DB = 'flypunch', VER = 2;
+const DB = 'flypunch', VER = 3;
 let dbp = null;
 function db() {
   if (dbp) return dbp;
@@ -8,7 +8,7 @@ function db() {
     // si otra pestaña con una versión vieja tiene la base abierta, la actualización queda bloqueada: no esperamos para siempre
     const timer = setTimeout(() => { dbp = null; rej(new Error('indexeddb bloqueada: cierra otras pestañas de Fly Punch')); }, 3000);
     r.onblocked = () => console.warn('Fly Punch: cierra las otras pestañas de la app para actualizar el guardado local');
-    r.onupgradeneeded = () => { const d = r.result; if (!d.objectStoreNames.contains('takes')) d.createObjectStore('takes', { keyPath: 'id' }); if (!d.objectStoreNames.contains('kv')) d.createObjectStore('kv'); if (!d.objectStoreNames.contains('samples')) d.createObjectStore('samples'); };
+    r.onupgradeneeded = () => { const d = r.result; if (!d.objectStoreNames.contains('takes')) d.createObjectStore('takes', { keyPath: 'id' }); if (!d.objectStoreNames.contains('kv')) d.createObjectStore('kv'); if (!d.objectStoreNames.contains('samples')) d.createObjectStore('samples'); if (!d.objectStoreNames.contains('audio')) d.createObjectStore('audio'); };
     r.onsuccess = () => { clearTimeout(timer); const d = r.result; d.onversionchange = () => { d.close(); dbp = null; }; res(d); };
     r.onerror = () => { clearTimeout(timer); dbp = null; rej(r.error); };
   });
@@ -26,3 +26,9 @@ export const FREE_TAKES = 5;
 export const sampleGet = (voice) => tx('samples', 'readonly', (s) => s.get(voice)).catch(() => undefined);
 export const samplePut = (voice, v) => tx('samples', 'readwrite', (s) => s.put(v, voice));
 export const sampleDel = (voice) => tx('samples', 'readwrite', (s) => s.delete(voice));
+// audio real grabado con cada toma (Blob), por id de toma
+export const audioGet = (id) => tx('audio', 'readonly', (s) => s.get(id)).catch(() => undefined);
+export const audioPut = (id, blob) => tx('audio', 'readwrite', (s) => s.put(blob, id)).catch((e) => console.warn('guardar audio', e));
+export const audioDel = (id) => tx('audio', 'readwrite', (s) => s.delete(id)).catch(() => undefined);
+// ¿se puede abrir el guardado local? (falla si otra pestaña con una versión vieja lo tiene bloqueado)
+export const dbOk = () => db().then(() => true, (e) => { console.warn('guardado local', e); return false; });

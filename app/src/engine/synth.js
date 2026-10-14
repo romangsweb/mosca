@@ -75,7 +75,7 @@ export async function renderWav(take, kitFor, kit = null) {
   for (const e of take.events) { const n = kitFor(e), t = e.t / 1000 + 0.05, p = n === 'tono' ? e.note : e.track === 'oido' ? 3 : 0; if (n !== 'tono' && kit?.[n]) playBuffer(ctx, out, kit[n], e.vel, t, p); else voice(ctx, out, n, e.vel, t, p); }
   return wavBlob(await ctx.startRendering());
 }
-function wavBlob(buf) {
+export function wavBlob(buf) {
   const ch = buf.numberOfChannels, len = buf.length * ch * 2 + 44, ab = new ArrayBuffer(len), v = new DataView(ab);
   const w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
   w(0, 'RIFF'); v.setUint32(4, len - 8, true); w(8, 'WAVE'); w(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, ch, true);
