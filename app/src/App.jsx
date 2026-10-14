@@ -1,3 +1,4 @@
+import { isIOS, isStandalone } from './ui/Install.jsx';
 import { Component, useEffect, useState } from 'react';
 import { session } from './engine/session.js';
 import { useS, useTick, Icon, Logo } from './ui/kit.jsx';
@@ -79,6 +80,7 @@ export default function App() {
   const s = useS(), [page, setPage] = useState(route());
   useEffect(() => { const f = () => setPage(route()); addEventListener('hashchange', f); return () => removeEventListener('hashchange', f); }, []);
   useEffect(() => { document.documentElement.dataset.theme = s.theme; }, [s.theme]);
+  useEffect(() => { if (s.ready && isIOS && !isStandalone() && !s.installHint && !s.notice) session.set({ notice: 'instalar' }); }, [s.ready]);
   useEffect(() => { if (s.user && page === 'bienvenida') location.hash = '#/estudio'; }, [s.user, page]);
   useEffect(() => {
     const k = (e) => {
@@ -142,6 +144,9 @@ export default function App() {
       )}
       {s.notice === 'audio' && (
         <div className="toast" role="alert">No pudimos abrir la entrada de audio: la toma se grabó solo con notas. Revisa Equipo → Audio.<button type="button" className="iconbtn" aria-label="Cerrar" onClick={() => session.set({ notice: null })}><Icon name="x" size={14} /></button></div>
+      )}
+      {s.notice === 'instalar' && (
+        <div className="toast" role="status"><span>Para usar Fly Punch como app en tu iPad: <strong>Compartir → Agregar a pantalla de inicio</strong>. Si no oyes nada, revisa que el iPad no esté en silencio.</span><button type="button" className="iconbtn" aria-label="Cerrar" onClick={() => session.set({ notice: null, installHint: true }, true)}><Icon name="x" size={14} /></button></div>
       )}
       {s.notice === 'congelar' && (
         <div className="toast" role="status">Para congelar, dale a Tocar: se guarda el último compás que tocó la mosca en esta pista.<button type="button" className="iconbtn" aria-label="Cerrar" onClick={() => session.set({ notice: null })}><Icon name="x" size={14} /></button></div>

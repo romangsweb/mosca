@@ -1,3 +1,4 @@
+import { isIOS } from '../ui/Install.jsx';
 import { useState } from 'react';
 import { session } from '../engine/session.js';
 import { PROFILES, VOICE_LIST } from '../engine/devices.js';
@@ -92,7 +93,7 @@ export default function Equipo() {
         <div><h1>Equipo</h1><p>Con qué toca la mosca, qué la controla y qué escucha. Funciona con el K.O. II, el sidekick y cualquier aparato MIDI.</p></div>
         <div className="row" style={{ flexWrap: 'wrap' }}>
           {!session.ko.access && session.ko.supported && <button type="button" className="btn lg primary" onClick={() => session.connect()}>Permitir MIDI</button>}
-          {!session.ko.supported && <span className="chip">SIN WEB MIDI · USA CHROME O EDGE</span>}
+          {!session.ko.supported && <span className="chip">{isIOS ? 'iPAD SIN MIDI · SUENA CON LOS KITS' : 'SIN WEB MIDI · USA CHROME O EDGE'}</span>}
           <Seg role="tab" label="Secciones de Equipo" items={[['principal', 'Aparato principal'], ['controles', 'Controles'], ['audio', 'Audio']]} value={tab} onChange={pick} />
         </div>
       </div>

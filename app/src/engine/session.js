@@ -17,7 +17,7 @@ import { SCALES } from './devices.js';
 import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
-const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx'];
+const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint'];
 
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'] };
 export const SENSE_LABEL = { dulce: 'Dulce', amargo: 'Amargo', jon_ce: 'Graves', jon_f: 'Medios', jon_dm: 'Agudos' };

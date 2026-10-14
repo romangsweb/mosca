@@ -1,0 +1,20 @@
+{
+  "name": "Fly Punch",
+  "short_name": "Fly Punch",
+  "description": "Un cerebro real de mosca (conectoma FlyWire) toca tu música.",
+  "lang": "es",
+  "id": "./",
+  "start_url": "./#/estudio",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "any",
+  "background_color": "#0B0B0C",
+  "theme_color": "#0B0B0C",
+  "categories": ["music", "education"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

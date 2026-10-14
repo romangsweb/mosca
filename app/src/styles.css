@@ -227,3 +227,9 @@ details.doc-item .doc { padding-bottom: 14px; }
 .lane-grid.edit .cell:hover { outline: 1px solid var(--sub); }
 .cell.on { box-shadow: inset 0 0 0 1.5px var(--acc); }
 .cell.on.beat { box-shadow: inset 0 0 0 1.5px var(--acc); }
+/* iPad / táctil: sin retraso ni zoom al tocar, sin selección accidental, respeta las zonas seguras */
+html { -webkit-tap-highlight-color: transparent; }
+button, .btn, .iconbtn, .pad, .cell, .seg button, .knob svg, input[type=range] { touch-action: manipulation; }
+.pad, .cell, .knob, .lane-grid, .stage { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+@media (display-mode: standalone) { body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); } }
+@media (pointer: coarse) { .iconbtn { min-width: 36px; min-height: 36px; } .seg button { height: 34px; } }

@@ -1,3 +1,4 @@
+import { InstallApp, isIOS } from '../ui/Install.jsx';
 import { useEffect, useState } from 'react';
 import { session } from '../engine/session.js';
 import { useS, Seg, Icon } from '../ui/kit.jsx';
@@ -59,6 +60,7 @@ export default function Cuenta() {
           <section className="panel" style={{ gap: 0, padding: 22 }}>
             <h1 style={{ marginBottom: 6 }}>Ajustes</h1>
             <div className="setting"><div><div className="t">K.O. II</div><div className="d">{s.ko.output ? `Conectado: ${s.ko.output}` : s.ko.error || 'No detectado. Conéctalo directo por USB-C y usa Chrome o Edge.'}</div></div><button type="button" className="btn" onClick={() => session.connect()}><span className={`status-dot${s.ko.output ? ' on' : ''}`} />{s.ko.output ? 'Volver a buscar' : 'Conectar'}</button></div>
+            <div className="setting"><div><div className="t">App</div><div className="d">Instala Fly Punch para abrirla como una app: pantalla completa, ícono propio y arranque sin conexión.{isIOS ? ' En iPad no hay MIDI (Safari no lo permite): suena con los kits, Acompañar y la entrada de audio; para tocar el K.O. II usa la computadora con Chrome.' : ''}</div></div><InstallApp /></div>
             <div className="setting"><div><div className="t">Tema</div><div className="d">La pantalla del cerebro se queda oscura en los dos temas, como el display de un aparato.</div></div><Seg label="Tema" items={[['noche', 'Noche'], ['dia', 'Día']]} value={s.theme} onChange={(v) => session.set({ theme: v }, true)} /></div>
             <div className="setting"><div><div className="t">Guía en pantalla</div><div className="d">Tres pasos cortos arriba de cada sección.</div></div><Seg label="Guía" items={[['on', 'Visible'], ['off', 'Oculta']]} value={s.guide ? 'on' : 'off'} onChange={(v) => session.set({ guide: v === 'on' }, true)} /></div>
             <div className="setting"><div><div className="t">MIDI, reloj y latencia</div><div className="d">Se ajustan en Sonido → K.O. II y MIDI.</div></div><a className="btn" href="#/sonido">Abrir</a></div>
