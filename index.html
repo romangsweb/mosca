@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MOSCA · Separación topológica de señales sobre el conectoma de Drosophila</title>
+  <meta name="description" content="Herramienta científica para extraer señales de audio o CSV, traducirlas a frecuencias de disparo e inyectarlas en un modelo del conectoma de Drosophila melanogaster (FlyWire) para separar datos apetitivos de aversivos.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+
+  <!-- ============ TOP BAR ============ -->
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 16 16" aria-hidden="true">
+        <circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1"/>
+        <path d="M8 1.5v13M1.5 8h13" stroke="currentColor" stroke-width="0.6"/>
+        <circle cx="8" cy="8" r="2" fill="currentColor"/>
+      </svg>
+      <strong>MOSCA</strong>
+      <span class="dim">/ conectoma-lab</span>
+    </div>
+    <nav class="menu" aria-label="Menú principal">
+      <button type="button">Archivo</button>
+      <button type="button">Vista</button>
+      <button type="button">Modelo</button>
+      <button type="button">Simulación</button>
+      <button type="button">Ayuda</button>
+    </nav>
+    <div class="topbar-meta mono">
+      <span>D. melanogaster · FAFB · FlyWire v783</span>
+      <span class="sep">|</span>
+      <span id="session-file">demo_muestra_14B.wav</span>
+      <span class="sep">|</span>
+      <span id="clock">--:--:--</span>
+    </div>
+  </header>
+
+  <main class="workspace">
+
+    <!-- ============ LEFT PANEL · INPUT ============ -->
+    <aside class="panel panel-left" aria-labelledby="in-title">
+      <div class="panel-head">
+        <h2 id="in-title">INPUT // EXTRACCIÓN DE SEÑAL</h2>
+        <span class="tag mono">01</span>
+      </div>
+
+      <section class="block">
+        <div class="block-head"><span class="idx mono">1.1</span>Fuente<span class="right mono" id="src-kind">DEMO</span></div>
+        <label class="dropzone" id="dropzone" for="file-input">
+          <input type="file" id="file-input" accept="audio/*,.csv,text/csv" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v4h16v-4" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+          <span class="dz-title">Arrastrar audio o CSV</span>
+          <span class="dz-sub mono">WAV · MP3 · FLAC · OGG · CSV</span>
+        </label>
+        <dl class="file-meta mono" id="file-meta">
+          <div><dt>archivo</dt><dd id="fm-name">demo_muestra_14B.wav</dd></div>
+          <div><dt>tamaño</dt><dd id="fm-size">307.2 kB</dd></div>
+          <div><dt>formato</dt><dd id="fm-fmt">PCM 16 kHz · mono · 9.60 s</dd></div>
+        </dl>
+        <ol class="pipeline mono" id="pipeline">
+          <li data-step="0">decod.</li>
+          <li data-step="1">whisper</li>
+          <li data-step="2">token</li>
+          <li data-step="3">f(x)→Hz</li>
+        </ol>
+      </section>
+
+      <section class="block">
+        <div class="block-head"><span class="idx mono">1.2</span>Forma de onda<span class="right mono" id="wave-meta">whisper-large-v3 · es</span></div>
+        <canvas id="wave" class="wave" aria-label="Forma de onda del audio procesado"></canvas>
+        <p class="transcript" id="transcript"></p>
+      </section>
+
+      <section class="block block-grow">
+        <div class="block-head"><span class="idx mono">1.3</span>Mapeo variable → frecuencia<span class="right mono" id="map-count">0</span></div>
+        <div class="table-wrap">
+          <table class="data" id="map-table">
+            <thead>
+              <tr><th>#</th><th>Variable</th><th class="num">x̂</th><th class="num">Hz</th><th>Destino</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="footnote mono">f = 2 + 98·x̂ Hz · tren de Poisson · Δt 0.1 ms</p>
+      </section>
+    </aside>
+
+    <!-- ============ CENTER · 3D CONNECTOME ============ -->
+    <section class="viewport" id="viewport" aria-label="Visor 3D del conectoma">
+      <h1 class="sr-only">Visor del conectoma de Drosophila melanogaster</h1>
+      <canvas id="gl"></canvas>
+
+      <span class="corner tl"></span><span class="corner tr"></span>
+      <span class="corner bl"></span><span class="corner br"></span>
+      <span class="crosshair" aria-hidden="true"></span>
+
+      <div class="vp-toolbar" role="toolbar" aria-label="Controles de vista">
+        <div class="seg">
+          <button type="button" id="view-front" class="is-active" data-view="front" title="Frontal (1)">Frontal</button>
+          <button type="button" id="view-dorsal" data-view="dorsal" title="Dorsal (2)">Dorsal</button>
+          <button type="button" id="view-lateral" data-view="lateral" title="Lateral (3)">Lateral</button>
+          <button type="button" id="view-iso" data-view="iso" title="Isométrica (4)">Iso</button>
+        </div>
+        <div class="seg">
+          <button type="button" id="toggle-rotate" class="is-active" title="Rotación automática (R)">Rotar</button>
+          <button type="button" id="toggle-shell" class="is-active" title="Mostrar neuropilo">Neuropilo</button>
+        </div>
+      </div>
+      <div class="vp-caption mono" id="vp-caption">VISTA FRONTAL · PERSPECTIVA 28° · ANTERIOR</div>
+
+      <div class="legend" id="legend" aria-label="Regiones anatómicas">
+        <div class="legend-head mono">REGIONES <span>n</span></div>
+        <ul id="legend-list"></ul>
+      </div>
+
+      <div class="sim-hud mono" id="sim-hud" aria-live="polite">
+        <span id="hud-phase">reposo</span>
+        <span class="hud-t">t = <b id="hud-t">000</b> ms</span>
+      </div>
+
+      <canvas class="gizmo" id="gizmo" width="72" height="72" aria-hidden="true"></canvas>
+
+      <div class="scalebar mono" id="scalebar"><span class="bar" id="scalebar-bar"></span><span id="scalebar-label">100 µm</span></div>
+    </section>
+
+    <!-- ============ RIGHT PANEL · OUTPUT ============ -->
+    <aside class="panel panel-right" aria-labelledby="out-title">
+      <div class="panel-head">
+        <h2 id="out-title">OUTPUT // SEPARACIÓN TOPOLÓGICA</h2>
+        <span class="tag mono">02</span>
+      </div>
+
+      <section class="block">
+        <div class="block-head"><span class="idx mono">2.1</span>Resumen</div>
+        <div class="metrics">
+          <div class="metric"><span class="m-label">N</span><span class="m-val mono" id="m-n">—</span></div>
+          <div class="metric"><span class="m-label"><i class="dot ok"></i>Apet.</span><span class="m-val mono" id="m-app">—</span></div>
+          <div class="metric"><span class="m-label"><i class="dot bad"></i>Avers.</span><span class="m-val mono" id="m-avr">—</span></div>
+          <div class="metric"><span class="m-label">d′</span><span class="m-val mono" id="m-d">—</span></div>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="block-head"><span class="idx mono">2.2</span>Eje de separación<span class="right mono">score ∈ [−1, 1]</span></div>
+        <canvas id="strip" class="strip" aria-label="Distribución de scores"></canvas>
+      </section>
+
+      <section class="block block-grow scroll">
+        <div class="block-head sticky"><span class="idx mono">2.3</span><i class="dot ok"></i>Cat. 1 · Apetitivo / Azúcar<span class="right mono" id="c-app">0</span></div>
+        <ul class="rows" id="list-app"><li class="empty mono">sin datos · ejecutar simulación</li></ul>
+
+        <div class="block-head sticky"><span class="idx mono">2.4</span><i class="dot bad"></i>Cat. 2 · Aversivo / Ruido<span class="right mono" id="c-avr">0</span></div>
+        <ul class="rows" id="list-avr"><li class="empty mono">sin datos · ejecutar simulación</li></ul>
+      </section>
+
+      <div class="actions">
+        <button type="button" class="btn btn-primary" id="btn-sim">
+          <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 2l7 4-7 4z" fill="currentColor"/></svg>
+          <span id="btn-sim-label">Iniciar simulación</span>
+          <kbd class="mono">⏎</kbd>
+        </button>
+        <div class="btn-row">
+          <button type="button" class="btn" id="btn-json" disabled>Exportar JSON</button>
+          <button type="button" class="btn" id="btn-csv" disabled>Exportar CSV</button>
+        </div>
+        <p class="footnote mono">exporta sólo Cat. 1 (dataset filtrado)</p>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ============ STATUS BAR ============ -->
+  <footer class="statusbar mono">
+    <span class="st-item"><i class="st-led" id="st-led"></i><span id="st-state">Generando esqueletos…</span></span>
+    <span class="st-item" id="st-cursor">x — y — z — µm</span>
+    <span class="st-progress" aria-hidden="true"><span id="st-bar"></span></span>
+    <span class="st-item" id="st-neurons">— neuronas</span>
+    <span class="st-item" id="st-segs">— segmentos</span>
+    <span class="st-item" id="st-fps">— fps</span>
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
