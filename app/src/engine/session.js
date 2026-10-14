@@ -8,7 +8,7 @@ import { mutate, identity } from './mutate.js';
 import { kvGet, kvSet, takePut, takesAll, takeDel, FREE_TAKES, sampleGet, samplePut, sampleDel } from './storage.js';
 import { VOICES as KIT_VOICES, kitData, toBuffers } from './kits.js';
 import { SLOTS, FREE_SLOTS, snapshot, applyScene, morphRates, onBar, exampleSong } from './song.js';
-import { handleMidi, FREE_MAPPINGS } from './controls.js';
+import { handleMidi, FREE_MAPPINGS, targetById } from './controls.js';
 import { Capture } from './capture.js';
 import { audioPut, audioGet, audioDel, dbOk } from './storage.js';
 import { SK_PRESET, skPorts, skSend } from './sidekick.js';
@@ -17,7 +17,7 @@ import { SCALES } from './devices.js';
 import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
-const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn'];
+const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes'];
 
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'] };
 export const SENSE_LABEL = { dulce: 'Dulce', amargo: 'Amargo', jon_ce: 'Graves', jon_f: 'Medios', jon_dm: 'Agudos' };
@@ -25,6 +25,7 @@ export const HIST = 128;
 // Qué abre Pro. El servidor aplica lo que importa (límite de tomas); la app solo muestra y bloquea la interfaz.
 export const PRO_FEATURES = {
   datos: 'Modo Datos: tus CSV estimulan los sentidos',
+  automatizacion: 'Movimientos ilimitados (grabar y dibujar automatización)',
   wav: 'Exportar tomas a WAV',
   tomas: 'Tomas ilimitadas en la nube',
   melodia: 'Modo melódico: escalas, bajo y melodía',
@@ -51,7 +52,7 @@ const DEFAULTS = {
   scenes: {}, song: [], songLoop: true, morph: true,
   mappings: [], audioIn: null, captureAudio: false, kitVol: 0.7,
   sk: { follow: false, fxAuto: false, fx: [0, 1] },
-  fx: { ...FX_DEFAULT }, metro: false, countIn: 1,
+  fx: { ...FX_DEFAULT }, metro: false, countIn: 1, autoLanes: [],
   follow: { source: 'entrada', tempo: true, key: true, autoPlay: true, offset: 0 },
   oidoSource: 'manual', dataMap: {}, perRow: 16,
 };
@@ -114,7 +115,8 @@ export class Session {
   get() { return this.s; }
   subscribe(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   onStep(fn) { this.stepListeners.add(fn); return () => this.stepListeners.delete(fn); }
-  emit() { this.s = { ...this.s }; this.listeners.forEach((f) => f()); }
+  emit() { if (this._batch) { this._batchDirty = true; return; } this.s = { ...this.s }; this.listeners.forEach((f) => f()); }
+  batch(fn) { this._batch = true; try { fn(); } finally { this._batch = false; if (this._batchDirty) { this._batchDirty = false; this.emit(); } } } // varios cambios, un solo redibujado
   set(patch, persist = false) {
     Object.assign(this.s, typeof patch === 'function' ? patch(this.s) : patch); this.emit();
     if (persist) this.persist();
@@ -141,6 +143,28 @@ export class Session {
   }
   undo() { if (!this.hist || this.hist.length < 2) return; clearTimeout(this._ht); this.fut.push(this.hist.pop()); this.restoreSnap(this.hist[this.hist.length - 1]); }
   redo() { if (!this.fut?.length) return; const snap = this.fut.pop(); this.hist.push(snap); this.restoreSnap(snap); }
+  // ---------- movimientos (automatización): grabar o dibujar cómo cambia un parámetro a lo largo de 1–8 compases ----------
+  get autoFull() { return !this.can('automatizacion') && this.s.autoLanes.length >= 1; }
+  addAutoLane(target = 'dulce') {
+    if (this.autoFull) { location.hash = '#/cuenta?plan'; return; }
+    const id = crypto.randomUUID().slice(0, 8); this.set({ autoLanes: [...this.s.autoLanes, { id, target, len: 2, mode: 'play', pts: new Array(32).fill(null) }] }, true); return id;
+  }
+  setAutoLane(id, patch) {
+    this.set({ autoLanes: this.s.autoLanes.map((l) => { if (l.id !== id) return l; const n = { ...l, ...patch }; if (patch.len) n.pts = Array.from({ length: patch.len * 16 }, (_, i) => l.pts[i % l.pts.length] ?? null); return n; }) }, true);
+  }
+  removeAutoLane(id) { this.set({ autoLanes: this.s.autoLanes.filter((l) => l.id !== id) }, true); }
+  drawAuto(id, i0, i1, v0, v1) { // dibujar una línea de valores entre dos pasos
+    const l = this.s.autoLanes.find((x) => x.id === id); if (!l) return; const pts = [...l.pts], a = Math.min(i0, i1), b = Math.max(i0, i1);
+    for (let i = a; i <= b; i++) pts[i] = b === a ? v1 : Math.round(v0 + ((v1 - v0) * (i - i0)) / (i1 - i0));
+    this.setAutoLane(id, { pts });
+  }
+  automate(n) {
+    for (const l of this.s.autoLanes) {
+      const t = targetById(l.target); if (!t || l.mode === 'off') continue; const i = n % l.pts.length;
+      if (l.mode === 'rec') l.pts[i] = t.get(this); // escribe lo que estás moviendo (perilla, sidekick o pad XY)
+      else if (l.pts[i] != null && t.get(this) !== l.pts[i]) t.set(this, l.pts[i]);
+    }
+  }
   // ---------- tempo con golpecitos ----------
   tap() {
     const now = performance.now(); this._taps = (this._taps || []).filter((t) => now - t < 2500); this._taps.push(now);
@@ -283,7 +307,7 @@ export class Session {
     this.set({ kitActive: want, customSamples: g.custom });
   }
   setTrackKit(tid, id) { if (id && !this.can('kits')) { location.hash = '#/cuenta?plan'; return; } this.setTrack(tid, { kitId: id || null }); this.loadKit(); }
-  setFx(patch) { const fx = { ...FX_DEFAULT, ...this.s.fx, ...patch }; this.set({ fx }, true); this.synth.setFx(fx, this.ko.internalBpm || this.s.bpm); }
+  setFx(patch, persist = true) { const fx = { ...FX_DEFAULT, ...this.s.fx, ...patch }; this.set({ fx }, persist); this.synth.setFx(fx, this.ko.internalBpm || this.s.bpm); }
   get wavOptions() { return { fx: this.s.fx, bpm: this.ko.internalBpm || this.s.bpm, sends: Object.fromEntries(this.s.tracks.map((t) => [t.id, { rev: t.rev ?? 0, dly: t.dly ?? 0 }])), kits: this.synth.kits, trackKit: this.synth.trackKit }; }
   // ---------- congelar: el compás que te gustó queda como patrón editable ----------
   freeze(tid = this.s.selTrack) {
@@ -322,8 +346,8 @@ export class Session {
     this.loadKit();
     await this.refreshTakes();
   }
-  setInput(k, v) { this.set({ inputs: { ...this.s.inputs, [k]: v } }, true); }
-  setTrack(id, patch) { this.set({ tracks: this.s.tracks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }, true); if ('level' in patch) this.skFollow(this.track(id)); if ('rev' in patch || 'dly' in patch) { const t = this.track(id); this.synth.setSends(id, { rev: t.rev ?? 0, dly: t.dly ?? 0 }); } }
+  setInput(k, v, persist = true) { this.set({ inputs: { ...this.s.inputs, [k]: v } }, persist); }
+  setTrack(id, patch, persist = true) { this.set({ tracks: this.s.tracks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }, persist); if ('level' in patch) this.skFollow(this.track(id)); if ('rev' in patch || 'dly' in patch) { const t = this.track(id); this.synth.setSends(id, { rev: t.rev ?? 0, dly: t.dly ?? 0 }); } }
   track(id = this.s.selTrack) { return this.s.tracks.find((t) => t.id === id); }
   pads(track) { return this.D.modos[track.sense].pads; }
   audible(t) { const solo = this.s.tracks.some((x) => x.solo); return solo ? t.solo : !t.mute; }
@@ -354,7 +378,7 @@ export class Session {
   // Mezcla: a dónde va cada pista. auto = al aparato si hay, si no a la compu (como siempre); aparato; kit (compu); ambos.
   toDevice(t, port = this.portFor(t)) { return this.s.sendMidi && !!port && (t.dest || 'auto') !== 'kit'; }
   toKit(t, port = this.portFor(t)) { const d = t.dest || 'auto'; return d === 'kit' || d === 'ambos' || (d === 'auto' && this.monitorOn) || (d === 'aparato' && !port && this.s.monitor !== 'nunca'); }
-  setKitVol(v) { this.set({ kitVol: v }, true); if (this.synth.out) this.synth.out.gain.value = v; }
+  setKitVol(v, persist = true) { this.set({ kitVol: v }, persist); if (this.synth.out) this.synth.out.gain.value = v; }
   get monitorOn() { return this.s.monitor === 'siempre' || (this.s.monitor === 'auto' && (!this.ko.connected || this.profile.kind === 'interno')); }
   // ---------- transporte ----------
   play() { this.synth.ensure(); this.sim.reset(); this.live.step = 0; this.live.countIn = 0; this.s.row = 0; this.morphState = null; if (this.s.songOn) this.songPos = { row: 0, bars: 0 }; this.ko.start(); this.set({ playing: true }); }
@@ -382,6 +406,7 @@ export class Session {
     if (s.metro && n % 4 === 0) this.synth.click(at, n % 16 === 0);
     if (s.data && n > 0 && n % s.perRow === 0) { s.row = (s.row + 1) % s.data.rows; queueMicrotask(() => this.emit()); }
     this.live.step = n; if (n % 16 === 0) onBar(this, n / 16);
+    if (s.autoLanes?.length) this.batch(() => this.automate(n));
     const R = this.rates(); L.lastRates = R;
     const cnt = this.sim.advance(s.density, R); L.counts = cnt;
     let active = 0; for (let i = 0; i < cnt.length; i++) if (cnt[i]) active++;
