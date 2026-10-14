@@ -41,25 +41,62 @@ export function voice(ctx, dest, name, vel, t, pitch = 0) {
   }
 }
 
+// ---------- efectos de la compu ----------
+// Cada pista entra a su bus → (seco) maestro · (envío) reverb · (envío) delay a tempo. Maestro: filtro → compresor.
+function impulse(ctx, secs = 2.2) {
+  const n = Math.round(ctx.sampleRate * secs), b = ctx.createBuffer(2, n, ctx.sampleRate);
+  for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); let seed = 7 + c * 13; for (let i = 0; i < n; i++) { seed = (seed * 16807) % 2147483647; d[i] = ((seed / 2147483647) * 2 - 1) * Math.pow(1 - i / n, 3.2); } }
+  return b;
+}
+export const FX_DEFAULT = { filtro: 1, comp: true, dlyBeats: 0.75, dlyFb: 0.38 };
+export function buildChain(ctx, dest, fx = FX_DEFAULT, bpm = 110) {
+  const out = ctx.createGain(); out.gain.value = 0.7;
+  const filt = ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.Q.value = 0.8;
+  const comp = ctx.createDynamicsCompressor(), thru = ctx.createGain();
+  out.connect(filt); filt.connect(comp).connect(dest); filt.connect(thru).connect(dest);
+  const rev = ctx.createConvolver(); rev.buffer = impulse(ctx); const revOut = ctx.createGain(); revOut.gain.value = 0.9; rev.connect(revOut).connect(out);
+  const dly = ctx.createDelay(2), fb = ctx.createGain(), dlyTone = ctx.createBiquadFilter(); dlyTone.type = 'lowpass'; dlyTone.frequency.value = 3800;
+  dly.connect(dlyTone).connect(fb).connect(dly); dlyTone.connect(out);
+  const buses = {};
+  const chain = {
+    out, filt, comp, thru, rev, dly, fb, buses,
+    bus(id, sends = {}) {
+      if (!buses[id]) { const g = ctx.createGain(), r = ctx.createGain(), d = ctx.createGain(); g.connect(out); g.connect(r).connect(rev); g.connect(d).connect(dly); buses[id] = { in: g, rev: r, dly: d }; }
+      const b = buses[id]; b.rev.gain.value = sends.rev ?? 0; b.dly.gain.value = sends.dly ?? 0; return b.in;
+    },
+    set(f = FX_DEFAULT, tempo = bpm) {
+      const x = { ...FX_DEFAULT, ...f };
+      filt.frequency.value = 180 * Math.pow(18000 / 180, Math.max(0, Math.min(1, x.filtro)));
+      comp.threshold.value = -18; comp.ratio.value = 4; comp.knee.value = 8;
+      // compresor encendido = señal por el compresor; apagado = directo
+      try { filt.disconnect(); } catch {} filt.connect(x.comp ? comp : thru);
+      dly.delayTime.value = Math.min(1.9, (60 / Math.max(40, tempo)) * x.dlyBeats); fb.gain.value = Math.max(0, Math.min(0.85, x.dlyFb));
+    },
+  };
+  chain.set(fx, bpm);
+  return chain;
+}
+
 export class Synth {
-  constructor() { this.ctx = null; this.out = null; this.enabled = true; this.kit = null; }
+  constructor() { this.ctx = null; this.out = null; this.enabled = true; this.kit = null; this.kits = {}; this.chain = null; this.trackKit = {}; this.sends = {}; }
   ensure() {
     if (!this.ctx) {
       this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-      this.out = this.ctx.createGain(); this.out.gain.value = 0.7;
-      const comp = this.ctx.createDynamicsCompressor(); this.out.connect(comp).connect(this.ctx.destination);
+      this.chain = buildChain(this.ctx, this.ctx.destination); this.out = this.chain.out;
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
     return this.ctx;
   }
-  // at: performance.now() en ms
-  play(name, vel, at = performance.now(), pitch = 0) {
+  setFx(fx, bpm) { this.ensure(); this.chain.set(fx, bpm); }
+  setSends(id, sends) { this.sends[id] = sends; if (this.chain) this.chain.bus(id, sends); }
+  // at: performance.now() en ms · track: id de la pista (su bus, su kit y sus envíos)
+  play(name, vel, at = performance.now(), pitch = 0, track = null) {
     if (!this.enabled || !name) return;
     const ctx = this.ensure(), t = Math.max(ctx.currentTime, ctx.currentTime + (at - performance.now()) / 1000);
-    if (name !== 'tono' && this.kit?.[name]) playBuffer(ctx, this.out, this.kit[name], vel, t, pitch);
-    else voice(ctx, this.out, name, vel, t, pitch);
+    const dest = track ? this.chain.bus(track, this.sends[track]) : this.out, kit = (track && this.kits[this.trackKit[track]]) || this.kit;
+    if (name !== 'tono' && kit?.[name]) playBuffer(ctx, dest, kit[name], vel, t, pitch);
+    else voice(ctx, dest, name, vel, t, pitch);
   }
-
 }
 
 // Render de una toma a WAV con las voces internas.
@@ -68,11 +105,15 @@ export function playBuffer(ctx, dest, buffer, vel, t, pitch = 0) {
   const src = ctx.createBufferSource(), g = ctx.createGain(); src.buffer = buffer; src.playbackRate.value = Math.pow(2, pitch / 12);
   g.gain.value = Math.pow(Math.max(0.05, vel / 127), 1.3); src.connect(g).connect(dest); src.start(t);
 }
-export async function renderWav(take, kitFor, kit = null) {
-  const sr = 44100, dur = take.durMs / 1000 + 1;
-  const ctx = new OfflineAudioContext(2, Math.ceil(sr * dur), sr), out = ctx.createGain(); out.gain.value = 0.7;
-  const comp = ctx.createDynamicsCompressor(); out.connect(comp).connect(ctx.destination);
-  for (const e of take.events) { const n = kitFor(e), t = e.t / 1000 + 0.05, p = n === 'tono' ? e.note : e.track === 'oido' ? 3 : 0; if (n !== 'tono' && kit?.[n]) playBuffer(ctx, out, kit[n], e.vel, t, p); else voice(ctx, out, n, e.vel, t, p); }
+// opt: { fx, bpm, sends: {pista: {rev, dly}}, kits: {id: buffers}, trackKit: {pista: id} } → el WAV suena como en la compu
+export async function renderWav(take, kitFor, kit = null, opt = {}) {
+  const sr = 44100, dur = take.durMs / 1000 + 2.5;
+  const ctx = new OfflineAudioContext(2, Math.ceil(sr * dur), sr), chain = buildChain(ctx, ctx.destination, opt.fx, opt.bpm);
+  for (const e of take.events) {
+    const n = kitFor(e), t = e.t / 1000 + 0.05, p = n === 'tono' ? e.note : e.track === 'oido' ? 3 : 0;
+    const dest = chain.bus(e.track || 'x', opt.sends?.[e.track]), k = (opt.kits && opt.trackKit && opt.kits[opt.trackKit[e.track]]) || kit;
+    if (n !== 'tono' && k?.[n]) playBuffer(ctx, dest, k[n], e.vel, t, p); else voice(ctx, dest, n, e.vel, t, p);
+  }
   return wavBlob(await ctx.startRendering());
 }
 export function wavBlob(buf) {

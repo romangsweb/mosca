@@ -40,7 +40,10 @@ export function Lanes({ track, selPad }) {
   useEffect(() => {
     const cells = grid.current.querySelectorAll('.cell');
     const color = pads.map((p) => (p.clase === 'sensor' ? '236,236,238' : p.inhibidora ? '125,147,178' : '255,106,26'));
-    const paint = () => { const lanes = session.live.lanes[track.id]; lanes.forEach((row, k) => row.forEach((v, i) => { cells[k * 16 + i].style.background = v ? `rgba(${color[k]},${0.25 + (v / 127) * 0.6})` : ''; })); };
+    const paint = () => {
+      const lanes = session.live.lanes[track.id], t = session.track(track.id), fz = t.play !== 'vivo' && t.frozen;
+      lanes.forEach((row, k) => row.forEach((v, i) => { const c = cells[k * 16 + i]; c.style.background = v ? `rgba(${color[k]},${0.25 + (v / 127) * 0.6})` : ''; c.classList.toggle('on', !!(fz && fz[k][i])); }));
+    };
     paint();
     const off = session.onStep(paint);
     let raf; const loop = () => {
@@ -52,12 +55,14 @@ export function Lanes({ track, selPad }) {
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
-    return () => { off(); cancelAnimationFrame(raf); };
+    const unsub = session.subscribe(paint);
+    return () => { off(); unsub(); cancelAnimationFrame(raf); };
   }, [track.id]);
   return (
     <div className="lanes">
       <div className="lane-names">{pads.map((p, k) => <span key={k} className={k === selPad ? 'sel' : ''}>{p.tipo}</span>)}</div>
-      <div className="lane-grid" ref={grid} role="img" aria-label="Disparos del último compás por neurona">
+      <div className={`lane-grid${track.play && track.play !== 'vivo' ? ' edit' : ''}`} ref={grid} role="img" aria-label="Disparos del último compás por neurona"
+        onClick={(e) => { if (!track.play || track.play === 'vivo') return; const i = [...grid.current.querySelectorAll('.cell')].indexOf(e.target); if (i >= 0) session.toggleStep(track.id, Math.floor(i / 16), i % 16); }}>
         {Array.from({ length: 192 }, (_, i) => <span key={i} className={`cell${i % 4 === 0 ? ' beat' : ''}`} />)}
         <span className="playhead" ref={head} />
       </div>

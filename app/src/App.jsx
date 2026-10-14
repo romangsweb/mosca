@@ -143,6 +143,9 @@ export default function App() {
       {s.notice === 'audio' && (
         <div className="toast" role="alert">No pudimos abrir la entrada de audio: la toma se grabó solo con notas. Revisa Equipo → Audio.<button type="button" className="iconbtn" aria-label="Cerrar" onClick={() => session.set({ notice: null })}><Icon name="x" size={14} /></button></div>
       )}
+      {s.notice === 'congelar' && (
+        <div className="toast" role="status">Para congelar, dale a Tocar: se guarda el último compás que tocó la mosca en esta pista.<button type="button" className="iconbtn" aria-label="Cerrar" onClick={() => session.set({ notice: null })}><Icon name="x" size={14} /></button></div>
+      )}
       {s.notice === 'limite' && (
         <div className="toast" role="status">Llegaste a 5 tomas guardadas en el plan Free. <a href="#/tomas" className="btn" onClick={() => session.set({ notice: null })}>Ver tomas</a><button type="button" className="iconbtn" aria-label="Cerrar" onClick={() => session.set({ notice: null })}><Icon name="x" size={14} /></button></div>
       )}

@@ -223,3 +223,7 @@ details.doc-item .doc { padding-bottom: 14px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0s !important; animation-iteration-count: 1 !important; transition: none !important; } }
 .rail-sep { width: 28px; height: 1px; background: var(--line); margin: 6px 0; flex: none; }
 @media (max-width: 760px) { .rail-sep { display: none; } }
+.lane-grid.edit .cell { cursor: pointer; }
+.lane-grid.edit .cell:hover { outline: 1px solid var(--sub); }
+.cell.on { box-shadow: inset 0 0 0 1.5px var(--acc); }
+.cell.on.beat { box-shadow: inset 0 0 0 1.5px var(--acc); }

@@ -3,7 +3,7 @@ import { Circuit } from './sim.js';
 import { KO2 } from './midi.js';
 import { profileById, route } from './devices.js';
 import { Ear } from './ear.js';
-import { Synth, DEFAULT_KIT } from './synth.js';
+import { Synth, DEFAULT_KIT, FX_DEFAULT } from './synth.js';
 import { mutate, identity } from './mutate.js';
 import { kvGet, kvSet, takePut, takesAll, takeDel, FREE_TAKES, sampleGet, samplePut, sampleDel } from './storage.js';
 import { VOICES as KIT_VOICES, kitData, toBuffers } from './kits.js';
@@ -17,7 +17,7 @@ import { SCALES } from './devices.js';
 import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
-const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow'];
+const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx'];
 
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'] };
 export const SENSE_LABEL = { dulce: 'Dulce', amargo: 'Amargo', jon_ce: 'Graves', jon_f: 'Medios', jon_dm: 'Agudos' };
@@ -41,8 +41,8 @@ const DEFAULTS = {
   bpm: 110, sessionName: 'Sesión sin título', theme: 'noche', guide: true, onboarded: false, alias: '',
   inputs: { dulce: 150, amargo: 40, jon_ce: 0, jon_f: 0, jon_dm: 0 },
   tracks: [
-    { id: 'gusto', name: 'Gusto', sense: 'gusto', group: 'C', ch: 1, mute: false, solo: false, level: 1, map: identity(), kit: [...DEFAULT_KIT], mode: 'ritmo', scale: 'menor_pent', root: 48, dest: 'auto' },
-    { id: 'oido', name: 'Oído', sense: 'oido', group: 'A', ch: 1, mute: true, solo: false, level: 0.85, map: identity(), kit: [...DEFAULT_KIT], mode: 'ritmo', scale: 'menor_pent', root: 60, dest: 'auto' },
+    { id: 'gusto', name: 'Gusto', sense: 'gusto', group: 'C', ch: 1, mute: false, solo: false, level: 1, map: identity(), kit: [...DEFAULT_KIT], mode: 'ritmo', scale: 'menor_pent', root: 48, dest: 'auto', kitId: null, rev: 0.12, dly: 0, play: 'vivo', frozen: null },
+    { id: 'oido', name: 'Oído', sense: 'oido', group: 'A', ch: 1, mute: true, solo: false, level: 0.85, map: identity(), kit: [...DEFAULT_KIT], mode: 'ritmo', scale: 'menor_pent', root: 60, dest: 'auto', kitId: null, rev: 0.2, dly: 0.1, play: 'vivo', frozen: null },
   ],
   selTrack: 'gusto', selPad: 11,
   density: 4, swing: 54, humanize: 4, curve: 'suave', velMin: 70, velMax: 127, ghost: true,
@@ -51,6 +51,7 @@ const DEFAULTS = {
   scenes: {}, song: [], songLoop: true, morph: true,
   mappings: [], audioIn: null, captureAudio: false, kitVol: 0.7,
   sk: { follow: false, fxAuto: false, fx: [0, 1] },
+  fx: { ...FX_DEFAULT },
   follow: { source: 'entrada', tempo: true, key: true, autoPlay: true, offset: 0 },
   oidoSource: 'manual', dataMap: {}, perRow: 16,
 };
@@ -191,7 +192,7 @@ export class Session {
     this.live.follow = { ...st }; const f = { ...DEFAULTS.follow, ...this.s.follow };
     if (this.followLocked) {
       if (f.tempo && !this.ko.hasExternalClock) {
-        this.ko.internalBpm = st.bpm; if (Math.round(st.bpm) !== this.s.bpm) this.s.bpm = Math.round(st.bpm);
+        this.ko.internalBpm = st.bpm; if (Math.round(st.bpm) !== this.s.bpm) { this.s.bpm = Math.round(st.bpm); if (this.synth.chain) this.synth.setFx(this.s.fx, st.bpm); }
         if (f.autoPlay && !this.s.playing && !this._folPlayed) { this._folPlayed = true; this.play(); }
         this.followPhase(st.beatAt + (f.offset || 0), st.periodMs);
       }
@@ -244,13 +245,39 @@ export class Session {
   async loadKit() {
     const want = this.kitAllowed(this.s.kitId) ? this.s.kitId : 'analogo', ctx = this.synth.ensure();
     if (this.synth.out) this.synth.out.gain.value = this.s.kitVol ?? 0.7;
-    const base = { ...kitData(want === 'propio' ? 'analogo' : want) }, custom = {};
-    if (want === 'propio') for (const v of KIT_VOICES) {
-      const smp = await sampleGet(v); if (!smp) continue;
-      try { base[v] = await ctx.decodeAudioData(smp.data.slice(0)); custom[v] = smp.name; } catch (e) { console.warn('muestra', v, e); }
+    const build = async (id) => {
+      const base = { ...kitData(id === 'propio' ? 'analogo' : id) }, custom = {};
+      if (id === 'propio') for (const v of KIT_VOICES) {
+        const smp = await sampleGet(v); if (!smp) continue;
+        try { base[v] = await ctx.decodeAudioData(smp.data.slice(0)); custom[v] = smp.name; } catch (e) { console.warn('muestra', v, e); }
+      }
+      return { buffers: toBuffers(ctx, base), custom };
+    };
+    const g = await build(want); this.synth.kit = g.buffers; this.synth.kits = { [want]: g.buffers };
+    // kit propio de cada pista (Pro); si no, la pista usa el kit general
+    for (const t of this.s.tracks) {
+      const id = t.kitId && this.kitAllowed(t.kitId) && this.can('kits') ? t.kitId : want;
+      if (!this.synth.kits[id]) this.synth.kits[id] = (await build(id)).buffers;
+      this.synth.trackKit[t.id] = id; this.synth.setSends(t.id, { rev: t.rev ?? 0, dly: t.dly ?? 0 });
     }
-    this.synth.kit = toBuffers(ctx, base); this.set({ kitActive: want, customSamples: custom });
+    this.synth.setFx(this.s.fx, this.ko.internalBpm || this.s.bpm);
+    this.set({ kitActive: want, customSamples: g.custom });
   }
+  setTrackKit(tid, id) { if (id && !this.can('kits')) { location.hash = '#/cuenta?plan'; return; } this.setTrack(tid, { kitId: id || null }); this.loadKit(); }
+  setFx(patch) { const fx = { ...FX_DEFAULT, ...this.s.fx, ...patch }; this.set({ fx }, true); this.synth.setFx(fx, this.ko.internalBpm || this.s.bpm); }
+  get wavOptions() { return { fx: this.s.fx, bpm: this.ko.internalBpm || this.s.bpm, sends: Object.fromEntries(this.s.tracks.map((t) => [t.id, { rev: t.rev ?? 0, dly: t.dly ?? 0 }])), kits: this.synth.kits, trackKit: this.synth.trackKit }; }
+  // ---------- congelar: el compás que te gustó queda como patrón editable ----------
+  freeze(tid = this.s.selTrack) {
+    const t = this.track(tid), lanes = this.live.lanes[tid]; if (!t || !lanes) return false;
+    const frozen = lanes.map((row) => Array.from(row, (v) => Math.min(127, Math.round(v / (t.level || 1)))));
+    if (!frozen.some((r) => r.some(Boolean))) return false;
+    this.setTrack(tid, { frozen, play: t.play === 'ambos' ? 'ambos' : 'congelado' }); return true;
+  }
+  toggleStep(tid, k, pos) {
+    const t = this.track(tid), frozen = (t.frozen || Array.from({ length: 12 }, () => new Array(16).fill(0))).map((r) => [...r]);
+    frozen[k][pos] = frozen[k][pos] ? 0 : 100; this.setTrack(tid, { frozen, play: t.play === 'vivo' ? 'congelado' : t.play });
+  }
+
   setKit(id) { if (!this.kitAllowed(id)) { location.hash = '#/cuenta?plan'; return; } this.set({ kitId: id }, true); this.loadKit(); }
   async addSample(voice, file) {
     if (!this.can('kits')) throw new Error('pro');
@@ -277,7 +304,7 @@ export class Session {
     await this.refreshTakes();
   }
   setInput(k, v) { this.set({ inputs: { ...this.s.inputs, [k]: v } }, true); }
-  setTrack(id, patch) { this.set({ tracks: this.s.tracks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }, true); if ('level' in patch) this.skFollow(this.track(id)); }
+  setTrack(id, patch) { this.set({ tracks: this.s.tracks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }, true); if ('level' in patch) this.skFollow(this.track(id)); if ('rev' in patch || 'dly' in patch) { const t = this.track(id); this.synth.setSends(id, { rev: t.rev ?? 0, dly: t.dly ?? 0 }); } }
   track(id = this.s.selTrack) { return this.s.tracks.find((t) => t.id === id); }
   pads(track) { return this.D.modos[track.sense].pads; }
   audible(t) { const solo = this.s.tracks.some((x) => x.solo); return solo ? t.solo : !t.mute; }
@@ -301,8 +328,8 @@ export class Session {
     if (r.voice === 'tono' && !this.can('melodia')) return { note: null, ch: r.ch, voice: t.kit[t.map[k]] };
     return r;
   }
-  sound(r, vel, when, t) { if (r.voice === 'tono') this.synth.play('tono', vel, when, r.note); else this.synth.play(r.voice, vel, when, t.id === 'oido' ? 3 : 0); }
-  setBpm(b) { const bpm = Math.max(40, Math.min(240, Math.round(b))); this.ko.internalBpm = bpm; this.set({ bpm }, true); }
+  sound(r, vel, when, t) { if (r.voice === 'tono') this.synth.play('tono', vel, when, r.note, t.id); else this.synth.play(r.voice, vel, when, t.id === 'oido' ? 3 : 0, t.id); }
+  setBpm(b) { const bpm = Math.max(40, Math.min(240, Math.round(b))); this.ko.internalBpm = bpm; this.set({ bpm }, true); if (this.synth.chain) this.synth.setFx(this.s.fx, bpm); }
   setClockOut(v) { this.ko.clockOut = v; this.set({ clockOut: v }, true); }
   setLatency(v) { this.ko.latency = v; this.set({ latency: v }, true); }
   // Mezcla: a dónde va cada pista. auto = al aparato si hay, si no a la compu (como siempre); aparato; kit (compu); ambos.
@@ -340,9 +367,12 @@ export class Session {
       pads.forEach((p, k) => {
         const c = cnt[p.idx]; rate[k] = rate[k] * 0.9 + 0.1 * (c / (s.density / 1000));
         lanes[k][pos] = 0; L.rateHist[t.id][k][n % HIST] = rate[k]; L.spikes[t.id][k][n % HIST] = c;
-        if (!c || !on) return;
-        const x = Math.min(1, c / 3), ghost = s.ghost && p.inhibidora ? 0.6 : 1;
-        const vel = Math.round((s.velMin + (s.velMax - s.velMin) * curve(x)) * ghost * t.level);
+        // vivo = toca la mosca · congelado = toca el patrón · ambos = el patrón más lo que agregue la mosca
+        const mode = t.play || 'vivo', fz = mode !== 'vivo' && t.frozen ? t.frozen[k][pos] : 0;
+        let vel = 0;
+        if (c && on && mode !== 'congelado') { const x = Math.min(1, c / 3), ghost = s.ghost && p.inhibidora ? 0.6 : 1; vel = Math.round((s.velMin + (s.velMax - s.velMin) * curve(x)) * ghost * t.level); }
+        if (fz && on) vel = Math.max(vel, Math.round(fz * t.level));
+        if (!vel) return;
         const when = at + swingMs + (Math.random() * 2 - 1) * s.humanize;
         const r = this.route(t, k);
         lanes[k][pos] = vel;
@@ -464,7 +494,7 @@ export class Session {
         const port = (e.port && this.ko.outPort(e.port)) || this.ko.output;
         const tr = this.track(e.track) || this.track();
         if (this.toDevice(tr, port)) this.ko.hit(e.note, e.vel, e.ch, 60, at, port);
-        if (this.toKit(tr, port)) e.voice === 'tono' ? this.synth.play('tono', e.vel, at, e.note) : this.synth.play(e.voice, e.vel, at, e.track === 'oido' ? 3 : 0);
+        if (this.toKit(tr, port)) e.voice === 'tono' ? this.synth.play('tono', e.vel, at, e.note, tr.id) : this.synth.play(e.voice, e.vel, at, e.track === 'oido' ? 3 : 0, tr.id);
       }, Math.max(0, e.t - 40)));
     }
     timers.push(setTimeout(() => { this.takeTimers = null; onEnd?.(); }, take.durMs + 100));

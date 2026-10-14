@@ -8,6 +8,7 @@ import { DeviceArt } from '../ui/DeviceArt.jsx';
 import { SK_PRESET, SK_FX } from '../engine/sidekick.js';
 import { TARGETS } from '../engine/controls.js';
 import { Acompanar } from '../ui/Acompanar.jsx';
+import { kitName } from '../ui/SoundRoute.jsx';
 
 // Mezcla: una tira por pista (a dónde va, nivel, silencio, solo), la compu (kit interno) y la entrada de audio
 // (el sidekick o tu interfaz). Es el mapa de cómo suena todo junto.
@@ -34,6 +35,12 @@ function Fader({ id, label, value, onChange, height = 150 }) {
       style={{ writingMode: 'vertical-lr', direction: 'rtl', height, width: 28, accentColor: 'var(--acc)', margin: 0 }} />
   );
 }
+
+const Slider = ({ label, value, onChange, fmt = (v) => `${Math.round(v * 100)}%`, disabled }) => (
+  <label className="row" style={{ gap: 8, fontSize: 12, opacity: disabled ? 0.5 : 1 }}><span className="muted" style={{ width: 62 }}>{label}</span>
+    <input type="range" min="0" max="100" value={Math.round(value * 100)} disabled={disabled} onChange={(e) => onChange(+e.target.value / 100)} style={{ flex: 1, accentColor: 'var(--acc)' }} />
+    <span className="mono" style={{ width: 40, textAlign: 'right', fontSize: 11 }}>{fmt(value)}</span></label>
+);
 
 function Strip({ title, art, icon, sub, children, controls, meter, fader, on = true }) {
   return (
@@ -68,6 +75,18 @@ function TrackStrip({ t }) {
         <p className="dim" style={{ margin: 0, fontSize: 11, lineHeight: 1.45 }}>{DEST_HELP[d]}</p>
       </>}>
       <div className="field"><label>Destino</label><Seg label={`Destino de ${t.name}`} items={DEST} value={d} onChange={(v) => session.setTrack(t.id, { dest: v })} /></div>
+      {session.toKit(t) && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+          <div className="row" style={{ gap: 8 }}><span className="label" style={{ flex: 1 }}>En la compu</span>{!session.can('kits') && <a href="#/cuenta?plan" className="badge-pro">PRO</a>}</div>
+          <select className="input" aria-label={`Kit de ${t.name}`} value={t.kitId || ''} onChange={(e) => session.setTrackKit(t.id, e.target.value)}>
+            <option value="">Kit general ({kitName(s.kitActive || s.kitId)})</option>
+            {KITS.map((k) => <option key={k.id} value={k.id} disabled={!session.can('kits')}>{k.name}</option>)}
+            <option value="propio" disabled={!session.can('kits')}>Mi kit</option>
+          </select>
+          <Slider label="Reverb" value={t.rev ?? 0} onChange={(v) => session.setTrack(t.id, { rev: v })} />
+          <Slider label="Delay" value={t.dly ?? 0} onChange={(v) => session.setTrack(t.id, { dly: v })} />
+        </div>
+      )}
       {d !== 'kit' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
           <div className="row" style={{ gap: 8 }}><span className="label">Aparato de esta pista</span>{!multi && <a href="#/cuenta?plan" className="badge-pro" style={{ marginLeft: 'auto' }}>PRO</a>}</div>
@@ -88,20 +107,24 @@ function TrackStrip({ t }) {
 }
 
 function KitStrip() {
-  const s = useS(), users = s.tracks.filter((t) => session.audible(t) && session.toKit(t));
+  const s = useS(), fx = s.fx || {}, users = s.tracks.filter((t) => session.audible(t) && session.toKit(t));
   const v = Math.max(0, ...users.map((t) => meterOf(t.id)));
   return (
-    <Strip title="Compu · kit" icon="sonido" sub={users.length ? `Lo usan: ${users.map((t) => t.name).join(', ')}` : 'Ninguna pista lo usa ahora'}
+ <Strip title="Compu · kit y efectos" icon="sonido" sub={users.length ? `Lo usan: ${users.map((t) => t.name).join(', ')}` : 'Ninguna pista lo usa ahora'}
       fader={<Fader id="kitvol" label="Volumen del kit" value={s.kitVol ?? 0.7} onChange={(x) => session.setKitVol(x)} />}
       meter={<Meter value={v * (s.kitVol ?? 0.7) / 0.7} />}
       controls={<>
-        <div className="field"><label htmlFor="kitsel">Kit de la librería</label>
+        <div className="field"><label htmlFor="kitsel">Kit general</label>
           <select id="kitsel" className="input" value={s.kitActive || s.kitId} onChange={(e) => session.setKit(e.target.value)}>
             {KITS.map((k) => <option key={k.id} value={k.id}>{k.name}{k.pro && !session.can('kits') ? ' · Pro' : ''}</option>)}
             <option value="propio">Mi kit{!session.can('kits') ? ' · Pro' : ''}</option>
           </select></div>
-        <p className="dim" style={{ margin: 0, fontSize: 11, lineHeight: 1.45 }}>Suena por las bocinas o audífonos de tu computadora. Pon una pista en «Compu» o «Ambos» para usarlo junto a tu aparato.</p>
-        <a className="btn" href="#/sonido">Abrir la librería</a>
+        <Slider label="Filtro" value={fx.filtro ?? 1} onChange={(v) => session.setFx({ filtro: v })} fmt={(v) => { const f = 180 * Math.pow(100, v); return v >= 0.99 ? 'abierto' : f < 1000 ? `${Math.round(f)}` : `${(f / 1000).toFixed(1)}k`; }} />
+        <div className="row" style={{ gap: 8, fontSize: 12 }}><span className="muted" style={{ width: 62 }}>Delay</span>
+          <Seg label="Tiempo del delay" items={[['0.5', '1/8'], ['0.75', '1/8·'], ['1', '1/4']]} value={String(fx.dlyBeats ?? 0.75)} onChange={(v) => session.setFx({ dlyBeats: +v })} /></div>
+        <Slider label="Repetir" value={(fx.dlyFb ?? 0.38) / 0.85} onChange={(v) => session.setFx({ dlyFb: v * 0.85 })} />
+        <label className="row" style={{ gap: 10, fontSize: 12 }}><input type="checkbox" checked={fx.comp !== false} onChange={(e) => session.setFx({ comp: e.target.checked })} style={{ width: 16, height: 16, accentColor: 'var(--acc)' }} />Compresor maestro</label>
+        <p className="dim" style={{ margin: 0, fontSize: 11, lineHeight: 1.45 }}>Reverb y delay se mandan desde cada pista. El delay va a tempo. Los efectos también salen en el WAV.</p>
       </>} />
   );
 }

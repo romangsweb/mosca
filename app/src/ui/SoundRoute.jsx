@@ -7,7 +7,7 @@ export const kitName = (id) => (id === 'propio' ? 'Mi kit' : KITS.find((k) => k.
 export function whereText(t) {
   const port = session.portFor(t), prof = session.profileFor(t), parts = [];
   if (session.toDevice(t, port)) parts.push(`${prof.name}${prof.kind === 'grupos' && t.mode !== 'melodia' ? ` · grupo ${t.group}` : ''}`);
-  if (session.toKit(t, port)) parts.push(`kit ${kitName(session.s.kitActive || session.s.kitId)} en la compu`);
+  if (session.toKit(t, port)) parts.push(`kit ${kitName((t.kitId && session.can('kits') && t.kitId) || session.s.kitActive || session.s.kitId)} en la compu`);
   return parts.join(' + ') || 'en silencio';
 }
 

@@ -134,6 +134,8 @@ export default function Estudio() {
               <a className="trk" href="#/datos" style={{ color: 'var(--sub)', paddingRight: 10 }}><Icon name="mas" size={14} />Datos<span className="badge-pro">PRO</span></a>
             </div>
             <div className="row" style={{ gap: 6 }}>
+              <Seg label="Quién toca la pista" items={[['vivo', 'Mosca'], ['congelado', 'Patrón'], ['ambos', 'Ambos']]} value={track.play || 'vivo'} onChange={(v) => { if (v !== 'vivo' && !track.frozen && !session.freeze(track.id)) session.setTrack(track.id, { play: v, frozen: Array.from({ length: 12 }, () => new Array(16).fill(0)) }); else session.setTrack(track.id, { play: v }); }} />
+              <button type="button" className="btn" onClick={() => { if (!session.freeze(track.id)) session.set({ notice: 'congelar' }); }} title="Guarda el último compás de la mosca como patrón editable"><Icon name="nieve" size={14} />Congelar</button>
               <button type="button" className="btn" onClick={() => session.mutateTrack()} title="Reparte las neuronas entre los pads respetando graves, medios y agudos"><Icon name="dado" size={14} />Mutar</button>
               <button type="button" className="iconbtn" disabled={!canUndo} aria-label="Deshacer mutación" onClick={() => session.undoMutate()}><Icon name="deshacer" size={14} /></button>
             </div>

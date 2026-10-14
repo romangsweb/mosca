@@ -52,7 +52,7 @@ export default function Tomas() {
     if (fmtSel === 'mid') download(takeToMidi(take), `${base}.mid`);
     if (fmtSel === 'csv') download(takeToCsv(take), `${base}-disparos.csv`);
     if (fmtSel === 'real') { const blob = await session.getAudio(take.id); if (blob) { try { const buf = await session.synth.ensure().decodeAudioData(await blob.arrayBuffer()); download(wavBlob(buf), `${base}-audio-real.wav`); } catch { download(blob, `${base}-audio-real.webm`); } } }
-    if (fmtSel === 'wav') download(await renderWav(take, (e) => e.voice, session.synth.kit), `${base}-${session.s.kitActive || 'kit'}.wav`);
+    if (fmtSel === 'wav') download(await renderWav(take, (e) => e.voice, session.synth.kit, session.wavOptions), `${base}-${session.s.kitActive || 'kit'}.wav`);
     setBusy(false); setExp(false);
   };
   return (
