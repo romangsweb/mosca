@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Component, useEffect, useState } from 'react';
 import { session } from './engine/session.js';
 import { useS, useTick, Icon, Logo } from './ui/kit.jsx';
 import { TrialBadge } from './ui/Paywall.jsx';
@@ -26,6 +26,23 @@ const TIPS = {
 };
 const SYNC_LABEL = { off: 'Guardado en este navegador', local: 'Guardado en este navegador', sincronizando: 'Sincronizando…', sincronizado: 'Sincronizado con tu cuenta', error: 'Sin conexión · guardado local' };
 const initials = (s) => (s.alias || s.user?.email || 'FP').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 2).toUpperCase() || 'FP';
+// Si una sección falla, no se queda la pantalla en negro: se muestra cómo salir.
+class Boundary extends Component {
+  state = { err: null };
+  static getDerivedStateFromError(err) { return { err }; }
+  componentDidCatch(err, info) { console.error('Fly Punch', err, info?.componentStack); }
+  render() {
+    if (!this.state.err) return this.props.children;
+    return (
+      <div className="stage" style={{ flexDirection: 'column', gap: 14, textAlign: 'center', padding: 24, minHeight: 360 }}>
+        <h2 style={{ fontSize: 20 }}>Algo falló en esta sección</h2>
+        <p style={{ margin: 0, color: '#A6A6AE', maxWidth: 460 }}>Tus tomas y ajustes están a salvo. Vuelve al estudio o recarga la página; si se repite, cuéntanos qué hiciste.</p>
+        <code style={{ fontSize: 11, color: '#77777F', maxWidth: 520, overflow: 'hidden', textOverflow: 'ellipsis' }}>{String(this.state.err?.message || this.state.err)}</code>
+        <div className="row"><a className="btn lg primary" href="#/estudio" onClick={() => this.setState({ err: null })}>Volver al estudio</a><button type="button" className="btn lg" style={{ color: '#ECECEE', borderColor: 'rgba(255,255,255,.12)' }} onClick={() => location.reload()}>Recargar</button></div>
+      </div>
+    );
+  }
+}
 const route = () => (location.hash.replace(/^#\/?/, '') || 'estudio').split('?')[0];
 
 function Position() {
@@ -105,7 +122,7 @@ export default function App() {
           <a href="#/cuenta?ayuda" aria-current={undefined}><Icon name="docs" size={20} />Docs</a>
           <a href="#/cuenta?ajustes" aria-current={page === 'cuenta' ? 'page' : undefined}><Icon name="ajustes" size={20} />Ajustes</a>
         </nav>
-        <main className="main" id="main"><Page key={page} /></main>
+        <main className="main" id="main"><Boundary key={page}><Page /></Boundary></main>
       </div>
       <StatusBar s={s} />
       {s.notice === 'limite' && (

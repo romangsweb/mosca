@@ -47,7 +47,7 @@ export default function Cuenta() {
                 : <a className="btn lg primary" style={{ marginLeft: 'auto' }} href="#/bienvenida" aria-disabled={s.sync === 'off'}>{s.sync === 'off' ? 'Cuentas no configuradas' : 'Iniciar sesión o crear cuenta'}</a>}
             </div>
             <div className="field"><label htmlFor="alias">Nombre artístico</label><input id="alias" className="input" value={s.alias} placeholder="Peso Mosca" onChange={(e) => session.set({ alias: e.target.value }, true)} /></div>
-            <div className="row"><div className="stat"><div className="label">Tomas</div><div className="v">{s.takes.length} / 5</div></div><div className="stat"><div className="label">Notas grabadas</div><div className="v">{s.takes.reduce((a, t) => a + t.events.length, 0)}</div></div><div className="stat"><div className="label">Pistas</div><div className="v">{s.tracks.length}</div></div></div>
+            <div className="row"><div className="stat"><div className="label">Tomas</div><div className="v">{s.takes.length}{s.plan === 'pro' ? '' : ' / 5'}</div></div><div className="stat"><div className="label">Notas grabadas</div><div className="v">{s.takes.reduce((a, t) => a + (t.events?.length ?? t.nEvents ?? 0), 0)}</div></div><div className="stat"><div className="label">Pistas</div><div className="v">{s.tracks.length}</div></div></div>
             <div className="row" style={{ borderTop: '1px solid var(--line)', paddingTop: 14, flexWrap: 'wrap' }}>
               <button type="button" className="btn" onClick={exportAll}><Icon name="bajar" size={14} />Exportar respaldo (.json)</button>
               {s.user && <span className="muted" style={{ fontSize: 12, alignSelf: 'center' }}>Tus ajustes de sonido, pistas, kit y tomas viajan con tu cuenta.</span>}

@@ -60,10 +60,12 @@ function peaksOf(buf, n = 160) {
 }
 function Fader({ id, label, sensor, color, value, onChange }) {
   const f = value / 200;
+  const drag = (e) => { const r = e.currentTarget.getBoundingClientRect(); onChange(Math.round(Math.max(0, Math.min(1, (r.bottom - 14 - e.clientY) / (r.height - 28))) * 200)); };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, width: 110 }}>
       <span className="mono" style={{ fontSize: 16 }}>{value}<small className="muted" style={{ fontSize: 10 }}> Hz</small></span>
-      <div style={{ position: 'relative', width: 44, height: 280, borderRadius: 10, background: '#131315', border: '1px solid rgba(255,255,255,.07)' }}>
+      <div aria-hidden="true" onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); drag(e); }} onPointerMove={(e) => e.buttons && drag(e)}
+        style={{ position: 'relative', width: 44, height: 280, borderRadius: 10, background: '#131315', border: '1px solid rgba(255,255,255,.07)', cursor: 'ns-resize', touchAction: 'none' }}>
         <span style={{ position: 'absolute', left: '50%', top: 14, bottom: 14, width: 2, marginLeft: -1, background: '#26262B' }} />
         <span style={{ position: 'absolute', left: '50%', bottom: 14, height: `calc((100% - 28px) * ${f})`, width: 2, marginLeft: -1, background: color }} />
         <span style={{ position: 'absolute', left: 4, right: 4, bottom: `calc(3px + (100% - 28px) * ${f})`, height: 22, borderRadius: 5, background: 'linear-gradient(180deg,#2A2A2F,#1B1B1F)', border: '1px solid rgba(255,255,255,.12)', boxShadow: '0 2px 6px rgba(0,0,0,.6)' }}><span style={{ position: 'absolute', left: 6, right: 6, top: 10, height: 1, background: color }} /></span>
@@ -140,7 +142,7 @@ export default function Oido() {
       </div>
       <div className="studio-top" style={{ minHeight: 560 }}>
         <div className="stage">
-          <div className="vignette" style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at 50% 46%, rgba(255,106,26,.08), transparent 45%)' }} />
+          <div className="vignette" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(circle at 50% 46%, rgba(255,106,26,.08), transparent 45%)' }} />
           {src === 'mic' && (
             <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18, animation: 'rise .35s ease-out' }}>
               <div style={{ position: 'relative', width: 400, height: 400, display: 'grid', placeItems: 'center' }}>
