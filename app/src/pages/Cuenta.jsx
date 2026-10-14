@@ -10,6 +10,7 @@ const DOCS = [
     <p>En el K.O. II elige un kit y deja el grupo <code>C</code> para la pista Gusto y el grupo <code>A</code> para Oído. Pulsa <code>Tocar</code> (o la barra espaciadora).</p></>],
   ['Cómo piensa la mosca', <>
     <p>Fly Punch simula {session.D?.n || 'cientos de'} neuronas reales del conectoma <strong>FlyWire</strong> (v783) con el modelo de Shiu et al. (Nature, 2024): cada neurona acumula voltaje, dispara al pasar un umbral y empuja a las neuronas a las que está conectada, con los pesos medidos en el conectoma. Son cuatro circuitos del mismo cerebro —gusto, oído, olfato y cortejo—, elegidos simulando el cerebro completo (138 639 neuronas) y quedándonos con las que responden a cada estímulo.</p>
+    <p>Ajustes al modelo, para que los circuitos de olfato no se enciendan en avalancha: sin conexiones entre células de Kenyon ni entre neuronas olfativas (son axo-axónicas), sin sinapsis de neuromodulación (dopamina, serotonina, octopamina; no son excitación rápida) y sin las sinapsis químicas excitadoras de las interneuronas locales del lóbulo antenal (en la mosca actúan sobre todo por uniones eléctricas). Del cuerpo fungiforme se incluye una muestra de 40 células de Kenyon.</p>
     <p>Los sabores y sonidos entran como disparos al azar en los sensores. Lo que oyes es la respuesta del circuito: por ejemplo, el amargo activa inhibidoras que apagan a MN9, la neurona que hace comer a la mosca.</p>
     <p>Es un modelo simplificado: reproduce bien qué neuronas se activan, no su biología completa.</p></>],
   ['Pistas, grupos y Mutar', <>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { session } from '../engine/session.js';
 import { makeZip } from '../engine/zip.js';
+import { renderVideo, videoSupported } from '../engine/video.js';
 import { takeToMidi, takeToCsv, download, slug } from '../engine/midifile.js';
 import { renderWav, wavBlob } from '../engine/synth.js';
 import { FREE_TAKES } from '../engine/storage.js';
@@ -40,7 +41,7 @@ function RealAudio({ id }) {
 }
 
 export default function Tomas() {
-  const s = useS(), [sel, setSel] = useState(s.lastTake || s.takes[0]?.id), [playing, setPlaying] = useState(false), [exp, setExp] = useState(false), [fmtSel, setFmt] = useState('mid'), [busy, setBusy] = useState(false), [editing, setEditing] = useState(false);
+  const s = useS(), [sel, setSel] = useState(s.lastTake || s.takes[0]?.id), [playing, setPlaying] = useState(false), [exp, setExp] = useState(false), [fmtSel, setFmt] = useState('mid'), [busy, setBusy] = useState(false), [vid, setVid] = useState(null), [editing, setEditing] = useState(false);
   const take = s.takes.find((t) => t.id === sel) || s.takes[0], [loadErr, setLoadErr] = useState(null);
   useEffect(() => () => session.stopTake(), []);
   useEffect(() => { setLoadErr(null); if (take && !take.events) session.ensureEvents(take.id).catch(() => setLoadErr('No pudimos descargar esta toma. Revisa tu conexión.')); }, [take?.id, take?.events]);
@@ -53,6 +54,14 @@ export default function Tomas() {
     if (fmtSel === 'mid') download(takeToMidi(take), `${base}.mid`);
     if (fmtSel === 'csv') download(takeToCsv(take), `${base}-disparos.csv`);
     if (fmtSel === 'real') { const blob = await session.getAudio(take.id); if (blob) { try { const buf = await session.synth.ensure().decodeAudioData(await blob.arrayBuffer()); download(wavBlob(buf), `${base}-audio-real.wav`); } catch { download(blob, `${base}-audio-real.webm`); } } }
+    if (fmtSel === 'video') { // en tiempo real: dura lo que la toma
+      setVid({ pct: 0 });
+      try {
+        const { blob, ext } = await renderVideo(take, { useRealAudio: !!take.hasAudio, onProgress: (p) => setVid({ pct: p }) });
+        const file = new File([blob], `${base}-fly-punch.${ext}`, { type: blob.type });
+        setVid({ pct: 1, file, share: !!navigator.canShare?.({ files: [file] }) }); setBusy(false); return; // el modal sigue abierto para descargar o compartir
+      } catch (e) { console.warn('video', e); setVid({ error: true }); setBusy(false); return; }
+    }
     if (fmtSel === 'stems') { // una pista = un WAV con su kit y efectos + su MIDI, todo en un .zip con el mismo inicio para alinearlos en tu DAW
       const files = [];
       for (const tr of take.tracks) {
@@ -128,12 +137,23 @@ export default function Tomas() {
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="exp-t">
             <h2 id="exp-t" style={{ fontSize: 18 }}>Exportar «{take.name}»</h2>
             <div role="radiogroup" aria-label="Formato" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {[...(take.hasAudio ? [['real', 'Audio real (.wav)', 'Lo que sonó en tus aparatos, grabado desde tu interfaz.']] : []), ['stems', 'Pistas separadas (.zip)', 'Un WAV y un MIDI por pista, alineados, para terminar la canción en tu DAW.'], ['mid', 'MIDI (.mid)', 'Una pista por pista de Fly Punch. Ábrelo en Ableton, Logic o FL Studio.'], ['csv', 'CSV de disparos', 'Tiempo, neurona, nota y velocidad de cada disparo.'], ['wav', 'Audio (.wav)', 'Con el kit de la librería que tengas elegido (no con los sonidos de tu aparato).']].map(([id, l, d]) => (
+              {[...(take.hasAudio ? [['real', 'Audio real (.wav)', 'Lo que sonó en tus aparatos, grabado desde tu interfaz.']] : []), ...(videoSupported() ? [['video', 'Video para redes (vertical)', 'La toma con el cerebro que la tocó, lista para Instagram, TikTok o Reels. Se graba en tiempo real.']] : []), ['stems', 'Pistas separadas (.zip)', 'Un WAV y un MIDI por pista, alineados, para terminar la canción en tu DAW.'], ['mid', 'MIDI (.mid)', 'Una pista por pista de Fly Punch. Ábrelo en Ableton, Logic o FL Studio.'], ['csv', 'CSV de disparos', 'Tiempo, neurona, nota y velocidad de cada disparo.'], ['wav', 'Audio (.wav)', 'Con el kit de la librería que tengas elegido (no con los sonidos de tu aparato).']].map(([id, l, d]) => (
                 <button key={id} type="button" role="radio" aria-checked={fmtSel === id} className="radio-card" disabled={(id === 'wav' || id === 'stems') && !session.can('wav')} style={(id === 'wav' || id === 'stems') && !session.can('wav') ? { opacity: 0.55, cursor: 'not-allowed' } : undefined} onClick={() => setFmt(id)}><span className="o" /><span style={{ flex: 1 }}><span style={{ display: 'block', fontWeight: 600 }}>{l}</span><span className="muted" style={{ fontSize: 12 }}>{d}</span></span>{id === 'wav' && !session.can('wav') && <span className="badge-pro">PRO</span>}</button>
               ))}
             </div>
             {!session.can('wav') && <a href="#/cuenta?plan" className="muted" style={{ fontSize: 12 }}>WAV es parte de Pro · {session.canTrial ? 'pruébalo 7 días gratis' : 'ver planes'} →</a>}
-            <div className="row" style={{ justifyContent: 'flex-end' }}><button type="button" className="btn lg" onClick={() => setExp(false)}>Cancelar</button><button type="button" className="btn lg primary" disabled={busy} onClick={doExport}>{busy ? 'Preparando…' : 'Descargar'}</button></div>
+            {vid && fmtSel === 'video' && (
+              <div className="well" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {vid.error ? <span style={{ color: '#FF8A4D', fontSize: 12.5 }}>No se pudo grabar el video en este navegador.</span> : vid.file ? (
+                  <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ flex: 1, fontSize: 12.5 }}>Listo: {vid.file.name}</span>
+                    <button type="button" className="btn primary" onClick={() => download(vid.file, vid.file.name)}>Descargar</button>
+                    {vid.share && <button type="button" className="btn acc" onClick={() => navigator.share({ files: [vid.file], title: take.name, text: 'Un cerebro real de mosca tocando · flypunch.buildations.com' }).catch(() => {})}>Compartir</button>}
+                  </div>
+                ) : <><span className="mono" style={{ fontSize: 11 }}>GRABANDO VIDEO · {Math.round(vid.pct * 100)} %</span><div style={{ height: 6, borderRadius: 3, background: 'var(--line)' }}><div style={{ height: '100%', width: `${vid.pct * 100}%`, borderRadius: 3, background: 'var(--acc)' }} /></div><span className="dim" style={{ fontSize: 11 }}>Deja esta pestaña abierta mientras se graba.</span></>}
+              </div>
+            )}
+            <div className="row" style={{ justifyContent: 'flex-end' }}><button type="button" className="btn lg" onClick={() => { setExp(false); setVid(null); }}>{vid?.file ? 'Cerrar' : 'Cancelar'}</button>{!(vid?.file && fmtSel === 'video') && <button type="button" className="btn lg primary" disabled={busy} onClick={doExport}>{busy ? (fmtSel === 'video' ? 'Grabando…' : 'Preparando…') : fmtSel === 'video' ? 'Crear video' : 'Descargar'}</button>}</div>
           </div>
         </div>
       )}

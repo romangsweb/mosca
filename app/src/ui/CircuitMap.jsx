@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { session } from '../engine/session.js';
 
-// Mapa del circuito (2D): la nube del cerebro de fondo, las 818 neuronas en su posición real,
+// Mapa del circuito (2D): la nube del cerebro de fondo, las neuronas de los circuitos en su posición real,
 // y las 12 neuronas de la pista dibujadas como esquema (sensores → interneuronas → salida)
 // con sus conexiones reales del conectoma. Cada disparo enciende un halo y manda un pulso por sus conexiones.
 const ACC = [255, 106, 26], STEEL = [125, 147, 178], WHITE = [236, 236, 238];
@@ -30,13 +30,13 @@ function buildGraph(D, pads) {
 }
 function column(p, k) {
   if (k === 11) return 3; // la salida de la pista (MN9 o DNg35)
-  if (p.clase === 'sensor') return 0;
+  if (p.clase === 'sensor' || p.sentido) return 0; // entradas del circuito (sensores o neuronas que se estimulan directo, como pC1)
   if (p.clase === 'motoneurona') return 3;
   if (p.clase === 'descendente') return 2.2;
   return p.inhibidora ? 1 : 1.4;
 }
 
-export default function CircuitMap({ selTrack, selPad, onPick }) {
+export default function CircuitMap({ selTrack, selPad, onPick, sense }) {
   const cv = useRef(null), st = useRef({});
   useEffect(() => {
     const D = session.D, c = cv.current, g = c.getContext('2d'), N = D.n;
@@ -140,7 +140,7 @@ export default function CircuitMap({ selTrack, selPad, onPick }) {
     return () => { cancelAnimationFrame(raf); off(); c.removeEventListener('pointermove', move); c.removeEventListener('click', click); };
   }, []);
   useEffect(() => { st.current.onPick = onPick; }, [onPick]);
-  useEffect(() => { st.current.setTrack?.(selTrack); }, [selTrack]);
+  useEffect(() => { st.current.setTrack?.(selTrack); }, [selTrack, sense]); // también al cambiar el circuito de la pista
   useEffect(() => { st.current.selPad = selPad; }, [selPad]);
   return <canvas ref={cv} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} role="img" aria-label="Mapa del circuito: sensores, interneuronas y salida, con sus conexiones reales del conectoma" />;
 }

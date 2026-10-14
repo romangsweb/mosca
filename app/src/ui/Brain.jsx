@@ -6,8 +6,8 @@ import { session } from '../engine/session.js';
 const UM = 50;
 const VIEWS = { Frontal: [0, 0.3, 22], Dorsal: [0, 22, 0.01], Lateral: [22, 0.3, 0], Circuito: null };
 
-// Visor 3D: nube del cerebro completo + 818 neuronas del circuito; se encienden al disparar.
-export default function Brain({ view, selTrack, selPad, onPick }) {
+// Visor 3D: nube del cerebro completo + neuronas de los circuitos; se encienden al disparar.
+export default function Brain({ view, selTrack, selPad, onPick, sense }) {
   const host = useRef(null), api = useRef(null);
   useEffect(() => {
     const D = session.D, el = host.current, N = D.n;
@@ -107,7 +107,7 @@ export default function Brain({ view, selTrack, selPad, onPick }) {
     return () => { cancelAnimationFrame(raf); off(); ro.disconnect(); renderer.dispose(); renderer.domElement.remove(); tags.forEach((t) => t.remove()); };
   }, []);
   useEffect(() => { api.current.onPick = onPick; }, [onPick]);
-  useEffect(() => { api.current.setPads(selTrack, selPad); }, [selTrack, selPad]);
+  useEffect(() => { api.current.setPads(selTrack, selPad); }, [selTrack, selPad, sense]);
   useEffect(() => { api.current.setView(view); }, [view]);
   return <div ref={host} style={{ position: 'absolute', inset: 0 }}><div className="tags" /></div>;
 }

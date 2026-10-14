@@ -317,7 +317,7 @@ export class Session {
   setTrackKit(tid, id) { if (id && !this.can('kits')) { location.hash = '#/cuenta?plan'; return; } this.setTrack(tid, { kitId: id || null }); this.loadKit(); }
   setFx(patch, persist = true) {
     if ('sc' in patch) this.synth.sc = patch.sc; const fx = { ...FX_DEFAULT, ...this.s.fx, ...patch }; this.set({ fx }, persist); this.synth.setFx(fx, this.ko.internalBpm || this.s.bpm); }
-  get wavOptions() { return { tuneFor: (e) => { const t = this.track(e.track); return t?.tune?.[t.map[e.pad]] || 0; }, fx: this.s.fx, bpm: this.ko.internalBpm || this.s.bpm, sends: Object.fromEntries(this.s.tracks.map((t) => [t.id, { rev: t.rev ?? 0, dly: t.dly ?? 0 }])), kits: this.synth.kits, trackKit: this.synth.trackKit }; }
+  get wavOptions() { return { padFor: (e) => { const t = this.track(e.track); return t ? this.padSound(t, e.pad) : null; }, fx: this.s.fx, bpm: this.ko.internalBpm || this.s.bpm, sends: Object.fromEntries(this.s.tracks.map((t) => [t.id, { rev: t.rev ?? 0, dly: t.dly ?? 0 }])), kits: this.synth.kits, trackKit: this.synth.trackKit }; }
   // ---------- congelar: el compás que te gustó queda como patrón editable ----------
   freeze(tid = this.s.selTrack) {
     const t = this.track(tid), lanes = this.live.lanes[tid]; if (!t || !lanes) return false;
@@ -389,7 +389,8 @@ export class Session {
     return r;
   }
   // afinación por pad (semitonos) sobre la del kit; la pista Oído suena 3 semitonos arriba para distinguirse
-  sound(r, vel, when, t, k = null) { if (r.voice === 'tono') this.synth.play('tono', vel, when, r.note, t.id); else this.synth.play(r.voice, vel, when, (t.id === 'oido' ? 3 : 0) + (k != null ? t.tune?.[t.map[k]] || 0 : 0), t.id); }
+  padSound(t, k) { const off = t.map[k]; return { tune: t.tune?.[off] || 0, decay: t.decay?.[off] ?? 1, pan: t.pan?.[off] || 0 }; }
+  sound(r, vel, when, t, k = null) { const pd = k != null ? this.padSound(t, k) : null; if (r.voice === 'tono') this.synth.play('tono', vel, when, r.note, t.id, pd); else this.synth.play(r.voice, vel, when, (t.id === 'oido' ? 3 : 0) + (pd?.tune || 0), t.id, pd); }
   setBpm(b) { const bpm = Math.max(40, Math.min(240, Math.round(b))); this.ko.internalBpm = bpm; this.set({ bpm }, true); if (this.synth.chain) this.synth.setFx(this.s.fx, bpm); }
   setClockOut(v) { this.ko.clockOut = v; this.set({ clockOut: v }, true); }
   setLatency(v) { this.ko.latency = v; this.set({ latency: v }, true); }
@@ -562,7 +563,7 @@ export class Session {
     await takeDel(id); audioDel(id); this.set({ takes: this.s.takes.filter((x) => x.id !== id) });
   }
   // reproducir una toma: re-envía notas al K.O. y/o voces internas
-  playTake(take, onEnd) {
+  playTake(take, onEnd, { kitOnly = false } = {}) { // kitOnly: solo el sonido de la compu (para grabar el video)
     this.stopTake(); this.synth.ensure();
     const t0 = performance.now() + 60, timers = [];
     for (const e of take.events) {
@@ -570,8 +571,8 @@ export class Session {
         const at = t0 + e.t;
         const port = (e.port && this.ko.outPort(e.port)) || this.ko.output;
         const tr = this.track(e.track) || this.track();
-        if (this.toDevice(tr, port)) this.ko.hit(e.note, e.vel, e.ch, 60, at, port);
-        if (this.toKit(tr, port)) e.voice === 'tono' ? this.synth.play('tono', e.vel, at, e.note, tr.id) : this.synth.play(e.voice, e.vel, at, (e.track === 'oido' ? 3 : 0) + (tr.tune?.[tr.map[e.pad]] || 0), tr.id);
+        if (!kitOnly && this.toDevice(tr, port)) this.ko.hit(e.note, e.vel, e.ch, 60, at, port);
+        if (kitOnly || this.toKit(tr, port)) e.voice === 'tono' ? this.synth.play('tono', e.vel, at, e.note, tr.id) : this.synth.play(e.voice, e.vel, at, (e.track === 'oido' ? 3 : 0) + this.padSound(tr, e.pad).tune, tr.id, this.padSound(tr, e.pad));
       }, Math.max(0, e.t - 40)));
     }
     timers.push(setTimeout(() => { this.takeTimers = null; onEnd?.(); }, take.durMs + 100));

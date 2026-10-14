@@ -107,7 +107,7 @@ export default function Estudio() {
     <div className="page" style={{ gap: 10 }}>
       <div className="studio-top">
         <section className="screen" aria-label="Cerebro de la mosca">
-          <div className="grid" />{view === 'Mapa' ? <CircuitMap selTrack={track.id} selPad={selPad} onPick={onPick} /> : <Suspense fallback={<div className="mono" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#77777F', fontSize: 11 }}>CARGANDO 3D…</div>}><Brain view={view} selTrack={track.id} selPad={selPad} onPick={onPick} /></Suspense>}<div className="vignette" />
+          <div className="grid" />{view === 'Mapa' ? <CircuitMap selTrack={track.id} selPad={selPad} onPick={onPick} sense={track.sense} /> : <Suspense fallback={<div className="mono" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#77777F', fontSize: 11 }}>CARGANDO 3D…</div>}><Brain view={view} selTrack={track.id} selPad={selPad} onPick={onPick} sense={track.sense} /></Suspense>}<div className="vignette" />
           <Hud />
           <div className="tr"><Seg onScreen label="Vista" items={[['Mapa', 'Mapa'], ['Frontal', '3D'], ['Dorsal', 'Dorsal'], ['Lateral', 'Lateral']]} value={view} onChange={setView} /></div>
           <div className="bl">

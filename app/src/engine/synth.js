@@ -96,10 +96,11 @@ export class Synth {
   setFx(fx, bpm) { this.ensure(); this.chain.set(fx, bpm); }
   setSends(id, sends) { this.sends[id] = sends; if (this.chain) this.chain.bus(id, sends); }
   // at: performance.now() en ms · track: id de la pista (su bus, su kit y sus envíos)
-  play(name, vel, at = performance.now(), pitch = 0, track = null) {
+  play(name, vel, at = performance.now(), pitch = 0, track = null, pad = null) {
     if (!this.enabled || !name) return;
     const ctx = this.ensure(), t = Math.max(ctx.currentTime, ctx.currentTime + (at - performance.now()) / 1000);
-    const dest = track ? this.chain.bus(track, this.sends[track]) : this.out, kit = (track && this.kits[this.trackKit[track]]) || this.kit;
+    const kit = (track && this.kits[this.trackKit[track]]) || this.kit;
+    const dest = padOut(ctx, track ? this.chain.bus(track, this.sends[track]) : this.out, t, pad || undefined, kit?.[name]?.duration || 0.5);
     if (name !== 'tono' && kit?.[name]) playBuffer(ctx, dest, kit[name], vel, t, pitch);
     else voice(ctx, dest, name, vel, t, pitch);
     // sidechain: el bombo «empuja» a las demás pistas (baja su volumen un instante y vuelve)
@@ -112,6 +113,14 @@ export class Synth {
 
 // Render de una toma a WAV con las voces internas.
 // toca una muestra del kit: velocidad → volumen, pitch → semitonos
+// caída (0.1–1: qué tanto del sonido se deja sonar) y paneo (−1 izq · 1 der) por pad
+export function padOut(ctx, dest, t, { decay = 1, pan = 0 } = {}, len = 0.5) {
+  if (decay >= 0.99 && !pan) return dest;
+  const g = ctx.createGain(); let out = g;
+  if (pan) { const p = ctx.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan)); g.connect(p).connect(dest); } else g.connect(dest);
+  if (decay < 0.99) { const end = t + Math.max(0.02, len * decay); g.gain.setValueAtTime(1, Math.max(t, end - 0.04)); g.gain.linearRampToValueAtTime(0.0001, end); }
+  return out;
+}
 export function playBuffer(ctx, dest, buffer, vel, t, pitch = 0) {
   const src = ctx.createBufferSource(), g = ctx.createGain(); src.buffer = buffer; src.playbackRate.value = Math.pow(2, pitch / 12);
   g.gain.value = Math.pow(Math.max(0.05, vel / 127), 1.3); src.connect(g).connect(dest); src.start(t);
@@ -122,8 +131,9 @@ export async function renderWav(take, kitFor, kit = null, opt = {}) {
   const ctx = new OfflineAudioContext(2, Math.ceil(sr * dur), sr), chain = buildChain(ctx, ctx.destination, opt.fx, opt.bpm);
   for (const id of new Set(take.events.map((e) => e.track))) chain.bus(id || 'x', opt.sends?.[id]);
   for (const e of take.events) {
-    const n = kitFor(e), t = e.t / 1000 + 0.05, p = n === 'tono' ? e.note : (e.track === 'oido' ? 3 : 0) + (opt.tuneFor?.(e) || 0);
-    const dest = chain.bus(e.track || 'x', opt.sends?.[e.track]), k = (opt.kits && opt.trackKit && opt.kits[opt.trackKit[e.track]]) || kit;
+    const n = kitFor(e), t = e.t / 1000 + 0.05, p = n === 'tono' ? e.note : (e.track === 'oido' ? 3 : 0) + (opt.padFor?.(e)?.tune || 0);
+    const k = (opt.kits && opt.trackKit && opt.kits[opt.trackKit[e.track]]) || kit, pd = opt.padFor?.(e);
+    const dest = padOut(ctx, chain.bus(e.track || 'x', opt.sends?.[e.track]), t, pd || undefined, k?.[n]?.duration || 0.5);
     if (n !== 'tono' && k?.[n]) playBuffer(ctx, dest, k[n], e.vel, t, p); else voice(ctx, dest, n, e.vel, t, p);
     const sc = opt.fx?.sc || 0;
     if (n === 'bombo' && sc > 0) for (const [id, b] of Object.entries(chain.buses)) { if (id === e.track) continue; const gn = b.in.gain; gn.setValueAtTime(1, t); gn.linearRampToValueAtTime(1 - sc * 0.85 * Math.min(1, e.vel / 110), t + 0.005); gn.linearRampToValueAtTime(1, t + 0.06 + sc * 0.18); }

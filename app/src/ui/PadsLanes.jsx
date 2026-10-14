@@ -58,7 +58,7 @@ export function Lanes({ track, selPad }) {
     raf = requestAnimationFrame(loop);
     const unsub = session.subscribe(paint);
     return () => { off(); unsub(); cancelAnimationFrame(raf); };
-  }, [track.id]);
+  }, [track.id, track.sense]);
   return (
     <div className="lanes">
       <div className="lane-names">{pads.map((p, k) => <span key={k} className={k === selPad ? 'sel' : ''}>{p.tipo}</span>)}</div>
