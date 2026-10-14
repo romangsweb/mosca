@@ -10,16 +10,18 @@ import Tomas from './pages/Tomas.jsx';
 import Cuenta from './pages/Cuenta.jsx';
 import Bienvenida from './pages/Bienvenida.jsx';
 import Equipo from './pages/Equipo.jsx';
+import Cancion from './pages/Cancion.jsx';
 
 const NAV = [
-  ['estudio', 'Estudio', 'estudio'], ['equipo', 'Equipo', 'usb'], ['oido', 'Oído', 'oido'], ['datos', 'Datos', 'datos', true], ['sonido', 'Sonido', 'sonido'], ['tomas', 'Tomas', 'tomas'],
+  ['estudio', 'Estudio', 'estudio'], ['equipo', 'Equipo', 'usb'], ['oido', 'Oído', 'oido'], ['datos', 'Datos', 'datos', true], ['cancion', 'Canción', 'cancion', true], ['sonido', 'Sonido', 'sonido'], ['tomas', 'Tomas', 'tomas'],
 ];
-const PAGES = { estudio: Estudio, equipo: Equipo, oido: Oido, datos: Datos, sonido: Sonido, tomas: Tomas, cuenta: Cuenta };
+const PAGES = { estudio: Estudio, equipo: Equipo, cancion: Cancion, oido: Oido, datos: Datos, sonido: Sonido, tomas: Tomas, cuenta: Cuenta };
 const TIPS = {
   estudio: ['Gira Dulce y Amargo: es lo que prueba la mosca.', 'Pulsa Tocar (o la barra espaciadora). Cada neurona que dispara toca su pad.', 'Toca un pad o una neurona del cerebro para inspeccionarla.'],
   oido: ['Elige micrófono, un archivo o los deslizadores.', 'Graves, medios y agudos estimulan tres grupos de sensores de la antena.', 'La pista Oído suena en el grupo A del K.O. II.'],
   datos: ['Sube un CSV o usa el ejemplo.', 'Asigna columnas a sabores o sonidos.', 'Cada fila dura un compás: escucha cómo cambian tus datos.'],
   equipo: ['Elige tu aparato en la galería: K.O. II, TR-8S, Digitakt, Ableton y más.', 'Si no aparece, usa Personalizado y escribe sus notas.', 'Pulsa «Probar» para oír 8 notas antes de tocar.'],
+  cancion: ['Guarda escenas en la tira del Estudio.', 'Ordénalas aquí con sus compases.', 'Tocar la canción: la mosca cambia de escena al compás.'],
   sonido: ['Librería: elige un kit y pulsa Escuchar.', 'Kit: qué voz tiene cada pad. Mutar respeta estos roles.', 'MIDI: reloj, latencia y control de efectos del K.O. II.'],
   tomas: ['Graba con el punto rojo o la tecla R.', 'Cada toma guarda las notas de todas las pistas.', 'Exporta a MIDI para tu DAW, o a WAV con los sonidos internos.'],
   cuenta: ['Inicia sesión para llevar tus ajustes a cualquier dispositivo.', 'Con cuenta, tus tomas se guardan en la nube.', 'Pro: modo Datos, tomas ilimitadas y WAV. Pruébalo 7 días gratis.'],
@@ -82,7 +84,12 @@ export default function App() {
     };
     addEventListener('keydown', k); return () => removeEventListener('keydown', k);
   }, []);
-  if (!s.ready) return <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: 'var(--sub)' }}><div className="row"><Logo /> Cargando el cerebro…</div></div>;
+  if (!s.ready) return (
+    <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: 'var(--sub)', textAlign: 'center', padding: 24 }}>
+      {s.loadError ? <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}><Logo /><strong style={{ color: 'var(--text)' }}>No pudimos cargar el cerebro</strong><span style={{ maxWidth: 420 }}>Revisa tu conexión y recarga. Si tienes otra pestaña de Fly Punch abierta, ciérrala.</span><code style={{ fontSize: 11 }}>{s.loadError}</code><button type="button" className="btn lg primary" onClick={() => location.reload()}>Recargar</button></div>
+        : <div className="row"><Logo /> Cargando el cerebro…</div>}
+    </div>
+  );
   if (!s.onboarded || page === 'bienvenida') return <Bienvenida />;
   const Page = PAGES[page] || Estudio;
   const night = s.theme === 'noche';
@@ -125,6 +132,9 @@ export default function App() {
         <main className="main" id="main"><Boundary key={page}><Page /></Boundary></main>
       </div>
       <StatusBar s={s} />
+      {s.notice === 'restauracion' && (
+        <div className="toast" role="status">No se pudo leer todo el guardado local (¿otra pestaña de Fly Punch abierta?). Cierra las demás pestañas y recarga.<button type="button" className="btn" onClick={() => location.reload()}>Recargar</button><button type="button" className="iconbtn" aria-label="Cerrar" onClick={() => session.set({ notice: null })}><Icon name="x" size={14} /></button></div>
+      )}
       {s.notice === 'limite' && (
         <div className="toast" role="status">Llegaste a 5 tomas guardadas en el plan Free. <a href="#/tomas" className="btn" onClick={() => session.set({ notice: null })}>Ver tomas</a><button type="button" className="iconbtn" aria-label="Cerrar" onClick={() => session.set({ notice: null })}><Icon name="x" size={14} /></button></div>
       )}

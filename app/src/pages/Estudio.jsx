@@ -6,6 +6,7 @@ import { useS, useTick, Icon, Knob, Seg, roleColor, ROLE_DESC } from '../ui/kit.
 import Brain from '../ui/Brain.jsx';
 import CircuitMap from '../ui/CircuitMap.jsx';
 import { Pads, Lanes } from '../ui/PadsLanes.jsx';
+import ScenesStrip from '../ui/Scenes.jsx';
 
 const PRESETS = { gusto: { dulce: ['Solo dulce', { dulce: 180, amargo: 0 }], veto: ['Veto amargo', { dulce: 150, amargo: 40 }], rampa: ['Mitad y mitad', { dulce: 90, amargo: 90 }] },
   oido: { voz: ['Voz', { jon_ce: 40, jon_f: 150, jon_dm: 40 }], bajo: ['Bajo', { jon_ce: 180, jon_f: 30, jon_dm: 0 }], brillo: ['Brillos', { jon_ce: 0, jon_f: 40, jon_dm: 170 }] } };
@@ -104,6 +105,7 @@ export default function Estudio() {
           <NeuronCard track={track} k={selPad} />
         </aside>
       </div>
+      <ScenesStrip />
       <div className="studio-bottom">
         <section className="panel pads-panel" style={{ gap: 8 }}>
           <div className="panel-head"><h2>Pads · {track.name}</h2>

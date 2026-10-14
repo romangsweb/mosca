@@ -35,6 +35,7 @@ export const ICONS = {
   check: 'M5 12.5l4.5 4.5L19 7.5',
   mas: 'M12 5v14M5 12h14', menos: 'M5 12h14', x: 'M6 6l12 12M18 6 6 18',
   chevron: 'M6 9l6 6 6-6',
+  cancion: 'M4 6h10M4 12h16M4 18h7M17 4v6M20 14v6',
 };
 export function Icon({ name, size = 18, stroke = 1.6, fill, style }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill={fill || 'none'} stroke={fill ? 'none' : 'currentColor'} strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={style}><path d={ICONS[name]} /></svg>;

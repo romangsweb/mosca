@@ -7,10 +7,11 @@ import { Synth, DEFAULT_KIT } from './synth.js';
 import { mutate, identity } from './mutate.js';
 import { kvGet, kvSet, takePut, takesAll, takeDel, FREE_TAKES, sampleGet, samplePut, sampleDel } from './storage.js';
 import { VOICES as KIT_VOICES, kitData, toBuffers } from './kits.js';
+import { SLOTS, FREE_SLOTS, snapshot, applyScene, morphRates, onBar } from './song.js';
 import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
-const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId'];
+const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph'];
 
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'] };
 export const SENSE_LABEL = { dulce: 'Dulce', amargo: 'Amargo', jon_ce: 'Graves', jon_f: 'Medios', jon_dm: 'Agudos' };
@@ -22,6 +23,7 @@ export const PRO_FEATURES = {
   tomas: 'Tomas ilimitadas en la nube',
   melodia: 'Modo melódico: escalas, bajo y melodía',
   kits: 'Librería completa de kits y tus propias muestras',
+  cancion: 'Modo canción y 8 escenas',
 };
 const NO_PLAN = { plan: 'free', planBase: 'free', trialEnds: null, trialUsed: false };
 const CURVES = { lineal: (x) => x, suave: (x) => Math.sqrt(x), dura: (x) => x * x };
@@ -37,6 +39,7 @@ const DEFAULTS = {
   density: 4, swing: 54, humanize: 4, curve: 'suave', velMin: 70, velMax: 127, ghost: true,
   sendMidi: true, clockOut: false, fxAuto: false, monitor: 'auto', latency: 0,
   device: 'ko2', port: null, devOverrides: {}, kitId: 'analogo',
+  scenes: {}, song: [], songLoop: true, morph: true,
   oidoSource: 'manual', dataMap: {}, perRow: 16,
 };
 
@@ -57,6 +60,9 @@ export class Session {
     });
   }
   async load() {
+    try { await this.loadCore(); } catch (e) { console.error('Fly Punch no pudo cargar el cerebro', e); this.set({ loadError: String(e?.message || e) }); }
+  }
+  async loadCore() {
     const [D, cloud] = await Promise.all([
       fetch(`${import.meta.env.BASE_URL}data/circuito-multi.json`).then((r) => r.json()),
       fetch(`${import.meta.env.BASE_URL}data/cerebro-nube.bin`).then((r) => r.arrayBuffer()),
@@ -67,16 +73,21 @@ export class Session {
       // historia por neurona (últimos HIST pasos): frecuencia suavizada y disparos crudos, para la gráfica del inspector
       this.live.rateHist[t.id] = [...Array(12)].map(() => new Float32Array(HIST)); this.live.spikes[t.id] = [...Array(12)].map(() => new Uint8Array(HIST));
     }
-    const saved = await kvGet('settings');
-    if (saved) Object.assign(this.s, { ...saved, tracks: saved.tracks?.map((t, i) => ({ ...DEFAULTS.tracks[i], ...t })) || this.s.tracks });
-    this.ko.internalBpm = this.s.bpm; this.ko.clockOut = this.s.clockOut; this.ko.latency = this.s.latency;
-    await this.refreshTakes();
-    if (cloudEnabled) {
-      try { const u = await currentUser(); if (u) await this.adoptUser(u); } catch (e) { console.warn('cuenta', e); }
-      onAuth((u) => { if (u && u.id !== this.s.user?.id) this.adoptUser(u); if (!u && this.s.user) { this.set({ user: null, ...NO_PLAN, sync: 'local' }); this.refreshTakes(); } });
-    }
+    // Restaurar ajustes, tomas y cuenta. Nada de esto puede dejar la app en «Cargando»: máximo 6 s y seguimos.
+    const restore = async () => {
+      const saved = await kvGet('settings');
+      if (saved) Object.assign(this.s, { ...saved, tracks: saved.tracks?.map((t, i) => ({ ...DEFAULTS.tracks[i], ...t })) || this.s.tracks });
+      this.ko.internalBpm = this.s.bpm; this.ko.clockOut = this.s.clockOut; this.ko.latency = this.s.latency;
+      await this.refreshTakes();
+      if (cloudEnabled) {
+        try { const u = await currentUser(); if (u) await this.adoptUser(u); } catch (e) { console.warn('cuenta', e); }
+        onAuth((u) => { if (u && u.id !== this.s.user?.id) this.adoptUser(u); if (!u && this.s.user) { this.set({ user: null, ...NO_PLAN, sync: 'local' }); this.refreshTakes(); } });
+      }
+    };
+    try { await Promise.race([restore(), new Promise((_, rej) => setTimeout(() => rej(new Error('restaurar tardó demasiado')), 6000))]); }
+    catch (e) { console.warn('Fly Punch arrancó sin restaurar todo:', e); this.s.notice = 'restauracion'; }
     this.s.ready = true; this.emit();
-    this.loadKit();
+    try { this.loadKit(); } catch (e) { console.warn('kit', e); }
     if (navigator.requestMIDIAccess) this.connect(true);
   }
   // ---------- store ----------
@@ -121,6 +132,25 @@ export class Session {
     catch (e) { console.warn('sincronizar', e); this.set({ sync: 'error' }); }
   }
   async logout() { await signOut(); this.set({ user: null, ...NO_PLAN, sync: 'local' }); this.loadKit(); await this.refreshTakes(); }
+  // ---------- escenas y canción ----------
+  slotAllowed(slot) { return SLOTS.indexOf(slot) < FREE_SLOTS || this.can('cancion'); }
+  saveScene(slot, name) {
+    if (!this.slotAllowed(slot)) { location.hash = '#/cuenta?plan'; return; }
+    const prev = this.s.scenes[slot];
+    this.set({ scenes: { ...this.s.scenes, [slot]: { name: name || prev?.name || `Escena ${slot}`, data: snapshot(this.s) } }, sceneNow: slot }, true);
+  }
+  deleteScene(slot) { const sc = { ...this.s.scenes }; delete sc[slot]; this.set({ scenes: sc, song: this.s.song.filter((r) => r.scene !== slot) }, true); }
+  renameScene(slot, name) { const sc = this.s.scenes[slot]; if (sc) this.set({ scenes: { ...this.s.scenes, [slot]: { ...sc, name } } }, true); }
+  // se aplica al inicio del siguiente compás si está tocando; si no, de inmediato
+  launchScene(slot) { if (!this.s.scenes[slot]) return; if (this.s.playing) this.set({ pendingScene: slot }); else applyScene(this, slot, { morph: false }); }
+  setSong(song) { this.set({ song }, true); }
+  startSong() {
+    if (!this.can('cancion')) { location.hash = '#/cuenta?plan'; return; }
+    const rows = this.s.song.filter((r) => this.s.scenes[r.scene]); if (!rows.length) return;
+    this.songPos = { row: 0, bars: this.s.playing ? -1 : 0 }; applyScene(this, rows[0].scene, { morph: false });
+    this.set({ songOn: true }); if (!this.s.playing) this.play();
+  }
+  stopSong() { this.songPos = null; this.set({ songOn: false }); }
   // ---------- librería de sonidos ----------
   // 'propio' = Mi kit: base Análogo + las muestras que subas por sonido (se guardan en este navegador)
   kitAllowed(id) { return id === 'analogo' || this.can('kits'); }
@@ -186,8 +216,8 @@ export class Session {
   setLatency(v) { this.ko.latency = v; this.set({ latency: v }, true); }
   get monitorOn() { return this.s.monitor === 'siempre' || (this.s.monitor === 'auto' && (!this.ko.connected || this.profile.kind === 'interno')); }
   // ---------- transporte ----------
-  play() { this.synth.ensure(); this.sim.reset(); this.live.step = 0; this.s.row = 0; this.ko.start(); this.set({ playing: true }); }
-  stop() { this.ko.stop(); if (this.s.rec) this.toggleRec(); this.set({ playing: false }); }
+  play() { this.synth.ensure(); this.sim.reset(); this.live.step = 0; this.s.row = 0; this.morphState = null; if (this.s.songOn) this.songPos = { row: 0, bars: 0 }; this.ko.start(); this.set({ playing: true }); }
+  stop() { this.ko.stop(); if (this.s.rec) this.toggleRec(); this.morphState = null; this.set({ playing: false, pendingScene: null }); }
   toggle() { this.s.playing ? this.stop() : this.play(); }
   // ---------- un paso de semicorchea ----------
   rates() {
@@ -196,6 +226,7 @@ export class Session {
     if (this.s.data && Object.keys(this.s.dataMap).length && this.can('datos')) {
       for (const [sense, ci] of Object.entries(this.s.dataMap)) if (ci !== '' && ci != null) r[sense] = this.s.data.cols[ci].norm[this.s.row] * 200;
     }
+    morphRates(this, r, this.live.step);
     // las pistas silenciadas no reciben estímulo de su sentido: así no ensucian el cerebro
     for (const t of this.s.tracks) if (!this.audible(t)) for (const k of SENSES[t.sense]) r[k] = 0;
     return r;
@@ -203,6 +234,7 @@ export class Session {
   step(n, at) {
     const s = this.s, D = this.D, L = this.live, stepMs = this.ko.stepMs;
     if (s.data && n > 0 && n % s.perRow === 0) { s.row = (s.row + 1) % s.data.rows; queueMicrotask(() => this.emit()); }
+    this.live.step = n; if (n % 16 === 0) onBar(this, n / 16);
     const R = this.rates(); L.lastRates = R;
     const cnt = this.sim.advance(s.density, R); L.counts = cnt;
     let active = 0; for (let i = 0; i < cnt.length; i++) if (cnt[i]) active++;
