@@ -1,4 +1,5 @@
 // Fly Punch · exportar tomas: MIDI estándar (formato 1, una pista por pista de Fly Punch) y CSV de disparos.
+import { midiSig } from './compas.js';
 const PPQ = 96;
 const vlq = (n) => { const b = [n & 0x7F]; while ((n >>= 7)) b.unshift((n & 0x7F) | 0x80); return b; };
 const str = (s) => [...new TextEncoder().encode(s)];
@@ -7,7 +8,8 @@ const chunk = (id, data) => [...str(id), (data.length >>> 24) & 255, (data.lengt
 export function takeToMidi(take, { namePads = true } = {}) {
   const msPerTick = 60000 / take.bpm / PPQ, tracks = [];
   const tempo = Math.round(60000000 / take.bpm);
-  tracks.push([0, 0xFF, 0x51, 3, (tempo >> 16) & 255, (tempo >> 8) & 255, tempo & 255, ...vlq(0), 0xFF, 0x03, ...vlq(str(take.name).length), ...str(take.name), 0, 0xFF, 0x2F, 0]);
+  const [nn, dd] = midiSig(take.compas);
+  tracks.push([0, 0xFF, 0x51, 3, (tempo >> 16) & 255, (tempo >> 8) & 255, tempo & 255, 0, 0xFF, 0x58, 4, nn, dd, dd === 3 ? 12 : 24, 8, ...vlq(0), 0xFF, 0x03, ...vlq(str(take.name).length), ...str(take.name), 0, 0xFF, 0x2F, 0]);
   for (const tr of take.tracks) {
     const evs = [];
     for (const e of take.events) if (e.track === tr.id) {

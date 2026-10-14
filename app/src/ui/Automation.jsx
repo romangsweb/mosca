@@ -14,14 +14,14 @@ function Lane({ lane, n }) {
     const c = cv.current, g = c.getContext('2d'), dpr = Math.min(2, devicePixelRatio), W = c.clientWidth, H = c.clientHeight;
     if (c.width !== Math.round(W * dpr) || c.height !== Math.round(H * dpr)) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); } // redimensionar solo si cambió (es caro)
     g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
-    const N = lane.pts.length, x = (i) => (i / N) * W, y = (v) => H - 3 - norm(t, v) * (H - 6);
-    g.fillStyle = 'rgba(255,255,255,.04)'; for (let b = 0; b < N / 16; b++) if (b % 2) g.fillRect(x(b * 16), 0, x(16), H);
+    const N = Math.min(lane.pts.length, (lane.len || 1) * session.C.len), B = session.C.len, x = (i) => (i / N) * W, y = (v) => H - 3 - norm(t, v) * (H - 6);
+    g.fillStyle = 'rgba(255,255,255,.04)'; for (let b = 0; b < N / B; b++) if (b % 2) g.fillRect(x(b * B), 0, x(B), H);
     g.strokeStyle = 'rgba(255,255,255,.08)'; for (let i = 0; i < N; i += 4) { g.beginPath(); g.moveTo(x(i) + 0.5, 0); g.lineTo(x(i) + 0.5, H); g.stroke(); }
-    g.beginPath(); let on = false; lane.pts.forEach((v, i) => { if (v == null) { on = false; return; } const X = x(i + 0.5), Y = y(v); on ? g.lineTo(X, Y) : g.moveTo(X, Y); on = true; });
+    g.beginPath(); let on = false; lane.pts.slice(0, N).forEach((v, i) => { if (v == null) { on = false; return; } const X = x(i + 0.5), Y = y(v); on ? g.lineTo(X, Y) : g.moveTo(X, Y); on = true; });
     g.strokeStyle = lane.mode === 'rec' ? '#E5484D' : lane.mode === 'off' ? '#55555C' : '#FF6A1A'; g.lineWidth = 2; g.stroke();
     if (session.s.playing) { const px = x((n % N) + 0.5); g.fillStyle = 'rgba(236,236,238,.7)'; g.fillRect(px, 0, 1.5, H); }
-  }, [lane.pts, lane.mode, lane.target, session.s.playing ? n : -1]);
-  const at = (e) => { const r = cv.current.getBoundingClientRect(), N = lane.pts.length; return [Math.max(0, Math.min(N - 1, Math.floor(((e.clientX - r.left) / r.width) * N))), denorm(t, 1 - (e.clientY - r.top) / r.height)]; };
+  }, [lane.pts, lane.mode, lane.target, session.s.compas, session.s.playing ? n : -1]);
+  const at = (e) => { const r = cv.current.getBoundingClientRect(), N = Math.min(lane.pts.length, (lane.len || 1) * session.C.len); return [Math.max(0, Math.min(N - 1, Math.floor(((e.clientX - r.left) / r.width) * N))), denorm(t, 1 - (e.clientY - r.top) / r.height)]; };
   const down = (e) => { e.currentTarget.setPointerCapture(e.pointerId); const [i, v] = at(e); last.current = [i, v]; session.drawAuto(lane.id, i, i, v, v); };
   const move = (e) => { if (!last.current) return; const [i, v] = at(e); session.drawAuto(lane.id, last.current[0], i, last.current[1], v); last.current = [i, v]; };
   const M = (mode, label, icon, color) => <button type="button" className="iconbtn" aria-pressed={lane.mode === mode} title={label} aria-label={label} onClick={() => session.setAutoLane(lane.id, { mode })} style={lane.mode === mode ? { color, borderColor: color } : undefined}><Icon name={icon} size={12} fill={icon === 'play' ? 'currentColor' : undefined} /></button>;

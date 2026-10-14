@@ -58,6 +58,7 @@ h1 { font-size: 20px; } h2 { font-size: 12px; letter-spacing: .01em; }
 .bpm { display: flex; align-items: center; }
 .bpm input { width: 44px; border: 0; background: transparent; text-align: center; font: 500 15px 'JetBrains Mono', monospace; -moz-appearance: textfield; }
 .bpm input::-webkit-inner-spin-button { display: none; }
+.transport .tsel { width: 62px; min-width: 0; flex: none; appearance: auto; height: 30px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--text); font-size: 12px; padding: 0 6px; cursor: pointer; }
 .bpm button { width: 24px; height: 36px; border: 0; background: transparent; color: var(--sub); }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; background: var(--chip); color: var(--sub); font: 500 10px 'JetBrains Mono', monospace; letter-spacing: .08em; white-space: nowrap; }
 .chip.acc { background: var(--acc-soft); color: var(--acc); }
@@ -236,3 +237,5 @@ button, .btn, .iconbtn, .pad, .cell, .seg button, .knob svg, input[type=range] {
 .cell.out { opacity: .25; }
 .lane-grid.edit .cell.out { cursor: default; }
 .cell.on.half { box-shadow: inset 0 0 0 1.5px var(--acc); background-image: repeating-linear-gradient(135deg, rgba(255,106,26,.35) 0 2px, transparent 2px 5px); }
+/* el chip del reloj solo cabe en pantallas anchas; el estado sigue visible en Sonido › MIDI y reloj */
+@media (max-width: 1599px) { .transport .clk:not(.acc) { display: none; } }

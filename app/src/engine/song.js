@@ -40,12 +40,12 @@ export function onBar(session, bar) {
     if (bars >= (s.song[row]?.bars || 1)) {
       row++; bars = 0;
       if (row >= s.song.length) { if (s.songLoop) row = 0; else { session.songPos = null; queueMicrotask(() => { session.set({ songOn: false }); session.stop(); }); return; } }
-      applyScene(session, s.song[row].scene, { step: bar * 16 });
+      applyScene(session, s.song[row].scene, { step: bar * session.C.len });
     }
     session.songPos = { row, bars }; queueMicrotask(() => session.emit());
     return;
   }
-  if (s.pendingScene) applyScene(session, s.pendingScene, { step: bar * 16 });
+  if (s.pendingScene) applyScene(session, s.pendingScene, { step: bar * session.C.len });
 }
 
 // Canción de ejemplo a partir de lo que suena ahora: cuatro partes que cambian lo que la mosca siente.

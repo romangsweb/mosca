@@ -11,7 +11,7 @@ function Timeline({ s }) {
   useTick(15);
   const rows = s.song, total = rows.reduce((a, r) => a + r.bars, 0) || 1, pos = session.songPos, L = session.live;
   let before = 0; if (s.songOn && pos) for (let i = 0; i < pos.row; i++) before += rows[i]?.bars || 0;
-  const head = s.songOn && pos ? (before + Math.max(0, pos.bars) + (s.playing ? (L.step % 16) / 16 : 0)) / total : null;
+  const head = s.songOn && pos ? (before + Math.max(0, pos.bars) + (s.playing ? (L.step % session.C.len) / session.C.len : 0)) / total : null;
   if (!rows.length) return (
     <div className="mono" style={{ flex: 'none', height: 64, borderRadius: 10, background: 'var(--screen)', display: 'grid', placeItems: 'center', color: '#77777F', fontSize: 11, letterSpacing: '.06em' }}>EL ARREGLO ESTÁ VACÍO · AÑADE ESCENAS ABAJO</div>
   );
@@ -129,7 +129,7 @@ function Arreglo({ s }) {
 
 export default function Cancion() {
   const s = useS(), [ask, setAsk] = useState(false), saved = SLOTS.filter((x) => s.scenes[x]);
-  const rows = s.song, playable = rows.some((r) => s.scenes[r.scene]), total = rows.reduce((a, r) => a + r.bars, 0), secs = Math.round(total * 16 * session.ko.stepMs / 1000);
+  const rows = s.song, playable = rows.some((r) => s.scenes[r.scene]), total = rows.reduce((a, r) => a + r.bars, 0), secs = Math.round(total * session.C.len * session.ko.stepMs / 1000);
   if (!session.can('cancion')) return (
     <div className="page">
       <div className="page-head"><div><h1 className="row" style={{ gap: 10 }}>Canción <span className="badge-pro">PRO</span></h1><p>Ordena escenas en el tiempo: intro, subida, caída. La mosca toca la canción completa y cambia de escena al compás.</p></div></div>

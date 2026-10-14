@@ -5,6 +5,7 @@ import { session } from '../engine/session.js';
 import { PAD_KEYS, GROUP_BASE } from '../engine/midi.js';
 import { VOICES, VOICE_CAT, DEFAULT_KIT } from '../engine/synth.js';
 import { useS, Seg, Icon } from '../ui/kit.jsx';
+import { COMPASES, compas } from '../engine/compas.js';
 
 function Slider({ id, label, value, min, max, unit, help, onChange, color }) {
   return (
@@ -29,7 +30,7 @@ export default function Sonido() {
   const setTab = (t) => { setTabS(t); history.replaceState(null, '', `#/sonido?${t}`); };
   const curve = { lineal: (x) => x, suave: (x) => Math.sqrt(x), dura: (x) => x * x }[s.curve];
   const pts = Array.from({ length: 21 }, (_, i) => `${40 + i * 17},${220 - (s.velMin + (s.velMax - s.velMin) * curve(i / 20)) / 127 * 190}`).join(' ');
-  const swingX = (i) => 20 + i * 37.5 + (i % 2 ? ((s.swing - 50) / 50) * 37.5 : 0);
+  const C = compas(s.compas), cw = 600 / C.len, swingX = (i) => 20 + i * cw + (i % 2 ? ((s.swing - 50) / 50) * cw : 0);
   return (
     <div className="page">
       <div className="page-head">
@@ -44,15 +45,19 @@ export default function Sonido() {
       {tab === 'ritmo' && (
         <div className="cols">
           <section className="panel" style={{ flex: '1 1 360px', gap: 18 }}>
+            <div className="field"><label style={{ color: 'var(--text)' }}>Compás</label>
+              <Seg label="Compás" items={Object.keys(COMPASES).map((id) => [id, id])} value={s.compas || '4/4'} onChange={(v) => session.setCompas(v)} />
+              <span className="dim" style={{ fontSize: 11 }}>{C.desc}. Cambia el largo del compás, el metrónomo, los patrones, la armonía y las escenas.</span></div>
+            <Slider id="acento" label="Acento del compás" value={Math.round((s.acento ?? 0.35) * 100)} min={0} max={100} unit="%" color="var(--acc)" help="El primer tiempo suena más fuerte y lo que cae entre pulsos un poco más suave: así se siente el compás aunque la mosca toque libre." onChange={(v) => session.set({ acento: v / 100 }, true)} />
             <Slider id="dens" label="Densidad (tiempo neuronal por paso)" value={s.density} min={1} max={20} unit="ms" help="Más milisegundos por paso = más disparos por compás = groove más lleno." onChange={(v) => session.set({ density: v }, true)} />
             <Slider id="swing" label="Swing" value={s.swing} min={50} max={75} unit="%" color="var(--acc)" help="Retrasa las semicorcheas pares." onChange={(v) => session.set({ swing: v }, true)} />
             <Slider id="hum" label="Humanizar" value={s.humanize} min={0} max={30} unit="ms" color="var(--steel)" help="Pequeñas variaciones de tiempo al azar." onChange={(v) => session.set({ humanize: v }, true)} />
           </section>
           <section className="panel" style={{ flex: '999 1 480px', background: 'var(--screen)', color: '#ECECEE' }}>
-            <h2>Vista previa del swing · 1 compás</h2>
-            <svg viewBox="0 0 640 120" style={{ width: '100%' }} role="img" aria-label="Rejilla de 16 pasos con el swing aplicado">
-              {Array.from({ length: 17 }, (_, i) => <line key={i} x1={20 + i * 37.5} y1="0" x2={20 + i * 37.5} y2="110" stroke={i % 4 ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.25)'} />)}
-              {Array.from({ length: 16 }, (_, i) => <rect key={i} x={swingX(i) + 4} y={i % 4 === 0 ? 20 : 50} width="26" height={i % 4 === 0 ? 70 : 40} rx="4" fill={i % 4 === 0 ? '#FF6A1A' : '#ECECEE'} opacity={i % 2 ? 0.5 : 0.85} style={{ transition: 'x .2s' }} />)}
+            <h2>Vista previa · 1 compás de {C.name}</h2>
+            <svg viewBox="0 0 640 120" style={{ width: '100%' }} role="img" aria-label={`Rejilla de ${C.len} pasos con el swing aplicado`}>
+              {Array.from({ length: C.len + 1 }, (_, i) => <line key={i} x1={20 + i * cw} y1="0" x2={20 + i * cw} y2="110" stroke={C.pulsos.includes(i % C.len) ? 'rgba(255,255,255,.25)' : 'rgba(255,255,255,.07)'} />)}
+              {Array.from({ length: C.len }, (_, i) => { const p = C.pulsos.includes(i); return <rect key={i} x={swingX(i) + cw * 0.1} y={i === 0 ? 10 : p ? 20 : 50} width={cw * 0.7} height={i === 0 ? 80 : p ? 70 : 40} rx="4" fill={p ? '#FF6A1A' : '#ECECEE'} opacity={i % 2 ? 0.5 : 0.85} style={{ transition: 'x .2s' }} />; })}
             </svg>
           </section>
         </div>

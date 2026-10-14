@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { session } from '../engine/session.js';
+import { compas } from '../engine/compas.js';
+import { TARGETS } from '../engine/loudness.js';
 import { makeZip } from '../engine/zip.js';
 import { shareUrl } from '../engine/cloud.js';
 import { renderVideo, videoSupported } from '../engine/video.js';
@@ -24,7 +26,7 @@ function Roll({ take, playing, t0 }) {
   }, [playing, t0, take]);
   const rows = take.tracks.flatMap((t) => Array.from({ length: 12 }, (_, k) => ({ t: t.id, k })));
   const H = Math.max(120, rows.length * 12), x = (ms) => (ms / take.durMs) * 700;
-  const bars = Math.max(1, Math.round(take.steps / 16));
+  const bars = Math.max(1, Math.round(take.steps / compas(take.compas).len));
   return (
     <svg viewBox={`0 0 700 ${H}`} style={{ width: '100%', height: 'auto', maxHeight: 340 }} role="img" aria-label={`Rollo de notas de ${take.name}`}>
       {Array.from({ length: bars + 1 }, (_, i) => <line key={i} x1={(i / bars) * 700} y1="0" x2={(i / bars) * 700} y2={H} stroke="rgba(255,255,255,.1)" />)}
@@ -82,7 +84,7 @@ function ShareButton({ take }) {
 }
 
 export default function Tomas() {
-  const s = useS(), [sel, setSel] = useState(s.lastTake || s.takes[0]?.id), [playing, setPlaying] = useState(false), [exp, setExp] = useState(false), [fmtSel, setFmt] = useState('mid'), [busy, setBusy] = useState(false), [vid, setVid] = useState(null), [editing, setEditing] = useState(false);
+  const s = useS(), [sel, setSel] = useState(s.lastTake || s.takes[0]?.id), [playing, setPlaying] = useState(false), [exp, setExp] = useState(false), [fmtSel, setFmt] = useState('mid'), [busy, setBusy] = useState(false), [rep, setRep] = useState(null), [vid, setVid] = useState(null), [editing, setEditing] = useState(false);
   const take = s.takes.find((t) => t.id === sel) || s.takes[0], [loadErr, setLoadErr] = useState(null);
   useEffect(() => () => session.stopTake(), []);
   useEffect(() => { setLoadErr(null); if (take && !take.events) session.ensureEvents(take.id).catch(() => setLoadErr('No pudimos descargar esta toma. Revisa tu conexión.')); }, [take?.id, take?.events]);
@@ -112,7 +114,7 @@ export default function Tomas() {
       }
       download(await makeZip(files), `${base}-pistas.zip`);
     }
-    if (fmtSel === 'wav') download(await renderWav(take, (e) => e.voice, session.synth.kit, session.wavOptions), `${base}-${session.s.kitActive || 'kit'}.wav`);
+    if (fmtSel === 'wav') { let r = null; download(await renderWav(take, (e) => e.voice, session.synth.kit, { ...session.wavOptions, lufs: TARGETS[s.lufs || 'streaming']?.[1] ?? null, onReport: (x) => (r = x) }), `${base}-${session.s.kitActive || 'kit'}.wav`); if (r) { setRep(r); setBusy(false); return; } }
     setBusy(false); setExp(false);
   };
   return (
@@ -183,6 +185,18 @@ export default function Tomas() {
                 <button key={id} type="button" role="radio" aria-checked={fmtSel === id} className="radio-card" disabled={(id === 'wav' || id === 'stems') && !session.can('wav')} style={(id === 'wav' || id === 'stems') && !session.can('wav') ? { opacity: 0.55, cursor: 'not-allowed' } : undefined} onClick={() => setFmt(id)}><span className="o" /><span style={{ flex: 1 }}><span style={{ display: 'block', fontWeight: 600 }}>{l}</span><span className="muted" style={{ fontSize: 12 }}>{d}</span></span>{id === 'wav' && !session.can('wav') && <span className="badge-pro">PRO</span>}</button>
               ))}
             </div>
+            {fmtSel === 'wav' && session.can('wav') && (
+              <div className="field"><label htmlFor="lufs">Volumen final (masterización)</label>
+                <select id="lufs" className="input" value={s.lufs || 'streaming'} onChange={(e) => { session.set({ lufs: e.target.value }, true); setRep(null); }}>{Object.entries(TARGETS).map(([id, [n]]) => <option key={id} value={id}>{n}</option>)}</select>
+                <span className="dim" style={{ fontSize: 11 }}>Mide la sonoridad (LUFS) y la ajusta a lo que pide la plataforma; un limitador evita que pase de −1 dB. «Sin normalizar» solo limita.</span></div>
+            )}
+            {rep && fmtSel === 'wav' && (
+              <div className="well mono" style={{ padding: 12, fontSize: 11.5, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }} aria-live="polite">
+                <div><div className="dim">ANTES</div><b>{rep.before} LUFS</b></div><div><div className="dim">DESPUÉS</div><b style={{ color: 'var(--acc)' }}>{rep.after} LUFS</b></div>
+                <div><div className="dim">LIMITADOR</div><b>{rep.limiterDb} dB</b></div><div><div className="dim">PICO</div><b>{rep.peakDb} dBTP</b></div>
+                {rep.limiterDb < -6 && <span style={{ gridColumn: '1 / -1', fontFamily: 'inherit', color: '#FF8A4D' }}>Se limitó mucho para llegar al objetivo: puede sonar aplastado. Prueba −14 o baja la densidad.</span>}
+              </div>
+            )}
             {!session.can('wav') && <a href="#/cuenta?plan" className="muted" style={{ fontSize: 12 }}>WAV es parte de Pro · {session.canTrial ? 'pruébalo 7 días gratis' : 'ver planes'} →</a>}
             {vid && fmtSel === 'video' && (
               <div className="well" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -195,7 +209,7 @@ export default function Tomas() {
                 ) : <><span className="mono" style={{ fontSize: 11 }}>GRABANDO VIDEO · {Math.round(vid.pct * 100)} %</span><div style={{ height: 6, borderRadius: 3, background: 'var(--line)' }}><div style={{ height: '100%', width: `${vid.pct * 100}%`, borderRadius: 3, background: 'var(--acc)' }} /></div><span className="dim" style={{ fontSize: 11 }}>Deja esta pestaña abierta mientras se graba.</span></>}
               </div>
             )}
-            <div className="row" style={{ justifyContent: 'flex-end' }}><button type="button" className="btn lg" onClick={() => { setExp(false); setVid(null); }}>{vid?.file ? 'Cerrar' : 'Cancelar'}</button>{!(vid?.file && fmtSel === 'video') && <button type="button" className="btn lg primary" disabled={busy} onClick={doExport}>{busy ? (fmtSel === 'video' ? 'Grabando…' : 'Preparando…') : fmtSel === 'video' ? 'Crear video' : 'Descargar'}</button>}</div>
+            <div className="row" style={{ justifyContent: 'flex-end' }}><button type="button" className="btn lg" onClick={() => { setExp(false); setVid(null); setRep(null); }}>{vid?.file || rep ? 'Cerrar' : 'Cancelar'}</button>{!(vid?.file && fmtSel === 'video') && <button type="button" className="btn lg primary" disabled={busy} onClick={doExport}>{busy ? (fmtSel === 'video' ? 'Grabando…' : 'Preparando…') : fmtSel === 'video' ? 'Crear video' : 'Descargar'}</button>}</div>
           </div>
         </div>
       )}

@@ -12,7 +12,7 @@ const PATTERNS = {
 export default function Opto() {
   const s = useS(); useTick(20);
   const o = s.opto || {}, pat = o.pattern || PATTERNS.negras, red = o.mode !== 'silenciar', col = red ? '#FF3B30' : '#38E07B';
-  const track = session.track(), pads = session.pads(track), sel = pads[s.selPad ?? 11], pos = session.live.step % 16;
+  const track = session.track(), pads = session.pads(track), sel = pads[s.selPad ?? 11], pos = session.live.step % session.C.len;
   const targetsTxt = o.target === 'pista' ? `las ${pads.filter((p) => p.clase !== 'sensor').length} neuronas de la pista` : o.target === 'salida' ? `la salida (${pads[11].tipo})` : `${sel?.tipo} (elígela en el mapa o en los pads)`;
   return (
     <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-start' }}>
@@ -26,10 +26,10 @@ export default function Opto() {
           <Seg label="Neuronas iluminadas" items={[['pad', 'Neurona elegida'], ['pista', 'Toda la pista'], ['salida', 'Salida']]} value={o.target || 'pad'} onChange={(v) => session.setOpto({ target: v })} />
         </div>
         <span className="muted" style={{ fontSize: 12 }}>Iluminas: <strong style={{ color: col }}>{targetsTxt}</strong></span>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(16, 1fr)', gap: 4 }} role="group" aria-label="Pulsos de luz por paso">
-          {pat.map((on, i) => (
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${session.C.len}, 1fr)`, gap: 4 }} role="group" aria-label="Pulsos de luz por paso">
+          {pat.slice(0, session.C.len).map((on, i) => (
             <button key={i} type="button" aria-pressed={!!on} aria-label={`Paso ${i + 1}`} onClick={() => session.setOpto({ pattern: pat.map((x, j) => (j === i ? (x ? 0 : 1) : x)) })}
-              style={{ height: 34, borderRadius: 6, border: `1px solid ${on ? col : 'var(--line)'}`, background: on ? col : i % 4 === 0 ? 'var(--hover)' : 'var(--well)', opacity: s.playing && pos === i ? 1 : on ? 0.85 : 1, boxShadow: s.playing && pos === i && on && o.on ? `0 0 14px ${col}` : 'none', outline: s.playing && pos === i ? '1px solid var(--text)' : 'none' }} />
+              style={{ height: 34, borderRadius: 6, border: `1px solid ${on ? col : 'var(--line)'}`, background: on ? col : session.C.pulsos.includes(i) ? 'var(--hover)' : 'var(--well)', opacity: s.playing && pos === i ? 1 : on ? 0.85 : 1, boxShadow: s.playing && pos === i && on && o.on ? `0 0 14px ${col}` : 'none', outline: s.playing && pos === i ? '1px solid var(--text)' : 'none' }} />
           ))}
         </div>
         <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>

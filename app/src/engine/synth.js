@@ -48,18 +48,23 @@ function impulse(ctx, secs = 2.2) {
   for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); let seed = 7 + c * 13; for (let i = 0; i < n; i++) { seed = (seed * 16807) % 2147483647; d[i] = ((seed / 2147483647) * 2 - 1) * Math.pow(1 - i / n, 3.2); } }
   return b;
 }
-export const FX_DEFAULT = { filtro: 1, comp: true, dlyBeats: 0.75, dlyFb: 0.38 };
+export const FX_DEFAULT = { filtro: 1, comp: true, dlyBeats: 0.75, dlyFb: 0.38, limit: true };
+import { master } from './loudness.js';
 export function buildChain(ctx, dest, fx = FX_DEFAULT, bpm = 110) {
   const out = ctx.createGain(); out.gain.value = 0.7;
   const filt = ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.Q.value = 0.8;
-  const comp = ctx.createDynamicsCompressor(), thru = ctx.createGain();
-  out.connect(filt); filt.connect(comp).connect(dest); filt.connect(thru).connect(dest);
+  const comp = ctx.createDynamicsCompressor(), thru = ctx.createGain(), pre = ctx.createGain(), post = ctx.createGain();
+  // limitador maestro: los picos se quedan cerca de −2 dB, así no hay recortes digitales aunque la mosca se emocione
+  // (el compresor de Web Audio sube el volumen solo, «makeup» = 0.6 × la reducción a 0 dB: lo compensamos con `trim`)
+  const lim = ctx.createDynamicsCompressor(), trim = ctx.createGain(); lim.threshold.value = -2; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.001; lim.release.value = 0.08;
+  trim.gain.value = 10 ** (-0.6 * (2 - 2 / 20) / 20);
+  out.connect(filt); filt.connect(comp).connect(pre); filt.connect(thru).connect(pre); lim.connect(trim).connect(post); post.connect(dest);
   const rev = ctx.createConvolver(); rev.buffer = impulse(ctx); const revOut = ctx.createGain(); revOut.gain.value = 0.9; rev.connect(revOut).connect(out);
   const dly = ctx.createDelay(2), fb = ctx.createGain(), dlyTone = ctx.createBiquadFilter(); dlyTone.type = 'lowpass'; dlyTone.frequency.value = 3800;
   dly.connect(dlyTone).connect(fb).connect(dly); dlyTone.connect(out);
   const buses = {};
   const chain = {
-    out, filt, comp, thru, rev, dly, fb, buses,
+    out, filt, comp, thru, rev, dly, fb, buses, lim, post,
     bus(id, sends = {}) {
       if (!buses[id]) { const g = ctx.createGain(), r = ctx.createGain(), d = ctx.createGain(); g.connect(out); g.connect(r).connect(rev); g.connect(d).connect(dly); buses[id] = { in: g, rev: r, dly: d }; }
       const b = buses[id]; b.rev.gain.value = sends.rev ?? 0; b.dly.gain.value = sends.dly ?? 0; return b.in;
@@ -70,6 +75,7 @@ export function buildChain(ctx, dest, fx = FX_DEFAULT, bpm = 110) {
       comp.threshold.value = -18; comp.ratio.value = 4; comp.knee.value = 8;
       // compresor encendido = señal por el compresor; apagado = directo
       try { filt.disconnect(); } catch {} filt.connect(x.comp ? comp : thru);
+      try { pre.disconnect(); } catch {} pre.connect(x.limit !== false ? lim : post);
       dly.delayTime.value = Math.min(1.9, (60 / Math.max(40, tempo)) * x.dlyBeats); fb.gain.value = Math.max(0, Math.min(0.85, x.dlyFb));
     },
   };
@@ -88,9 +94,11 @@ export class Synth {
     return this.ctx;
   }
   // clic del metrónomo: directo a la salida, sin efectos ni volumen del kit
-  click(at = performance.now(), accent = false) {
+  // nivel: 2 = primer tiempo (agudo y fuerte) · 1 = pulso · 0.5 = subdivisión de los compases de /8 (suave)
+  click(at = performance.now(), level = 1) {
+    if (level === true) level = 2; else if (level === false) level = 1;
     const ctx = this.ensure(), t = Math.max(ctx.currentTime, ctx.currentTime + (at - performance.now()) / 1000), o = ctx.createOscillator(), g = ctx.createGain();
-    o.frequency.value = accent ? 1760 : 1175; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(accent ? 0.35 : 0.22, t + 0.002); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+    o.frequency.value = level >= 2 ? 1760 : level >= 1 ? 1175 : 880; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(level >= 2 ? 0.35 : level >= 1 ? 0.22 : 0.1, t + 0.002); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
     o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 0.06);
   }
   setFx(fx, bpm) { this.ensure(); this.chain.set(fx, bpm); }
@@ -125,6 +133,7 @@ export function playBuffer(ctx, dest, buffer, vel, t, pitch = 0) {
   const src = ctx.createBufferSource(), g = ctx.createGain(); src.buffer = buffer; src.playbackRate.value = Math.pow(2, pitch / 12);
   g.gain.value = Math.pow(Math.max(0.05, vel / 127), 1.3); src.connect(g).connect(dest); src.start(t);
 }
+// opt.lufs: objetivo de sonoridad (−14, −16, −9) o null; opt.onReport recibe el informe de masterización
 // opt: { fx, bpm, sends: {pista: {rev, dly}}, kits: {id: buffers}, trackKit: {pista: id} } → el WAV suena como en la compu
 export async function renderWav(take, kitFor, kit = null, opt = {}) {
   const sr = 44100, dur = take.durMs / 1000 + 2.5;
@@ -138,7 +147,9 @@ export async function renderWav(take, kitFor, kit = null, opt = {}) {
     const sc = opt.fx?.sc || 0;
     if (n === 'bombo' && sc > 0) for (const [id, b] of Object.entries(chain.buses)) { if (id === e.track) continue; const gn = b.in.gain; gn.setValueAtTime(1, t); gn.linearRampToValueAtTime(1 - sc * 0.85 * Math.min(1, e.vel / 110), t + 0.005); gn.linearRampToValueAtTime(1, t + 0.06 + sc * 0.18); }
   }
-  return wavBlob(await ctx.startRendering());
+  const buf = await ctx.startRendering();
+  if (opt.lufs !== undefined) { const r = master(buf, opt.lufs); opt.onReport?.(r); }
+  return wavBlob(buf);
 }
 export function wavBlob(buf) {
   const ch = buf.numberOfChannels, len = buf.length * ch * 2 + 44, ab = new ArrayBuffer(len), v = new DataView(ab);

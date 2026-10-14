@@ -48,7 +48,7 @@ export default function Libreria() {
                 <Strip id={k.id} active={on || playing === k.id} />
                 {playing === k.id && <span className="chip acc" style={{ position: 'absolute', left: 8, top: 8 }}>SONANDO</span>}
               </div>
-              <div className="between"><h3 style={{ fontSize: 15 }}>{k.name}</h3>{k.pro ? <span className="badge-pro">PRO</span> : <span className="chip">FREE</span>}</div>
+              <div className="between"><h3 style={{ fontSize: 15 }}>{k.name}</h3><span className="row" style={{ gap: 6 }}>{k.nuevo && <span className="chip acc">NUEVO</span>}{k.pro ? <span className="badge-pro">PRO</span> : <span className="chip">FREE</span>}</span></div>
               <p className="muted" style={{ margin: 0, fontSize: 12, lineHeight: 1.5, minHeight: 36 }}>{k.desc}</p>
               <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
                 <button type="button" className="btn" onClick={() => listen(k.id)} disabled={playing === k.id}><Icon name="play" size={11} fill="currentColor" />Escuchar</button>

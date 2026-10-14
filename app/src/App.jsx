@@ -1,6 +1,7 @@
 import { isIOS, isStandalone } from './ui/Install.jsx';
 import { Component, useEffect, useState } from 'react';
 import { session } from './engine/session.js';
+import { COMPASES, compas, posLabel } from './engine/compas.js';
 import { useS, useTick, Icon, Logo } from './ui/kit.jsx';
 import { TrialBadge } from './ui/Paywall.jsx';
 import Estudio from './pages/Estudio.jsx';
@@ -56,7 +57,7 @@ const route = () => (location.hash.replace(/^#\/?/, '') || 'estudio').split('?')
 function Position() {
   useTick(20);
   const n = session.s.playing ? session.live.step : 0;
-  return <div className="pos mono" aria-label="Posición">{String(1 + Math.floor(n / 16)).padStart(3, '0')}.{1 + Math.floor((n % 16) / 4)}.{1 + (n % 4)}</div>;
+  return <div className="pos mono" aria-label="Posición">{posLabel(session.C, n)}</div>;
 }
 function Transport({ s }) {
   const ext = session.ko.hasExternalClock;
@@ -72,10 +73,14 @@ function Transport({ s }) {
         <button type="button" aria-label="Subir tempo" onClick={() => session.setBpm(s.bpm + 1)} disabled={ext}>+</button>
         <span className="mono muted" style={{ fontSize: 10, marginRight: 6 }}>BPM</span>
       </div>
+      <label className="sr" htmlFor="compas">Compás</label>
+      <select id="compas" className="tsel mono hide-sm" value={s.compas || '4/4'} title={`Compás · ${compas(s.compas).desc}`} onChange={(e) => session.setCompas(e.target.value)}>
+        {Object.entries(COMPASES).map(([id, c]) => <option key={id} value={id}>{c.name}</option>)}
+      </select>
       <button type="button" className="tbtn hide-sm" style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.06em', padding: '0 8px' }} title="Toca al ritmo para marcar el tempo (T)" disabled={ext} onClick={() => session.tap()}>TAP</button>
       <button type="button" className="tbtn" aria-pressed={!!s.metro} aria-label="Metrónomo" title="Metrónomo (M)" onClick={() => session.set({ metro: !s.metro }, true)} style={s.metro ? { color: 'var(--acc)' } : undefined}><Icon name="metro" size={16} /></button>
       {s.counting && <span className="chip acc" aria-live="polite">CUENTA</span>}
-      <span className={`chip hide-sm${ext || s.clockOut || session.followLocked ? ' acc' : ''}`} title="Fuente del reloj">{ext ? 'SIGUE K.O.' : session.followLocked && s.follow?.tempo !== false ? 'ACOMPAÑA' : s.clockOut ? 'MAESTRO' : 'INTERNO'}</span>
+      <span className={`chip hide-sm clk${ext || s.clockOut || session.followLocked ? ' acc' : ''}`} title="Fuente del reloj">{ext ? 'SIGUE K.O.' : session.followLocked && s.follow?.tempo !== false ? 'ACOMPAÑA' : s.clockOut ? 'MAESTRO' : 'INTERNO'}</span>
     </div>
   );
 }

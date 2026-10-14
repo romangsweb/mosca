@@ -5,7 +5,7 @@ import { useS, useTick, Icon } from './kit.jsx';
 // Tira de escenas: clic lanza la escena (en el siguiente compás si está tocando). «Guardar» fija lo que suena ahora.
 export default function ScenesStrip() {
   const s = useS(); useTick(8);
-  const L = session.live, barFrac = s.playing ? (L.step % 16) / 16 : 0;
+  const L = session.live, barFrac = s.playing ? (L.step % session.C.len) / session.C.len : 0;
   return (
     <section className="panel" style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: '8px 12px', flexWrap: 'wrap' }} aria-label="Escenas">
       <h2 style={{ marginRight: 4 }}>Escenas</h2>

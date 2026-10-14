@@ -12,7 +12,7 @@ export function Pads({ track, selPad, onSelect }) {
   const refs = useRef([]);
   const pads = session.pads(track);
   useEffect(() => session.onStep((n) => {
-    const lanes = session.live.lanes[track.id], pos = n % 16;
+    const lanes = session.live.lanes[track.id], pos = n % session.C.len;
     lanes.forEach((row, k) => { if (row[pos] > 0) { const el = refs.current[k]; if (!el) return; el.classList.add('hit'); setTimeout(() => el.classList.remove('hit'), 90); } });
   }), [track.id]);
   return (
@@ -42,14 +42,14 @@ export function Lanes({ track, selPad }) {
     const color = pads.map((p) => (p.clase === 'sensor' ? '236,236,238' : p.inhibidora ? '125,147,178' : '255,106,26'));
     const paint = () => {
       const lanes = session.live.lanes[track.id], t = session.track(track.id), fz = t.play !== 'vivo' && t.frozen;
-      const len = fz ? t.len || 16 : 16;
+      const len = fz ? t.len || session.C.len : session.C.len;
       lanes.forEach((row, k) => row.forEach((v, i) => { const c = cells[k * 16 + i]; c.style.background = v ? `rgba(${color[k]},${0.25 + (v / 127) * 0.6})` : ''; c.classList.toggle('on', !!(fz && i < len && fz[k][i])); c.classList.toggle('half', !!(fz && fz[k][i] && (t.prob?.[k]?.[i] ?? 100) < 100)); c.classList.toggle('out', i >= len); }));
     };
     paint();
     const off = session.onStep(paint);
     let raf; const loop = () => {
       const L = session.live, ms = session.ko.stepMs;
-      if (session.s.playing && L.stepAt) { const f = ((L.step % 16) + Math.min(1, Math.max(0, (performance.now() - L.stepAt) / ms))) / 16; head.current.style.left = `${f * 100}%`; head.current.style.opacity = 0.7; }
+      if (session.s.playing && L.stepAt) { const f = ((L.step % session.C.len) + Math.min(1, Math.max(0, (performance.now() - L.stepAt) / ms))) / 16; head.current.style.left = `${f * 100}%`; head.current.style.opacity = 0.7; }
       else head.current.style.opacity = 0;
       const lvl = Math.min(1, L.active / 60);
       meters.current.forEach((m, i) => m && (m.style.height = `${session.s.playing ? Math.round((i ? 0.85 : 1) * lvl * 100) : 0}%`));

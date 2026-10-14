@@ -29,6 +29,23 @@ function Meter({ value, height = 150 }) {
 }
 const meterOf = (id) => { const m = session.live.meter[id]; if (!m) return 0; const dt = performance.now() - m.at; return dt < 0 ? 0 : (m.vel / 127) * Math.exp(-dt / 220); };
 
+// sonoridad en vivo de la compu: LUFS momentáneo (400 ms), de 3 s y pico; la barra marca −14 LUFS (streaming)
+function Loudness() {
+  useTick(12);
+  const L = session.s.playing ? session.loudness() : null, f = (x) => (Number.isFinite(x) ? x.toFixed(1) : '—');
+  const pct = (x) => (Number.isFinite(x) ? Math.max(0, Math.min(100, ((x + 40) / 40) * 100)) : 0), hot = L && L.peakDb > -1;
+  return (
+    <div className="well" style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6 }} aria-label="Sonoridad de la salida">
+      <div className="between mono" style={{ fontSize: 10, color: 'var(--dim)' }}><span>LUFS 3 S</span><span>MOMENTÁNEO</span><span>PICO</span></div>
+      <div className="between mono" style={{ fontSize: 15, fontWeight: 600 }}><span style={{ color: 'var(--acc)' }}>{f(L?.short)}</span><span>{f(L?.momentary)}</span><span style={{ color: hot ? '#E5484D' : undefined }}>{f(L?.peakDb)} dB</span></div>
+      <div style={{ position: 'relative', height: 6, borderRadius: 3, background: 'var(--line)' }}>
+        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct(L?.momentary)}%`, borderRadius: 3, background: 'linear-gradient(90deg, #7D93B2, #FF6A1A)', transition: 'width .08s linear' }} />
+        <i title="−14 LUFS" style={{ position: 'absolute', left: `${pct(-14)}%`, top: -3, bottom: -3, width: 2, background: 'var(--text)' }} />
+      </div>
+      <span className="dim" style={{ fontSize: 10.5 }}>La raya es −14 LUFS, el volumen de Spotify y YouTube. Al exportar WAV se ajusta solo.</span>
+    </div>
+  );
+}
 function Fader({ id, label, value, onChange, height = 150 }) {
   return (
     <input id={id} type="range" min="0" max="100" value={Math.round(value * 100)} aria-label={label} onChange={(e) => onChange(+e.target.value / 100)}
@@ -125,6 +142,8 @@ function KitStrip() {
         <Slider label="Repetir" value={(fx.dlyFb ?? 0.38) / 0.85} onChange={(v) => session.setFx({ dlyFb: v * 0.85 })} />
         <Slider label="Sidechain" value={fx.sc || 0} onChange={(v) => session.setFx({ sc: v })} />
         <label className="row" style={{ gap: 10, fontSize: 12 }}><input type="checkbox" checked={fx.comp !== false} onChange={(e) => session.setFx({ comp: e.target.checked })} style={{ width: 16, height: 16, accentColor: 'var(--acc)' }} />Compresor maestro</label>
+        <label className="row" style={{ gap: 10, fontSize: 12 }} title="Los picos se quedan cerca de −2 dB: evita recortes digitales"><input type="checkbox" checked={fx.limit !== false} onChange={(e) => session.setFx({ limit: e.target.checked })} style={{ width: 16, height: 16, accentColor: 'var(--acc)' }} />Limitador maestro (techo −2 dB)</label>
+        <Loudness />
         <p className="dim" style={{ margin: 0, fontSize: 11, lineHeight: 1.45 }}>Reverb y delay se mandan desde cada pista; el delay va a tempo. Sidechain: cada bombo baja un instante las demás pistas. Los efectos salen también en el WAV.</p>
       </>} />
   );

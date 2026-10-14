@@ -6,6 +6,10 @@ export const KITS = [
   { id: 'lofi', name: 'Lo-fi', desc: 'Polvo, cinta y 8 bits. Golpes cálidos y apagados, con ruido de fondo.', pro: true },
   { id: 'metal', name: 'Metal', desc: 'FM y modulación en anillo: campanas, golpes industriales y graves con filo.', pro: true },
   { id: 'organico', name: 'Orgánico', desc: 'Cuerdas punteadas, madera, sacudidores y tambores de mano.', pro: true },
+  { id: 'insectos', name: 'Insectos', desc: 'Grillos, cigarras, zumbidos y alas: la mosca tocando con los sonidos de su mundo.', pro: false, nuevo: true },
+  { id: 'boom', name: 'Boom', desc: 'Bombos largos con sub, bajo que se arrastra, palmas anchas. Para trap y hip hop.', pro: true, nuevo: true },
+  { id: 'minimal', name: 'Minimal', desc: 'Clics, golpes secos y cortos, mucho aire. Para techno y micro house.', pro: true, nuevo: true },
+  { id: 'chip', name: 'Chip', desc: 'Ondas cuadradas y ruido de 4 bits, como una consola de los 80.', pro: true, nuevo: true },
 ];
 export const VOICES = ['bombo', 'caja', 'palmas', 'hat', 'hat abierto', 'aro', 'tom', 'perc', 'bajo', 'zap'];
 
@@ -80,6 +84,55 @@ const R = {
     perc: () => pluck(1.0, 392, 0.993, 0.55, 20),
     bajo: () => biquad(pluck(1.6, 65.4, 0.997, 0.5, 21), 'lp', 1400),
     zap: () => mix([shape(tones(1.0, [1046], 'sin'), (i) => env(i, 0.35)), 1], [shape(tones(1.0, [2093 * 1.01], 'sin'), (i) => env(i, 0.12)), 0.4]),
+  },
+  // sonidos de insectos, sintetizados a partir de cómo los producen: estridulación (pulsos), timbales (cigarra) y alas (zumbido)
+  insectos: {
+    bombo: () => mix([shape(sweep(0.5, 130, 48, 0.035), (i) => env(i, 0.28)), 1], [shape(tones(0.12, [200], 'sq'), (i) => env(i, 0.03) * (0.5 + 0.5 * Math.sin(TAU * 200 * i / SR))), 0.15]),
+    caja: () => shape(tones(0.22, [4300], 'sin'), (i) => { const t = i / SR, k = Math.floor(t / 0.028); return k < 4 && t % 0.028 < 0.016 ? Math.sin(Math.PI * (t % 0.028) / 0.016) * (1 - k * 0.15) : 0; }), // grillo: 4 pulsos
+    palmas: () => shape(biquad(noise(0.08, 41), 'bp', 3000, 2), (i) => { const t = i / SR; return [0, 0.014, 0.031].reduce((a, s0) => a + (t >= s0 ? Math.exp(-(t - s0) / 0.003) : 0), 0); }), // escarabajo clic
+    hat: () => shape(biquad(noise(0.06, 42), 'bp', 7500, 3), (i) => env(i, 0.012)), // aleteo
+    'hat abierto': () => shape(biquad(noise(0.6, 43), 'bp', 5000, 1.5), (i) => (0.5 + 0.5 * Math.sin(TAU * 180 * i / SR)) * env(i, 0.3, 0.02)), // cigarra
+    aro: () => shape(tones(0.03, [3100], 'sin'), (i) => env(i, 0.006)),
+    tom: () => shape(biquad(tones(0.5, [150, 300], 'sq'), 'lp', 1200), (i) => Math.min(1, i / SR / 0.04) * env(i, 0.22)), // abejorro
+    perc: () => shape(tones(0.35, [6500], 'sin'), (i) => (Math.sin(TAU * 60 * i / SR) > 0 ? 1 : 0) * env(i, 0.15)), // saltamontes
+    bajo: () => shape(biquad(tones(1.0, [65.4, 65.9], 'sq'), 'lp', 650), (i) => (0.75 + 0.25 * Math.sin(TAU * 190 * i / SR)) * env(i, 0.5, 0.01)), // zumbido de mosca
+    zap: () => { const b = buf(0.45); let ph = 0; for (let i = 0; i < b.length; i++) { const t = i / SR, f = 600 + 300 * (1 - Math.exp(-t / 0.1)) + 25 * Math.sin(TAU * 7 * t); ph += TAU * f / SR; b[i] = Math.sign(Math.sin(ph)) * 0.6 * env(i, 0.2, 0.01); } return biquad(b, 'lp', 5000); }, // mosquito
+  },
+  boom: {
+    bombo: () => drive(mix([shape(sweep(1.2, 120, 42, 0.05), (i) => env(i, 0.85)), 1], [shape(biquad(noise(0.01, 51), 'hp', 3000), (i) => env(i, 0.002)), 0.3]), 1.3),
+    caja: () => mix([shape(tones(0.25, [200], 'sin'), (i) => env(i, 0.05)), 0.6], [shape(biquad(biquad(noise(0.5, 52), 'hp', 1800), 'lp', 8000), (i) => env(i, 0.22)), 0.9]),
+    palmas: () => { const n = biquad(noise(0.6, 53), 'bp', 1100, 0.9); return shape(n, (i) => { const t = i / SR; return t < 0.04 ? Math.exp(-((t % 0.0105) / 0.003)) : Math.exp(-(t - 0.04) / 0.2); }); },
+    hat: () => shape(biquad(tones(0.12, HAT), 'hp', 8000), (i) => env(i, 0.022)),
+    'hat abierto': () => shape(biquad(tones(1.0, HAT), 'hp', 7500), (i) => env(i, 0.4)),
+    aro: () => shape(biquad(tones(0.08, [1800, 520], 'sin'), 'bp', 1700, 2), (i) => env(i, 0.012)),
+    tom: () => shape(sweep(0.8, 180, 110, 0.06), (i) => env(i, 0.4)),
+    perc: () => shape(sweep(0.3, 380, 330, 0.02), (i) => env(i, 0.12)),
+    bajo: () => drive(shape(sweep(2.0, 62, 49, 0.06), (i) => env(i, 1.4)), 1.25),
+    zap: () => shape(sweep(0.4, 1800, 120, 0.03), (i) => env(i, 0.12)),
+  },
+  minimal: {
+    bombo: () => mix([shape(sweep(0.3, 150, 55, 0.02), (i) => env(i, 0.12)), 1], [shape(tones(0.004, [3000], 'sin'), () => 1), 0.3]),
+    caja: () => mix([shape(biquad(noise(0.12, 61), 'hp', 3000), (i) => env(i, 0.04)), 0.9], [shape(tones(0.05, [260], 'sin'), (i) => env(i, 0.02)), 0.5]),
+    palmas: () => shape(biquad(noise(0.08, 62), 'bp', 1800, 2), (i) => env(i, 0.03)),
+    hat: () => shape(biquad(noise(0.04, 63), 'hp', 9000), (i) => env(i, 0.012)),
+    'hat abierto': () => shape(biquad(noise(0.25, 64), 'hp', 8000), (i) => env(i, 0.09)),
+    aro: () => shape(tones(0.02, [2400], 'sin'), (i) => env(i, 0.006)),
+    tom: () => shape(sweep(0.25, 110, 100, 0.05), (i) => env(i, 0.09)),
+    perc: () => fm(0.2, 1500, 2.01, 3, 0.01, 0.04),
+    bajo: () => shape(sweep(0.6, 55, 50, 0.04, 'tri'), (i) => env(i, 0.25)),
+    zap: () => shape(sweep(0.08, 6000, 400, 0.006), (i) => env(i, 0.03)),
+  },
+  chip: {
+    bombo: () => crush(shape(sweep(0.3, 180, 50, 0.03, 'sq'), (i) => env(i, 0.1)), 4, 2),
+    caja: () => crush(shape(noise(0.2, 71), (i) => env(i, 0.07)), 4, 8),
+    palmas: () => crush(shape(noise(0.15, 72), (i) => env(i, 0.05)), 4, 16),
+    hat: () => crush(shape(biquad(noise(0.05, 73), 'hp', 7000), (i) => env(i, 0.02)), 4, 2),
+    'hat abierto': () => crush(shape(biquad(noise(0.35, 74), 'hp', 6500), (i) => env(i, 0.15)), 4, 2),
+    aro: () => shape(tones(0.06, [1568], 'sq'), (i) => env(i, 0.03)),
+    tom: () => shape(sweep(0.3, 300, 150, 0.05, 'sq'), (i) => env(i, 0.12)),
+    perc: () => { const b = buf(0.3), f = [523.3, 659.3, 784]; let ph = 0; for (let i = 0; i < b.length; i++) { ph += f[Math.floor(i / SR / 0.03) % 3] / SR; b[i] = (ph % 1 < 0.5 ? 1 : -1) * env(i, 0.2); } return b; }, // arpegio
+    bajo: () => shape(sweep(1.0, 65.4, 65.4, 1, 'tri'), (i) => (env(i, 0.6) > 0.05 ? Math.round(env(i, 0.6) * 8) / 8 : 0)), // triángulo con volumen en escalones
+    zap: () => shape(sweep(0.25, 2000, 100, 0.04, 'sq'), (i) => env(i, 0.1)),
   },
 };
 // Lo-fi: la base analógica, afinada distinto, filtrada, con 8 bits y polvo
