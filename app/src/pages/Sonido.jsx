@@ -1,0 +1,125 @@
+import { useState } from 'react';
+import { session } from '../engine/session.js';
+import { PAD_KEYS, GROUP_BASE } from '../engine/midi.js';
+import { VOICES, VOICE_CAT, DEFAULT_KIT } from '../engine/synth.js';
+import { useS, Seg, Icon } from '../ui/kit.jsx';
+
+function Slider({ id, label, value, min, max, unit, help, onChange, color }) {
+  return (
+    <div className="field">
+      <div className="between"><label htmlFor={id} style={{ color: 'var(--text)' }}>{label}</label><span className="mono">{value} {unit}</span></div>
+      <input id={id} type="range" min={min} max={max} value={value} onChange={(e) => onChange(+e.target.value)} style={{ accentColor: color }} />
+      {help && <span className="dim" style={{ fontSize: 11 }}>{help}</span>}
+    </div>
+  );
+}
+function Toggle({ label, desc, checked, onChange, children }) {
+  return (
+    <div className="setting">
+      <div><div className="t">{label}</div><div className="d">{desc}</div></div>
+      {children || <label className="row" style={{ gap: 8 }}><input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} style={{ width: 18, height: 18, accentColor: 'var(--acc)' }} />{checked ? 'Activado' : 'Desactivado'}</label>}
+    </div>
+  );
+}
+
+export default function Sonido() {
+  const s = useS(), [tab, setTab] = useState('ritmo'), track = session.track();
+  const curve = { lineal: (x) => x, suave: (x) => Math.sqrt(x), dura: (x) => x * x }[s.curve];
+  const pts = Array.from({ length: 21 }, (_, i) => `${40 + i * 17},${220 - (s.velMin + (s.velMax - s.velMin) * curve(i / 20)) / 127 * 190}`).join(' ');
+  const swingX = (i) => 20 + i * 37.5 + (i % 2 ? ((s.swing - 50) / 50) * 37.5 : 0);
+  return (
+    <div className="page">
+      <div className="page-head">
+        <div><h1>Sonido</h1><p>Cómo se traducen los disparos de las neuronas en notas, y qué hace Fly Punch con tu K.O. II.</p></div>
+        <Seg role="tab" label="Secciones" items={[['ritmo', 'Ritmo'], ['din', 'Dinámica'], ['kit', 'Kit y pistas'], ['midi', 'K.O. II y MIDI']]} value={tab} onChange={setTab} />
+      </div>
+
+      {tab === 'ritmo' && (
+        <div className="cols">
+          <section className="panel" style={{ flex: '1 1 360px', gap: 18 }}>
+            <Slider id="dens" label="Densidad (tiempo neuronal por paso)" value={s.density} min={1} max={20} unit="ms" help="Más milisegundos por paso = más disparos por compás = groove más lleno." onChange={(v) => session.set({ density: v }, true)} />
+            <Slider id="swing" label="Swing" value={s.swing} min={50} max={75} unit="%" color="var(--acc)" help="Retrasa las semicorcheas pares." onChange={(v) => session.set({ swing: v }, true)} />
+            <Slider id="hum" label="Humanizar" value={s.humanize} min={0} max={30} unit="ms" color="var(--steel)" help="Pequeñas variaciones de tiempo al azar." onChange={(v) => session.set({ humanize: v }, true)} />
+          </section>
+          <section className="panel" style={{ flex: '999 1 480px', background: 'var(--screen)', color: '#ECECEE' }}>
+            <h2>Vista previa del swing · 1 compás</h2>
+            <svg viewBox="0 0 640 120" style={{ width: '100%' }} role="img" aria-label="Rejilla de 16 pasos con el swing aplicado">
+              {Array.from({ length: 17 }, (_, i) => <line key={i} x1={20 + i * 37.5} y1="0" x2={20 + i * 37.5} y2="110" stroke={i % 4 ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.25)'} />)}
+              {Array.from({ length: 16 }, (_, i) => <rect key={i} x={swingX(i) + 4} y={i % 4 === 0 ? 20 : 50} width="26" height={i % 4 === 0 ? 70 : 40} rx="4" fill={i % 4 === 0 ? '#FF6A1A' : '#ECECEE'} opacity={i % 2 ? 0.5 : 0.85} style={{ transition: 'x .2s' }} />)}
+            </svg>
+          </section>
+        </div>
+      )}
+
+      {tab === 'din' && (
+        <div className="cols">
+          <section className="panel" style={{ flex: '1 1 360px' }}>
+            <h2>Curva de velocidad</h2>
+            <p className="muted" style={{ margin: 0 }}>Cuántos disparos en un paso se convierten en qué tan fuerte suena el pad.</p>
+            <Seg label="Curva" items={[['lineal', 'Lineal'], ['suave', 'Suave'], ['dura', 'Dura']]} value={s.curve} onChange={(v) => session.set({ curve: v }, true)} />
+            <Slider id="vmin" label="Velocidad mínima" value={s.velMin} min={1} max={127} onChange={(v) => session.set({ velMin: Math.min(v, s.velMax) }, true)} />
+            <Slider id="vmax" label="Velocidad máxima" value={s.velMax} min={1} max={127} onChange={(v) => session.set({ velMax: Math.max(v, s.velMin) }, true)} />
+            <label className="row" style={{ gap: 10 }}><input type="checkbox" checked={s.ghost} onChange={(e) => session.set({ ghost: e.target.checked }, true)} style={{ width: 18, height: 18, accentColor: 'var(--acc)' }} />Las inhibidoras tocan notas fantasma (60 % de fuerza)</label>
+          </section>
+          <section className="panel" style={{ flex: '999 1 420px', background: 'var(--screen)', color: '#ECECEE' }}>
+            <svg viewBox="0 0 400 250" style={{ width: '100%' }} role="img" aria-label="Curva de disparos a velocidad">
+              <line x1="40" y1="220" x2="380" y2="220" stroke="rgba(255,255,255,.2)" /><line x1="40" y1="20" x2="40" y2="220" stroke="rgba(255,255,255,.2)" />
+              <polyline points={pts} fill="none" stroke="#FF6A1A" strokeWidth="3" strokeLinejoin="round" />
+              <text x="380" y="242" textAnchor="end" fill="#8C8C94" fontFamily="JetBrains Mono, monospace" fontSize="11">DISPAROS POR PASO →</text>
+              <text x="46" y="16" fill="#8C8C94" fontFamily="JetBrains Mono, monospace" fontSize="11">VELOCIDAD</text>
+            </svg>
+          </section>
+        </div>
+      )}
+
+      {tab === 'kit' && (
+        <section className="panel">
+          <div className="between" style={{ flexWrap: 'wrap' }}>
+            <Seg label="Pista" items={s.tracks.map((t) => [t.id, `${t.name} · grupo ${t.group}`])} value={track.id} onChange={(id) => session.set({ selTrack: id }, true)} />
+            <div className="row" style={{ flexWrap: 'wrap' }}>
+              <label className="row" style={{ gap: 6 }}>Grupo del K.O. II<select className="input" value={track.group} onChange={(e) => session.setTrack(track.id, { group: e.target.value })}>{Object.keys(GROUP_BASE).map((g) => <option key={g}>{g}</option>)}</select></label>
+              <label className="row" style={{ gap: 6 }}>Canal<select className="input" value={track.ch} onChange={(e) => session.setTrack(track.id, { ch: +e.target.value })}>{Array.from({ length: 16 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}</select></label>
+              <label className="row" style={{ gap: 6 }}>Nivel<input type="range" min="20" max="100" value={Math.round(track.level * 100)} onChange={(e) => session.setTrack(track.id, { level: +e.target.value / 100 })} /></label>
+              <button type="button" className="btn" onClick={() => session.mutateTrack(track.id)}><Icon name="dado" size={14} />Mutar</button>
+              <button type="button" className="btn ghost" onClick={() => session.setTrack(track.id, { kit: [...DEFAULT_KIT] })}>Kit por defecto</button>
+            </div>
+          </div>
+          <p className="muted" style={{ margin: 0, lineHeight: 1.55 }}>Dile a Fly Punch qué sonido tiene cada pad de tu kit en el K.O. II. Lo usa para las voces internas y para <strong style={{ color: 'var(--text)' }}>Mutar</strong>: las motoneuronas van a graves, las interneuronas a medios y los sensores e inhibidoras a agudos, así el azar cambia la mezcla sin romperla.</p>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="table">
+              <thead><tr><th>Pad</th><th>Nota</th><th>Sonido en tu kit</th><th>Registro</th><th>Neurona que lo toca hoy</th><th>Probar</th></tr></thead>
+              <tbody>{PAD_KEYS.map((key, off) => {
+                const k = track.map.indexOf(off), p = session.pads(track)[k];
+                return (
+                  <tr key={key}>
+                    <td className="mono" style={{ fontWeight: 600 }}>{key}</td><td className="mono muted">{GROUP_BASE[track.group] + off}</td>
+                    <td><select className="input" aria-label={`Sonido del pad ${key}`} value={track.kit[off]} onChange={(e) => { const kit = [...track.kit]; kit[off] = e.target.value; session.setTrack(track.id, { kit }); }}>{VOICES.map((v) => <option key={v}>{v}</option>)}</select></td>
+                    <td className="muted">{VOICE_CAT[track.kit[off]]}</td><td className="mono">{p?.tipo}</td>
+                    <td><button type="button" className="iconbtn" aria-label={`Probar pad ${key}`} onClick={() => session.tapPad(k, track)}><Icon name="play" size={12} fill="currentColor" /></button></td>
+                  </tr>
+                );
+              })}</tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {tab === 'midi' && (
+        <section className="panel" style={{ gap: 0 }}>
+          <Toggle label="Enviar notas al K.O. II" desc="Cada disparo toca su pad por USB-MIDI." checked={s.sendMidi} onChange={(v) => session.set({ sendMidi: v }, true)} />
+          <Toggle label="Fly Punch marca el tempo (maestro)" desc="Manda reloj y Start/Stop: el secuenciador del K.O. II arranca junto con la mosca y puedes grabar sus patrones encima. En el K.O. II: SHIFT + ERASE, código 101, ENTER. Si lo dejas apagado y el K.O. manda reloj (código 102), Fly Punch lo sigue." checked={s.clockOut} onChange={(v) => session.setClockOut(v)} />
+          <Toggle label="La mosca mueve los efectos" desc="MN9 controla la perilla X de efectos (CC 12) y la actividad total la perilla Y (CC 13). Elige un efecto en el K.O. II para oírlo." checked={s.fxAuto} onChange={(v) => session.set({ fxAuto: v }, true)} />
+          <Toggle label="Sonido interno" desc="Voces de batería simples para escuchar sin K.O. II. No imitan tu kit.">
+            <Seg label="Sonido interno" items={[['auto', 'Solo sin K.O.'], ['siempre', 'Siempre'], ['nunca', 'Nunca']]} value={s.monitor} onChange={(v) => session.set({ monitor: v }, true)} />
+          </Toggle>
+          <Toggle label="Compensar latencia" desc="Adelanta las notas MIDI si el K.O. II suena tarde.">
+            <div className="row" style={{ minWidth: 240 }}><input type="range" min="0" max="60" value={s.latency} onChange={(e) => session.setLatency(+e.target.value)} aria-label="Latencia en milisegundos" style={{ flex: 1 }} /><span className="mono" style={{ width: 48, textAlign: 'right' }}>{s.latency} ms</span></div>
+          </Toggle>
+          <Toggle label="Recibir pads del K.O. II" desc="Al tocar un pad del K.O. II se estimula su neurona en el cerebro (como optogenética). Siempre activo; en el K.O. usa el código 110 para recibir en todos los canales.">
+            <span className={`chip${s.ko.input ? ' acc' : ''}`}>{s.ko.input ? 'ENTRADA LISTA' : 'SIN ENTRADA'}</span>
+          </Toggle>
+        </section>
+      )}
+    </div>
+  );
+}
