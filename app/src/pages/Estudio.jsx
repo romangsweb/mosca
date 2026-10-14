@@ -1,10 +1,11 @@
-import { useCallback, useState } from 'react';
+import { lazy, Suspense, useCallback, useState } from 'react';
 import { session, SENSES, SENSE_LABEL, HIST } from '../engine/session.js';
 import { PAD_KEYS } from '../engine/midi.js';
 import { SCALES, NOTE_NAMES } from '../engine/devices.js';
 import { SoundRoute } from '../ui/SoundRoute.jsx';
 import { useS, useTick, Icon, Knob, Seg, roleColor, ROLE_DESC } from '../ui/kit.jsx';
-import Brain from '../ui/Brain.jsx';
+// el 3D (three.js) solo se descarga si abres una vista 3D: el arranque es más rápido
+const Brain = lazy(() => import('../ui/Brain.jsx'));
 import CircuitMap from '../ui/CircuitMap.jsx';
 import { Pads, Lanes } from '../ui/PadsLanes.jsx';
 import ScenesStrip from '../ui/Scenes.jsx';
@@ -93,7 +94,7 @@ export default function Estudio() {
     <div className="page" style={{ gap: 10 }}>
       <div className="studio-top">
         <section className="screen" aria-label="Cerebro de la mosca">
-          <div className="grid" />{view === 'Mapa' ? <CircuitMap selTrack={track.id} selPad={selPad} onPick={onPick} /> : <Brain view={view} selTrack={track.id} selPad={selPad} onPick={onPick} />}<div className="vignette" />
+          <div className="grid" />{view === 'Mapa' ? <CircuitMap selTrack={track.id} selPad={selPad} onPick={onPick} /> : <Suspense fallback={<div className="mono" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#77777F', fontSize: 11 }}>CARGANDO 3D…</div>}><Brain view={view} selTrack={track.id} selPad={selPad} onPick={onPick} /></Suspense>}<div className="vignette" />
           <Hud />
           <div className="tr"><Seg onScreen label="Vista" items={[['Mapa', 'Mapa'], ['Frontal', '3D'], ['Dorsal', 'Dorsal'], ['Lateral', 'Lateral']]} value={view} onChange={setView} /></div>
           <div className="bl">

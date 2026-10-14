@@ -6,6 +6,14 @@
 export const GROUP_BASE = { A: 36, B: 48, C: 60, D: 72 };
 export const PAD_KEYS = ['.', '0', 'ENT', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
+// Reloj en un worker: los temporizadores de la página se frenan cuando la pestaña no está visible,
+// los del worker no. El worker solo "late"; la programación de notas sigue aquí con marcas de tiempo exactas.
+let TICK_URL = null;
+const tickWorker = () => {
+  try { TICK_URL ||= URL.createObjectURL(new Blob(['let t=null;onmessage=(e)=>{clearInterval(t);t=e.data>0?setInterval(()=>postMessage(0),e.data):null}'], { type: 'text/javascript' })); return new Worker(TICK_URL); }
+  catch { return null; }
+};
+
 export class KO2 {
   constructor(h = {}) {
     this.h = h; this.access = null; this.input = null; this.output = null;
@@ -76,20 +84,25 @@ export class KO2 {
     this.step = 0; this.nextAt = performance.now() + 30;
     if (this.clockOut) this.send([0xFA], this.nextAt);
     const loop = () => {
+      if (!this.timer) return;
       const now = performance.now();
       if (!this.hasExternalClock) {
-        const dur = this.stepMs;
-        while (this.nextAt <= now + 25) { // 25 ms de anticipación
+        // con la pestaña oculta el navegador entrega los latidos con retraso: programamos más adelante
+        const dur = this.stepMs, ahead = typeof document !== 'undefined' && document.hidden ? 160 : 25;
+        if (now - this.nextAt > 250) this.nextAt = now + 5; // tras una pausa larga (p. ej. la Mac dormida) no recuperar cientos de pasos de golpe
+        while (this.nextAt <= now + ahead) {
           if (this.clockOut) for (let i = 0; i < 6; i++) this.send([0xF8], this.nextAt + (i * dur) / 6);
           this.h.onStep?.(this.step++, this.nextAt); this.nextAt += dur;
         }
       } else this.nextAt = now;
-      this.timer = setTimeout(loop, 4);
     };
-    loop();
+    this.worker ||= tickWorker();
+    if (this.worker) { this.timer = true; this.worker.onmessage = loop; this.worker.postMessage(5); loop(); }
+    else { const t = () => { loop(); if (this.timer) this.timer = setTimeout(t, 4); }; this.timer = setTimeout(t, 0); }
   }
   stop() {
-    this.running = false; clearTimeout(this.timer); this.timer = null;
+    this.running = false; if (this.worker) this.worker.postMessage(0); if (typeof this.timer === 'number') clearTimeout(this.timer); this.timer = null;
     if (this.clockOut) this.send([0xFC]);
   }
+
 }
