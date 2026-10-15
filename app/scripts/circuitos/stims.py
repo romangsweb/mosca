@@ -12,6 +12,10 @@ G = {
   'dulce': grp('dulce'), 'amargo': grp('amargo'), 'jon_ce': grp('jon_ce'), 'jon_f': grp('jon_f'), 'jon_dm': grp('jon_dm'),
   'vinagre': by(r'^ORN_(DM1|VA2)$'), 'co2': by(r'^ORN_V$'), 'geosmina': by(r'^ORN_DA2$'),
   'canto': by(r'^JO-B'), 'cva': by(r'^ORN_DA1$'), 'deseo': by(r'^pC1[a-e]$'),
+  # visión: lo que la cámara calcula en la app activa a las neuronas que en la mosca hacen ese cálculo
+  'acercar': by(r'^(LPLC2|LC4)$'),            # algo que se acerca (looming)
+  'movimiento': by(r'^(T4|T5)[ab]$'),         # movimiento horizontal de campo amplio
+  'luz': by(r'^OCG'),                         # cambios de luz: los ocelos (los tres «ojos simples» de la cabeza) vía sus neuronas OCG
 }
 print({k: len(v) for k, v in G.items()})
 import os

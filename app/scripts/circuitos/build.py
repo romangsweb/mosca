@@ -5,15 +5,24 @@ b = Brain(); Z = np.load('./rates.npz')
 a = pd.read_csv(DATOS + 'ann/supplemental_files/Supplemental_file1_neuron_annotations.tsv', sep='\t', low_memory=False).set_index('root_id')
 old = json.load(open('../../public/data/circuito-multi.json'))
 oldids = [int(x) for x in old['flywire_ids']]
-CH = {'gusto': ['dulce', 'amargo'], 'oido': ['jon_ce', 'jon_f', 'jon_dm'], 'olfato': ['vinagre', 'co2', 'geosmina'], 'cortejo': ['canto', 'cva', 'deseo']}
+CH = {'gusto': ['dulce', 'amargo'], 'oido': ['jon_ce', 'jon_f', 'jon_dm'], 'olfato': ['vinagre', 'co2', 'geosmina'], 'cortejo': ['canto', 'cva', 'deseo'], 'vision': ['acercar', 'movimiento', 'luz']}
 G = {k: list(Z[f'G_{k}']) for m in CH.values() for k in m}
+# T4/T5 son ~6000: en la app va una muestra al azar y cada una «representa» a las demás (sus sinapsis pesan total/muestra).
+# Así el resto del circuito recibe en promedio la misma entrada que en el cerebro completo.
+ESCALA = {}
+rng = np.random.default_rng(783)
+for k, nmax in (('movimiento', 160),):
+    full = G[k]
+    if len(full) > nmax:
+        G[k] = sorted(int(i) for i in rng.choice(full, nmax, replace=False)); ESCALA.update({i: len(full) / nmax for i in G[k]})
 R = {k: Z[k] for m in CH.values() for k in m}
 sensors = set(i for v in G.values() for i in v)
+STIM_ALL = set(int(i) for m in CH.values() for k in m for i in Z[f'G_{k}'])
 ctg = a.cell_type.fillna('').to_dict()
 keep = set(sensors) | set(b.idx[i] for i in oldids if i in b.idx)  # todo lo de antes que existe en v783
 for m, chans in CH.items():
     if m in ('gusto', 'oido'): continue
-    score = np.max([R[c] for c in chans], axis=0); score[list(sensors)] = 0
+    score = np.max([R[c] for c in chans], axis=0); score[list(sensors | STIM_ALL)] = 0  # nunca las estimuladas directamente (ni las T4/T5 fuera de la muestra)
     kc = np.array([str(ctg.get(int(r), '')).startswith('KC') for r in b.ids])
     s2 = score.copy(); s2[kc] = 0; top = np.argsort(-s2)[:320]; keep |= set(int(i) for i in top if s2[i] >= 5)
     s3 = score.copy(); s3[~kc] = 0; topk = np.argsort(-s3)[:40]; keep |= set(int(i) for i in topk if s3[i] >= 5)  # una muestra del cuerpo fungiforme
@@ -23,19 +32,23 @@ CUR = {
              (r'^lLN2F_b$', 'vinagre'), (r'^ALBN1$', 'vinagre'), (r'^LHAV3f1$', 'vinagre'), (r'^LHAV2d1$', 'geosmina'), (r'^LHAV2m1$', 'co2'), (r'^DNb05$', 'vinagre')],
   'cortejo': [(r'^JO-B', 'canto'), (r'^ORN_DA1$', 'cva'), (r'^pC1a$', 'deseo'), (r'^CB3876$', 'canto'), (r'^CB2789$', 'canto'), (r'^DA1_lPN$', 'cva'),
               (r'^pC1d$', 'deseo'), (r'^SMP555,SMP556$', 'deseo'), (r'^SMP553$', 'deseo'), (r'^DNp12$', 'canto'), (r'^LHPV12a1$', 'cva'), (r'^DNp37$', 'deseo')],
+  # visión: detectores de acercamiento → fibra gigante (huida); movimiento T4 → HS/H2 (giro); ocelos → DNp18/DNb06
+  'vision': [(r'^LPLC2$', 'acercar'), (r'^LC4$', 'acercar'), (r'^T4a$', 'movimiento'), (r'^OCG01a$', 'luz'), (r'^PVLP011$', 'acercar'), (r'^HSE$', 'movimiento'),
+             (r'^H2$', 'movimiento'), (r'^LPi15$', 'movimiento'), (r'^DNp18$', 'luz'), (r'^DNb06$', 'luz'), (r'^DNp04$', 'acercar'), (r'^DNp01$', 'acercar')],
 }
 CUR_IDX = {}
 for mname, picks in CUR.items():
     got = []
     for pat, ch in picks:
         cand = [b.idx[r] for r, t in ctg.items() if r in b.idx and re.match(pat, t) and b.idx[r] not in got]
+        if any(i in STIM_ALL for i in cand): cand = [i for i in cand if i in set(G[ch])] or cand  # de las estimuladas, solo la muestra que va a la app
         i = max(cand, key=lambda i: R[ch][i]); got.append(i); keep.add(i)
     CUR_IDX[mname] = got
 sub = np.array(sorted(keep)); loc = {int(g): i for i, g in enumerate(sub)}; n = len(sub)
 print('neuronas', n)
 # sinapsis dentro del subcircuito
 m = np.isin(b.pre, sub) & np.isin(b.post, sub)
-pre = np.array([loc[int(x)] for x in b.pre[m]]); post = np.array([loc[int(x)] for x in b.post[m]]); w = (b.cnt[m] * P['wsyn']).round(3)
+pre = np.array([loc[int(x)] for x in b.pre[m]]); post = np.array([loc[int(x)] for x in b.post[m]]); esc = np.array([ESCALA.get(int(x), 1.0) for x in b.pre[m]]); w = (b.cnt[m] * P['wsyn'] * esc).round(3)
 print('sinapsis', len(pre))
 ids = [int(b.ids[g]) for g in sub]
 ann = a.reindex(ids)
@@ -102,9 +115,11 @@ def curated(mname):
     chans = CH[mname]; pads = []
     for (pat, ch), g in zip(CUR[mname], CUR_IDX[mname]):
         i = loc[g]; pads.append(pad(i, ch if i in set(grupos.get(ch, [])) else None, ch))
+        if mname == 'vision' and pads[-1]['sentido']: pads[-1]['clase'] = 'sensor'  # entradas del ojo: se dibujan como sensores
     return {'sentidos': chans, 'pads': pads}
 modos['olfato'] = curated('olfato')
 modos['cortejo'] = curated('cortejo')
+modos['vision'] = curated('vision')
 for mname, md in modos.items():
     for k, p in enumerate(md['pads']): p['nota_off'] = k; p['pad'] = KEYS[k]
     print(mname, [(p['tipo'], p['clase'][:4], 'inh' if p['inhibidora'] else 'exc', max(resp[c][p['idx']] for c in CH[mname])) for p in md['pads']])

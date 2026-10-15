@@ -17,20 +17,22 @@ import { SCALES } from './devices.js';
 import { compas, clickAt, accent } from './compas.js';
 import { liveMeter } from './loudness.js';
 import { World, FEEDS } from './world.js';
+import { Vision } from './vision.js';
 import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud , shareTake, unshareTake, kitIndex, uploadSample, downloadSample, deleteSample, uploadTakeAudio, downloadTakeAudio, deleteTakeAudio } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
 const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes', 'opto', 'taste', 'compas', 'acento', 'lufs', 'xfade', 'intensidad', 'mundo'];
 
-export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'], olfato: ['vinagre', 'co2', 'geosmina'], cortejo: ['canto', 'cva', 'deseo'] };
+export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'], olfato: ['vinagre', 'co2', 'geosmina'], cortejo: ['canto', 'cva', 'deseo'], vision: ['acercar', 'movimiento', 'luz'] };
 // circuitos: cada uno es una parte real del mismo cerebro, con sus sensores y su neurona de salida
 export const CIRCUITS = {
   gusto: { name: 'Gusto', desc: 'Neuronas del gusto en la probóscide. La salida, MN9, mueve el músculo para comer.' },
   oido: { name: 'Oído', desc: 'Órgano de Johnston en la antena: graves, medios y agudos.' },
   olfato: { name: 'Olfato', desc: 'Neuronas olfativas de la antena: vinagre (fruta), CO₂ y geosmina (alerta). Pasan por el lóbulo antenal hacia el cuerno lateral.' },
   cortejo: { name: 'Cortejo', desc: 'Cómo una hembra escucha el canto del macho (antena, JO-B), huele su feromona (cVA) y decide: pC1 y vpoDN.' },
+  vision: { name: 'Visión', desc: 'El ojo y la huida: algo que se acerca (LPLC2 y LC4) avisa a la fibra gigante (DNp01); el movimiento de lado pasa por T4/T5 hasta las células HS; los ocelos sienten la luz. Con tu cámara.' },
 };
-export const SENSE_LABEL = { dulce: 'Dulce', amargo: 'Amargo', jon_ce: 'Graves', jon_f: 'Medios', jon_dm: 'Agudos', vinagre: 'Vinagre', co2: 'CO₂', geosmina: 'Geosmina', canto: 'Canto', cva: 'cVA', deseo: 'pC1' };
+export const SENSE_LABEL = { dulce: 'Dulce', amargo: 'Amargo', jon_ce: 'Graves', jon_f: 'Medios', jon_dm: 'Agudos', vinagre: 'Vinagre', co2: 'CO₂', geosmina: 'Geosmina', canto: 'Canto', cva: 'cVA', deseo: 'pC1', acercar: 'Se acerca', movimiento: 'Movimiento', luz: 'Luz' };
 export const HIST = 128;
 // Qué abre Pro. El servidor aplica lo que importa (límite de tomas); la app solo muestra y bloquea la interfaz.
 export const PRO_FEATURES = {
@@ -57,7 +59,7 @@ const CURVES = { lineal: (x) => x, suave: (x) => Math.sqrt(x), dura: (x) => x * 
 
 const DEFAULTS = {
   bpm: 110, sessionName: 'Sesión sin título', theme: 'noche', guide: true, onboarded: false, alias: '',
-  inputs: { dulce: 150, amargo: 40, jon_ce: 0, jon_f: 0, jon_dm: 0, vinagre: 0, co2: 0, geosmina: 0, canto: 0, cva: 0, deseo: 0 },
+  inputs: { dulce: 150, amargo: 40, jon_ce: 0, jon_f: 0, jon_dm: 0, vinagre: 0, co2: 0, geosmina: 0, canto: 0, cva: 0, deseo: 0, acercar: 0, movimiento: 0, luz: 0 },
   tracks: [
     { id: 'gusto', name: 'Gusto', sense: 'gusto', group: 'C', ch: 1, mute: false, solo: false, level: 1, map: identity(), kit: [...DEFAULT_KIT], mode: 'ritmo', scale: 'menor_pent', root: 48, dest: 'auto', kitId: null, rev: 0.12, dly: 0, play: 'vivo', frozen: null, len: 16 },
     { id: 'oido', name: 'Oído', sense: 'oido', group: 'A', ch: 1, mute: true, solo: false, level: 0.85, map: identity(), kit: [...DEFAULT_KIT], mode: 'ritmo', scale: 'menor_pent', root: 60, dest: 'auto', kitId: null, rev: 0.2, dly: 0.1, play: 'vivo', frozen: null, len: 16 },
@@ -85,7 +87,7 @@ export class Session {
     this.s.takes = []; this.s.ready = false; this.s.user = null; Object.assign(this.s, NO_PLAN); this.s.sync = cloudEnabled ? 'local' : 'off'; this.s.mutHistory = {}; this.s.data = null; this.s.row = 0; this.s.saved = Date.now();
     this.live = { step: 0, pos: 0, active: 0, mn9: 0, groom: 0, rate: {}, lanes: {}, out: {}, hist: new Array(64).fill(0), counts: null, lastHitAt: {}, rowHist: [], rateHist: {}, spikes: {}, meter: {} };
     if (typeof window !== 'undefined') { addEventListener('pagehide', () => this.flush()); document.addEventListener('visibilitychange', () => document.hidden && this.flush()); }
-    this.rec = null; this.ear = new Ear(); this.synth = new Synth(); this.capture = new Capture(); this.world = new World(this);
+    this.rec = null; this.ear = new Ear(); this.synth = new Synth(); this.capture = new Capture(); this.world = new World(this); this.vision = new Vision();
     this.ko = new KO2({
       onStep: (n, at) => this.step(n, at),
       onStart: () => { if (!this.s.playing) this.play(); },
@@ -502,7 +504,10 @@ export class Session {
     this.set({ tracks: this.s.tracks.filter((t) => t.id !== id), selTrack: this.s.selTrack === id ? 'gusto' : this.s.selTrack }, true);
     for (const k of ['lanes', 'rate', 'rateHist', 'spikes']) delete this.live[k][id];
   }
-  setSense(tid, sense) { if (!this.D.modos[sense]) return; this.setTrack(tid, { sense, frozen: null, play: 'vivo' }); }
+  setSense(tid, sense) {
+    if (!this.D.modos[sense]) return; const t = this.track(tid), rename = t && t.name === CIRCUITS[t.sense]?.name; // si la pista se llamaba como su circuito, cambia de nombre con él
+    this.setTrack(tid, { sense, frozen: null, play: 'vivo', ...(rename ? { name: CIRCUITS[sense].name } : {}) });
+  }
   // sin Pro, las pistas 3 y 4 se conservan pero no suenan
   audible(t) { if (this.s.tracks.indexOf(t) >= this.trackLimit) return false; const solo = this.s.tracks.some((x) => x.solo); return solo ? t.solo : !t.mute; }
   // ---------- dispositivo ----------
@@ -544,6 +549,8 @@ export class Session {
   // ---------- un paso de semicorchea ----------
   rates() {
     const r = { ...this.s.inputs };
+    // la cámara manda en los tres sentidos de la visión mientras está encendida
+    if (this.vision.on) { const v = this.vision.vals; r.acercar = v.acercar * 200; r.movimiento = v.movimiento * 200; r.luz = v.luz * 200; }
     if (this.s.oidoSource !== 'manual' && this.ear.kind) { const L = this.ear.read(); r.jon_ce = L[0] * 200; r.jon_f = L[1] * 200; r.jon_dm = L[2] * 200; this.live.ear = L; }
     if (this.s.data && Object.keys(this.s.dataMap).length && this.can('datos')) {
       for (const [sense, ci] of Object.entries(this.s.dataMap)) if (ci !== '' && ci != null) r[sense] = this.s.data.cols[ci].norm[this.s.row] * 200;

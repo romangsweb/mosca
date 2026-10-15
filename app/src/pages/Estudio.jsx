@@ -15,11 +15,12 @@ import ScenesStrip from '../ui/Scenes.jsx';
 const PRESETS = { gusto: { dulce: ['Solo dulce', { dulce: 180, amargo: 0 }], veto: ['Veto amargo', { dulce: 150, amargo: 40 }], rampa: ['Mitad y mitad', { dulce: 90, amargo: 90 }] },
   oido: { voz: ['Voz', { jon_ce: 40, jon_f: 150, jon_dm: 40 }], bajo: ['Bajo', { jon_ce: 180, jon_f: 30, jon_dm: 0 }], brillo: ['Brillos', { jon_ce: 0, jon_f: 40, jon_dm: 170 }] },
   olfato: { fruta: ['Fruta', { vinagre: 170, co2: 0, geosmina: 0 }], alerta: ['Alerta', { vinagre: 0, co2: 150, geosmina: 120 }], conflicto: ['Fruta podrida', { vinagre: 140, co2: 0, geosmina: 140 }] },
-  cortejo: { canto: ['Solo canto', { canto: 160, cva: 0, deseo: 0 }], cortejo: ['Canto + cVA', { canto: 150, cva: 120, deseo: 0 }], deseo: ['pC1 directo', { canto: 0, cva: 0, deseo: 150 }] } };
+  cortejo: { canto: ['Solo canto', { canto: 160, cva: 0, deseo: 0 }], cortejo: ['Canto + cVA', { canto: 150, cva: 120, deseo: 0 }], deseo: ['pC1 directo', { canto: 0, cva: 0, deseo: 150 }] },
+  vision: { amenaza: ['Amenaza', { acercar: 170, movimiento: 0, luz: 0 }], vuelo: ['Paisaje en vuelo', { acercar: 0, movimiento: 160, luz: 60 }], tormenta: ['Tormenta', { acercar: 90, movimiento: 90, luz: 150 }] } };
 // salida de cada circuito: etiqueta de la neurona y estado cuando dispara
-const OUT = { gusto: ['MN9 · comer', 'Comiendo'], oido: ['DNg35 · acicalar', 'Se acicala'], olfato: [null, 'Responde al olor'], cortejo: [null, 'Receptiva'] };
+const OUT = { gusto: ['MN9 · comer', 'Comiendo'], oido: ['DNg35 · acicalar', 'Se acicala'], olfato: [null, 'Responde al olor'], cortejo: [null, 'Receptiva'], vision: ['DNp01 · fibra gigante', '¡Huye!'] };
 const NT = { acetylcholine: 'ACh', gaba: 'GABA', glutamate: 'Glu', serotonin: '5-HT', dopamine: 'DA', octopamine: 'OA' };
-const SENSE_COLOR = { dulce: 'var(--acc)', amargo: 'var(--steel)', jon_ce: 'var(--steel)', jon_f: 'var(--white)', jon_dm: 'var(--acc)', vinagre: 'var(--acc)', co2: 'var(--steel)', geosmina: 'var(--white)', canto: 'var(--acc)', cva: 'var(--white)', deseo: 'var(--steel)' };
+const SENSE_COLOR = { dulce: 'var(--acc)', amargo: 'var(--steel)', jon_ce: 'var(--steel)', jon_f: 'var(--white)', jon_dm: 'var(--acc)', vinagre: 'var(--acc)', co2: 'var(--steel)', geosmina: 'var(--white)', canto: 'var(--acc)', cva: 'var(--white)', deseo: 'var(--steel)', acercar: 'var(--acc)', movimiento: 'var(--white)', luz: 'var(--steel)' };
 
 function Hud() {
   useTick(8);
@@ -109,15 +110,15 @@ function NeuronCard({ track, k }) {
 function Inputs({ track }) {
   const s = useS(), senses = SENSES[track.sense] || [], pre = PRESETS[track.sense] || {};
   const cur = Object.entries(pre).find(([, [, v]]) => Object.entries(v).every(([k, x]) => s.inputs[k] === x))?.[0];
-  const live = track.sense === 'oido' && s.oidoSource !== 'manual';
+  const cam = track.sense === 'vision' && session.vision.on, live = (track.sense === 'oido' && s.oidoSource !== 'manual') || cam;
   return (
     <section className="panel">
-      <div className="panel-head"><h2>Entrada · {track.name}</h2><a href={track.sense === 'oido' ? '#/oido' : '#/datos'} className="muted" style={{ fontSize: 11 }}>{track.sense === 'oido' ? 'Micrófono o archivo' : 'Usar datos'}</a></div>
+      <div className="panel-head"><h2>Entrada · {track.name}</h2><a href={track.sense === 'oido' ? '#/oido' : track.sense === 'vision' ? '#/vision' : '#/datos'} className="muted" style={{ fontSize: 11 }}>{track.sense === 'oido' ? 'Micrófono o archivo' : track.sense === 'vision' ? 'Usar la cámara' : 'Usar datos'}</a></div>
       <div className="field"><label htmlFor="circ">Circuito de la pista</label>
         <select id="circ" className="input" style={{ height: 32 }} value={track.sense} onChange={(e) => session.setSense(track.id, e.target.value)} title={CIRCUITS[track.sense]?.desc}>
-          {Object.entries(CIRCUITS).filter(([id]) => session.D.modos[id]).map(([id, c]) => <option key={id} value={id}>{c.name}{id === 'olfato' || id === 'cortejo' ? ' · nuevo' : ''}</option>)}
+          {Object.entries(CIRCUITS).filter(([id]) => session.D.modos[id]).map(([id, c]) => <option key={id} value={id}>{c.name}{id === 'vision' ? ' · nuevo' : ''}</option>)}
         </select></div>
-      {live ? <p className="muted" style={{ margin: 0 }}>Escuchando {s.oidoSource === 'mic' ? 'el micrófono' : 'un archivo'}. <a href="#/oido" style={{ textDecoration: 'underline' }}>Abrir Oído</a></p> : (
+      {live ? (cam ? <p className="muted" style={{ margin: 0 }}>Viendo con la cámara. <a href="#/vision" style={{ textDecoration: 'underline' }}>Abrir Visión</a></p> : <p className="muted" style={{ margin: 0 }}>Escuchando {s.oidoSource === 'mic' ? 'el micrófono' : 'un archivo'}. <a href="#/oido" style={{ textDecoration: 'underline' }}>Abrir Oído</a></p>) : (
         <div className="knobs">{senses.map((k) => <Knob key={k} id={`in-${k}`} label={SENSE_LABEL[k]} value={s.inputs[k]} color={SENSE_COLOR[k]} onChange={(v) => session.setInput(k, v)} />)}</div>
       )}
       {!live && <Seg label="Presets" items={Object.entries(pre).map(([id, [t]]) => [id, t])} value={cur} onChange={(id) => session.set({ inputs: { ...s.inputs, ...pre[id][1] } }, true)} />}
