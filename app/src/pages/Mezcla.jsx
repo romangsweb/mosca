@@ -8,6 +8,7 @@ import { DeviceArt } from '../ui/DeviceArt.jsx';
 import { SK_PRESET, SK_FX } from '../engine/sidekick.js';
 import { TARGETS } from '../engine/controls.js';
 import { Acompanar } from '../ui/Acompanar.jsx';
+import Consola from '../ui/Consola.jsx';
 import { kitName } from '../ui/SoundRoute.jsx';
 
 // Mezcla: una tira por pista (a dónde va, nivel, silencio, solo), la compu (kit interno) y la entrada de audio
@@ -270,6 +271,7 @@ export default function Mezcla() {
       <div className="well mono" style={{ flex: 'none', padding: '10px 14px', fontSize: 11, lineHeight: 1.7, color: 'var(--sub)', overflowX: 'auto', whiteSpace: 'nowrap' }} aria-label="Flujo de la señal">
         MOSCA → {s.tracks.map((t) => { const p = session.portFor(t), dv = session.toDevice(t, p), k = session.toKit(t, p); return `${t.name.toUpperCase()} → ${[dv && (p?.name || session.profileFor(t).name), k && 'COMPU'].filter(Boolean).join(' + ') || '—'}`; }).join('   ·   ')}   ·   APARATOS → SIDEKICK → ENTRADA
       </div>
+      <Consola />
       <Acompanar />
       <SidekickPanel />
       <div className="cols" style={{ alignItems: 'stretch' }}>

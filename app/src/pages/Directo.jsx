@@ -3,6 +3,7 @@ import { session, CIRCUITS } from '../engine/session.js';
 import { SLOTS, SCENE_COLORS } from '../engine/song.js';
 import { srcLabel } from '../engine/controls.js';
 import { useS, useTick, Icon, Seg } from '../ui/kit.jsx';
+import Consola from '../ui/Consola.jsx';
 
 // Directo: tocar el set en vivo. Escenas grandes que se lanzan a tiempo de compás, cada pista con su lado del crossfader,
 // y cuatro macros que se asignan al sidekick (o a cualquier perilla) con un clic.
@@ -75,6 +76,7 @@ export default function Directo() {
         </div>
       </div>
 
+      <Consola compact />
       <section className="panel" style={{ gap: 10 }} aria-label="Escenas">
         <div className="between"><h2>Escenas <span className="mono muted" style={{ fontSize: 10, fontWeight: 400 }}>· TECLAS 1–8 · ENTRAN AL SIGUIENTE COMPÁS</span></h2>
           <div style={{ width: 160, height: 4, borderRadius: 2, background: 'var(--line)' }} aria-hidden="true"><div style={{ width: `${barFrac * 100}%`, height: '100%', borderRadius: 2, background: 'var(--text)' }} /></div></div>

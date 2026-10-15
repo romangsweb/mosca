@@ -18,11 +18,11 @@ export const EXPR_SOURCES = [['ninguna', '— nada —'], ['salida', 'Salida de 
 export const EXPR_DESTS = [['cc12', 'Efecto · perilla X (CC 12)'], ['cc13', 'Efecto · perilla Y (CC 13)'], ['pb', 'Pitch (se hunde)'], ['cc1', 'Vibrato (CC 1)'], ['cc64', 'Sustain (CC 64)']];
 
 export class KoLink {
-  constructor(session, senses) { this.S = session; this.senses = senses; this.mon = []; this.sent = []; this.inLog = []; this.outLog = []; this.eco = new Map(); this.pulses = []; this.last = {}; this.cc = { cc12: 0, cc13: 0, cc1: 0, pb: 0, cc64: 0 }; }
+  constructor(session, senses) { this.S = session; this.senses = senses; this.mon = []; this.notes = []; this.ccIn = {}; this.sent = []; this.inLog = []; this.outLog = []; this.eco = new Map(); this.pulses = []; this.last = {}; this.cc = { cc12: 0, cc13: 0, cc1: 0, pb: 0, cc64: 0 }; }
   // todo lo que Fly Punch le manda a un K.O. (para el filtro de eco y para la animación)
-  noteOut(note, port) { const now = performance.now(); this.sent.push([note, now]); if (this.sent.length > 64) this.sent.shift(); const p = noteToPad(note); if (p) { this.outLog.push({ ...p, at: now, port: port?.name }); if (this.outLog.length > 96) this.outLog.shift(); } }
+  noteOut(note, port) { const now = performance.now(); this.sent.push([note, now]); if (this.sent.length > 64) this.sent.shift(); this.notes.push({ note, port: port?.name, at: now }); if (this.notes.length > 128) this.notes.shift(); const p = noteToPad(note); if (p) { this.outLog.push({ ...p, at: now, port: port?.name }); if (this.outLog.length > 96) this.outLog.shift(); } }
   // monitor MIDI: todo lo que llega (para ver qué manda cada control del K.O. y asignarlo con un clic)
-  monitor(m) { if (m.type === 'note' && !m.val) return; this.mon.unshift({ ...m, at: Date.now() }); if (this.mon.length > 40) this.mon.length = 40; }
+  monitor(m) { if (m.type === 'cc' || m.type === 'pb') this.ccIn[`${m.port}|${m.ch}|${m.type}${m.num}`] = { val: m.val, at: performance.now() }; if (m.type === 'note' && !m.val) return; this.mon.unshift({ ...m, at: Date.now() }); if (this.mon.length > 40) this.mon.length = 40; }
   isKoPort(name) { return !!name && KO_MATCH.test(name) && !SK_MATCH.test(name); }
   // ---------- conversación: una nota que llega del K.O. ----------
   noteIn({ note, vel, port, main }) {

@@ -44,20 +44,20 @@ export default function KoTwin({ group: g0, onGroup }) {
   };
   return (
     <svg viewBox="0 0 300 430" style={{ width: '100%', maxWidth: 340, height: 'auto', display: 'block' }} role="img" aria-label={`K.O. II en pantalla, grupo ${group}`}>
-      <defs><linearGradient id="kobody" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#DCDCD8" /><stop offset="1" stopColor="#C9C9C4" /></linearGradient></defs>
-      <rect x="4" y="4" width="292" height="422" rx="14" fill="url(#kobody)" stroke="#A9A9A3" />
+      <defs><linearGradient id="kobody" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#24252A" /><stop offset="1" stopColor="#1A1B1E" /></linearGradient></defs>
+      <rect x="4" y="4" width="292" height="422" rx="14" fill="url(#kobody)" stroke="#33353A" />{[[14, 14], [286, 14], [14, 416], [286, 416]].map(([x, y]) => <circle key={`${x}${y}`} cx={x} cy={y} r="2.4" fill="#36383D" />)}
       {/* pantalla */}
       <rect x="20" y="20" width="150" height="62" rx="6" fill="#0D0D0F" />
       <text ref={scr} x="30" y="46" fill="#FF6A1A" fontFamily="JetBrains Mono, monospace" fontSize="11">A</text>
-      <text x="30" y="68" fill="#77777F" fontFamily="JetBrains Mono, monospace" fontSize="9">FLY PUNCH · EP-133</text>
+      <text x="30" y="68" fill="#77777F" fontFamily="JetBrains Mono, monospace" fontSize="9">FLY PUNCH · SAMPLER</text>
       {/* perillas X / Y */}
-      {[[206, 'X', kx, '#FF6A1A'], [256, 'Y', ky, '#8E8E92']].map(([x, l, ref, c]) => (
-        <g key={l} transform={`translate(${x} 50)`}><circle r="20" fill={c} stroke="rgba(0,0,0,.25)" /><g ref={ref}><rect x="-1.6" y="-18" width="3.2" height="10" rx="1.5" fill="#0D0D0F" /></g><text y="36" textAnchor="middle" fontSize="9" fill="#55555A" fontFamily="JetBrains Mono, monospace">{l}</text></g>
+      {[[206, 'X', kx], [256, 'Y', ky]].map(([x, l, ref]) => (
+        <g key={l} transform={`translate(${x} 50)`}><circle r="20" fill="#2A2C30" stroke="#3A3C41" /><circle r="14" fill="#232428" /><g ref={ref}><rect x="-1.8" y="-18" width="3.6" height="11" rx="1.6" fill="#FF6A1A" /></g><text y="36" textAnchor="middle" fontSize="9" fill="#6E7178" fontFamily="JetBrains Mono, monospace">{l}</text></g>
       ))}
       {/* fader (pitch) */}
-      <rect x="110" y="106" width="136" height="6" rx="3" fill="#9C9C96" />
-      <rect ref={fad} x="169" y="98" width="18" height="22" rx="3" fill="#2A2A2E" />
-      <text x="20" y="113" fontSize="9" fill="#55555A" fontFamily="JetBrains Mono, monospace">PITCH</text>
+      <rect x="110" y="106" width="136" height="6" rx="3" fill="#121315" />
+      <rect ref={fad} x="169" y="98" width="18" height="22" rx="3" fill="#3B3D42" stroke="#55585E" />
+      <text x="20" y="113" fontSize="9" fill="#6E7178" fontFamily="JetBrains Mono, monospace">PITCH</text>
       {/* grupos */}
       {GROUPS.map((G, j) => (
         <g key={G} onClick={() => pick(G)} style={{ cursor: 'pointer' }}>
@@ -79,7 +79,7 @@ export default function KoTwin({ group: g0, onGroup }) {
       {/* los 4 grupos de un vistazo */}
       {GROUPS.map((G, j) => (
         <g key={G} transform={`translate(226 ${196 + j * 52})`}>
-          <text x="-6" y="24" textAnchor="end" fontSize="9" fill="#55555A" fontFamily="JetBrains Mono, monospace">{G}</text>
+          <text x="-6" y="24" textAnchor="end" fontSize="9" fill="#6E7178" fontFamily="JetBrains Mono, monospace">{G}</text>
           {LAYOUT.map((row, ri) => row.map((off, ci) => <rect key={off} ref={(el) => (mini.current[j * 12 + off] = el)} x={ci * 13} y={ri * 11} width="11" height="9" rx="2" fill="#3A3A3E" />))}
         </g>
       ))}
