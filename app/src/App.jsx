@@ -110,6 +110,7 @@ export default function App() {
       if (e.key === 't' || e.key === 'T') session.tap();
       if (e.key === 'g' || e.key === 'G') session.feedback(1);
       if (e.key === 'n' || e.key === 'N') session.feedback(-1);
+      if (e.key === 'f' || e.key === 'F') session.fillNow();
     };
     addEventListener('keydown', k); return () => removeEventListener('keydown', k);
   }, []);

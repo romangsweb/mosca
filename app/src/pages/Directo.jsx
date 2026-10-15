@@ -30,6 +30,10 @@ function Macro({ id, label, value, min = 0, max = 100, fmt, onChange, pro, wide 
   );
 }
 
+// remate: lo que hace cada pista en el último tiempo antes de un cambio
+const FILLS = [['off', 'Sin remate'], ['redoble', 'Redoble'], ['corte', 'Corte (silencio)'], ['mosca', 'La mosca se suelta']];
+const FILL_HELP = { off: 'Sigue igual hasta el cambio.', redoble: 'La caja (o el último pad) acelera hasta el uno.', corte: 'Se calla el último tiempo: el uno pega más.', mosca: 'Sus neuronas reciben un empujón y la mosca improvisa, aunque esté congelada.' };
+
 function TrackPad({ t }) {
   const s = useS(), on = session.audible(t), locked = s.tracks.indexOf(t) >= session.trackLimit, g = session.xfGain(t);
   const prof = session.profileFor(t), port = session.portFor(t), dest = [session.toDevice(t, port) && `${port?.name || prof.name} · ${t.group}`, session.toKit(t, port) && 'compu'].filter(Boolean).join(' + ');
@@ -48,6 +52,8 @@ function TrackPad({ t }) {
         <Seg label={`Lado del crossfader de ${t.name}`} items={[['A', 'A'], ['-', 'Centro'], ['B', 'B']]} value={t.xf || '-'} onChange={(v) => (session.can('directo') ? session.setTrack(t.id, { xf: v === '-' ? null : v }) : (location.hash = '#/cuenta?plan'))} />
         <div aria-hidden="true" style={{ width: 54, height: 6, borderRadius: 3, background: 'var(--line)' }}><div style={{ width: `${(on ? g : 0) * 100}%`, height: '100%', borderRadius: 3, background: 'var(--acc)', transition: 'width .1s' }} /></div>
       </div>
+      <label className="row" style={{ gap: 8, fontSize: 12 }} title={FILL_HELP[t.fill || 'off']}><span className="muted" style={{ width: 44 }}>Remate</span>
+        <select className="input" style={{ flex: 1, minWidth: 0, height: 30 }} value={t.fill || 'off'} onChange={(e) => session.setTrack(t.id, { fill: e.target.value })}>{FILLS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
       <div className="row" style={{ gap: 6 }}>
         <button type="button" className="btn" style={{ flex: 1, minWidth: 0, padding: '0 8px' }} onClick={() => session.mutateTrack(t.id)}><Icon name="dado" size={13} />Mutar</button>
         <button type="button" className="btn" style={{ flex: 1, minWidth: 0, padding: '0 8px' }} onClick={() => { if (!session.freeze(t.id)) session.set({ notice: 'congelar' }); }}><Icon name="nieve" size={13} />Congelar</button>
@@ -60,6 +66,7 @@ function TrackPad({ t }) {
 export default function Directo() {
   const s = useS(); useTick(10);
   const L = session.live, barFrac = s.playing ? (L.step % session.C.len) / session.C.len : 0;
+  const fillOn = s.playing && !!(L.fillBar || s.pendingScene || L.fillManual === Math.floor(L.step / session.C.len)), anyFill = s.tracks.some((t) => t.fill && t.fill !== 'off');
   // teclas 1–8 lanzan escenas (solo en esta página)
   useEffect(() => {
     const k = (e) => { if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName) || e.metaKey || e.ctrlKey || e.altKey) return; const i = '12345678'.indexOf(e.key); if (i >= 0) session.launchScene(SLOTS[i]); };
@@ -80,8 +87,13 @@ export default function Directo() {
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'stretch' }}>
       <Consola compact />
       <section className="panel" style={{ gap: 10, flex: '1 1 460px', minWidth: 0 }} aria-label="Escenas">
-        <div className="between"><h2>Escenas <span className="mono muted" style={{ fontSize: 10, fontWeight: 400 }}>· TECLAS 1–8 · ENTRAN AL SIGUIENTE COMPÁS</span></h2>
-          <div style={{ width: 160, height: 4, borderRadius: 2, background: 'var(--line)' }} aria-hidden="true"><div style={{ width: `${barFrac * 100}%`, height: '100%', borderRadius: 2, background: 'var(--text)' }} /></div></div>
+        <div className="between" style={{ gap: 10, flexWrap: 'wrap' }}><h2>Escenas <span className="mono muted" style={{ fontSize: 10, fontWeight: 400 }}>· TECLAS 1–8 · ENTRAN AL SIGUIENTE COMPÁS</span></h2>
+          <div className="row" style={{ gap: 8 }}>
+            <select className="input" aria-label="Cuándo hay remate" style={{ height: 30, width: 'auto' }} value={s.fillEvery || 0} onChange={(e) => session.set({ fillEvery: +e.target.value }, true)}>
+              <option value={0}>Remate al cambiar</option><option value={4}>Remate cada 4</option><option value={8}>Remate cada 8</option></select>
+            <button type="button" className={`btn ${fillOn ? 'acc' : ''}`} disabled={!s.playing} onClick={() => session.fillNow()} title={anyFill ? 'El compás que suena termina con el remate de cada pista (tecla F)' : 'Elige el remate de cada pista abajo (tecla F)'}>Remate ahora</button>
+            <div style={{ width: 90, height: 4, borderRadius: 2, background: 'var(--line)' }} aria-hidden="true"><div style={{ width: `${barFrac * 100}%`, height: '100%', borderRadius: 2, background: fillOn ? 'var(--acc)' : 'var(--text)' }} /></div>
+          </div></div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
           {SLOTS.map((slot, i) => {
             const sc = s.scenes[slot], now = s.sceneNow === slot, pend = s.pendingScene === slot, col = SCENE_COLORS[slot];

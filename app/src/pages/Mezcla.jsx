@@ -105,6 +105,7 @@ function TrackStrip({ t }) {
           <Slider label="Delay" value={t.dly ?? 0} onChange={(v) => session.setTrack(t.id, { dly: v })} />
         </div>
       )}
+      {session.toKit(t) && <Canal t={t} />}
       {d !== 'kit' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
           <div className="row" style={{ gap: 8 }}><span className="label">Aparato de esta pista</span>{!multi && <a href="#/cuenta?plan" className="badge-pro" style={{ marginLeft: 'auto' }}>PRO</a>}</div>
@@ -121,6 +122,32 @@ function TrackStrip({ t }) {
       )}
       <button type="button" className="btn" onClick={() => [11, 3, 7, 0].forEach((k, i) => setTimeout(() => session.tapPad(k, t), i * 180))}><Icon name="play" size={11} fill="currentColor" />Probar esta pista</button>
     </Strip>
+  );
+}
+
+// perilla de canal: deslizador con centro (doble clic vuelve a 0)
+const Knob = ({ label, value, min, max, fmt, onChange, disabled, center = 0 }) => (
+  <label className="row" style={{ gap: 8, fontSize: 12, opacity: disabled ? 0.5 : 1 }} onDoubleClick={() => !disabled && onChange(center)} title="Doble clic: al centro"><span className="muted" style={{ width: 62 }}>{label}</span>
+    <input type="range" min={min} max={max} step="any" value={value} disabled={disabled} onChange={(e) => onChange(+e.target.value)} style={{ flex: 1, minWidth: 0, accentColor: 'var(--acc)' }} />
+    <span className="mono" style={{ width: 52, textAlign: 'right', fontSize: 11 }}>{fmt(value)}</span></label>
+);
+const db = (v) => `${v > 0.05 ? '+' : ''}${(Math.abs(v) < 0.05 ? 0 : v).toFixed(1)} dB`;
+const hz = (f) => (f >= 1000 ? `${(f / 1000).toFixed(1)}k` : `${Math.round(f)}`);
+const fltFmt = (v) => (Math.abs(v) < 0.02 ? 'abierto' : v < 0 ? `LP ${hz(20000 * Math.pow(0.01, -v))}` : `HP ${hz(20 * Math.pow(150, v))}`); // LP: pasan los graves · HP: pasan los agudos
+
+function Canal({ t }) {
+  const st = t.strip || {}, pro = session.can('canal'), set = (k) => (v) => session.setStrip(t.id, { [k]: Math.abs(v) < (k === 'filtro' ? 0.03 : 0.25) && k !== 'drive' ? 0 : v });
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+      <div className="row" style={{ gap: 8 }}><span className="label" style={{ flex: 1 }}>Canal</span>
+        {!pro ? <a href="#/cuenta?plan" className="badge-pro">PRO</a> : (st.lo || st.mid || st.hi || st.filtro || st.drive) ? <button type="button" className="btn" style={{ height: 24, fontSize: 11 }} onClick={() => session.setTrack(t.id, { strip: null })}>Plano</button> : null}</div>
+      <Knob label="Graves" value={st.lo || 0} min={-12} max={12} fmt={db} disabled={!pro} onChange={set('lo')} />
+      <Knob label="Medios" value={st.mid || 0} min={-12} max={12} fmt={db} disabled={!pro} onChange={set('mid')} />
+      <Knob label="Agudos" value={st.hi || 0} min={-12} max={12} fmt={db} disabled={!pro} onChange={set('hi')} />
+      <Knob label="Filtro" value={st.filtro || 0} min={-1} max={1} fmt={fltFmt} disabled={!pro} onChange={set('filtro')} />
+      <Knob label="Saturar" value={st.drive || 0} min={0} max={1} fmt={(v) => `${Math.round(v * 100)}%`} disabled={!pro} onChange={set('drive')} />
+      <label className="row" style={{ gap: 8, fontSize: 12 }}><input type="checkbox" checked={t.choke !== false} onChange={(e) => session.setTrack(t.id, { choke: e.target.checked })} style={{ accentColor: 'var(--acc)' }} />El hat cerrado corta al abierto</label>
+    </div>
   );
 }
 

@@ -22,7 +22,7 @@ import { KoLink, CHARLA_DEFAULT } from './ko.js';
 import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud , shareTake, unshareTake, kitIndex, uploadSample, downloadSample, deleteSample, uploadTakeAudio, downloadTakeAudio, deleteTakeAudio } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
-const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes', 'opto', 'taste', 'compas', 'acento', 'lufs', 'xfade', 'intensidad', 'mundo', 'charla', 'expr'];
+const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes', 'opto', 'taste', 'compas', 'acento', 'lufs', 'xfade', 'intensidad', 'mundo', 'charla', 'expr', 'fillEvery'];
 
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'], olfato: ['vinagre', 'co2', 'geosmina'], cortejo: ['canto', 'cva', 'deseo'], vision: ['acercar', 'movimiento', 'luz'] };
 // circuitos: cada uno es una parte real del mismo cerebro, con sus sensores y su neurona de salida
@@ -51,6 +51,7 @@ export const PRO_FEATURES = {
   pistas: '4 pistas: los 4 grupos del K.O. II, cada una con su circuito',
   directo: 'Directo: crossfader entre aparatos y macros para tocar en vivo',
   mundo: 'Mundo en vivo: sismos, Wikipedia y bitcoin como estímulos (el clima es gratis)',
+  canal: 'Canal por pista: ecualizador, filtro y saturación',
 };
 // pistas 3 y 4 (Pro): ocupan los grupos B y D del K.O. II, que las dos primeras dejan libres
 export const EXTRA_TRACKS = [{ id: 'p3', group: 'B', sense: 'olfato', root: 60 }, { id: 'p4', group: 'D', sense: 'cortejo', root: 36 }];
@@ -74,7 +75,7 @@ const DEFAULTS = {
   sk: { follow: false, fxAuto: false, fx: [0, 1] },
   fx: { ...FX_DEFAULT }, metro: false, countIn: 1, autoLanes: [],
   taste: { on: true, likes: {}, dislikes: {}, n: 0, plastic: {} },
-  compas: '4/4', acento: 0.35, lufs: 'streaming', xfade: 0.5, intensidad: 1, mundo: { mix: 1 }, charla: { ...CHARLA_DEFAULT }, expr: null,
+  compas: '4/4', acento: 0.35, lufs: 'streaming', xfade: 0.5, intensidad: 1, mundo: { mix: 1 }, charla: { ...CHARLA_DEFAULT }, expr: null, fillEvery: 0,
   opto: { on: false, mode: 'activar', target: 'pad', power: 0.6, pattern: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] },
   follow: { source: 'entrada', tempo: true, key: true, autoPlay: true, offset: 0 },
   oidoSource: 'manual', dataMap: {}, perRow: 16,
@@ -86,7 +87,7 @@ export class Session {
     this.s = structuredClone(DEFAULTS);
     this.s.playing = false; this.s.rec = false; this.s.ko = { input: null, output: null, error: null };
     this.s.takes = []; this.s.ready = false; this.s.user = null; Object.assign(this.s, NO_PLAN); this.s.sync = cloudEnabled ? 'local' : 'off'; this.s.mutHistory = {}; this.s.data = null; this.s.row = 0; this.s.saved = Date.now();
-    this.live = { step: 0, pos: 0, active: 0, mn9: 0, groom: 0, rate: {}, lanes: {}, out: {}, hist: new Array(64).fill(0), counts: null, lastHitAt: {}, rowHist: [], rateHist: {}, spikes: {}, meter: {} };
+    this.live = { step: 0, pos: 0, active: 0, mn9: 0, groom: 0, rate: {}, lanes: {}, out: {}, hist: new Array(64).fill(0), counts: null, lastHitAt: {}, lastPad: {}, rowHist: [], rateHist: {}, spikes: {}, meter: {} };
     if (typeof window !== 'undefined') { addEventListener('pagehide', () => this.flush()); document.addEventListener('visibilitychange', () => document.hidden && this.flush()); }
     this.rec = null; this.ear = new Ear(); this.synth = new Synth(); this.capture = new Capture(); this.world = new World(this); this.vision = new Vision(); this.kolink = new KoLink(this, SENSES);
     this.ko = new KO2({
@@ -387,7 +388,7 @@ export class Session {
     for (const t of this.s.tracks) {
       const id = t.kitId && this.kitAllowed(t.kitId) && this.can('kits') ? t.kitId : want;
       if (!this.synth.kits[id]) this.synth.kits[id] = (await build(id)).buffers;
-      this.synth.trackKit[t.id] = id; this.synth.setSends(t.id, { rev: t.rev ?? 0, dly: t.dly ?? 0 });
+      this.synth.trackKit[t.id] = id; this.synth.setStrip(t.id, this.stripFor(t)); this.synth.choke[t.id] = t.choke !== false; this.synth.setSends(t.id, { rev: t.rev ?? 0, dly: t.dly ?? 0 });
     }
     this.synth.setFx(this.s.fx, this.ko.internalBpm || this.s.bpm); this.synth.sc = this.s.fx?.sc || 0;
     this.set({ kitActive: want, customSamples: g.custom });
@@ -395,7 +396,7 @@ export class Session {
   setTrackKit(tid, id) { if (id && !this.can('kits')) { location.hash = '#/cuenta?plan'; return; } this.setTrack(tid, { kitId: id || null }); this.loadKit(); }
   setFx(patch, persist = true) {
     if ('sc' in patch) this.synth.sc = patch.sc; const fx = { ...FX_DEFAULT, ...this.s.fx, ...patch }; this.set({ fx }, persist); this.synth.setFx(fx, this.ko.internalBpm || this.s.bpm); }
-  get wavOptions() { return { padFor: (e) => { const t = this.track(e.track); return t ? this.padSound(t, e.pad) : null; }, fx: this.s.fx, bpm: this.ko.internalBpm || this.s.bpm, sends: Object.fromEntries(this.s.tracks.map((t) => [t.id, { rev: t.rev ?? 0, dly: t.dly ?? 0 }])), kits: this.synth.kits, trackKit: this.synth.trackKit }; }
+  get wavOptions() { return { padFor: (e) => { const t = this.track(e.track); return t ? this.padSound(t, e.pad) : null; }, fx: this.s.fx, bpm: this.ko.internalBpm || this.s.bpm, sends: Object.fromEntries(this.s.tracks.map((t) => [t.id, { rev: t.rev ?? 0, dly: t.dly ?? 0 }])), strips: Object.fromEntries(this.s.tracks.map((t) => [t.id, this.stripFor(t)])), choke: Object.fromEntries(this.s.tracks.map((t) => [t.id, t.choke !== false])), kits: this.synth.kits, trackKit: this.synth.trackKit }; }
   // ---------- congelar: el compás que te gustó queda como patrón editable ----------
   freeze(tid = this.s.selTrack) {
     const t = this.track(tid), lanes = this.live.lanes[tid]; if (!t || !lanes) return false;
@@ -468,7 +469,13 @@ export class Session {
     await this.refreshTakes();
   }
   setInput(k, v, persist = true) { this.set({ inputs: { ...this.s.inputs, [k]: v } }, persist); }
-  setTrack(id, patch, persist = true) { this.set({ tracks: this.s.tracks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }, persist); if ('level' in patch) this.skFollow(this.track(id)); if ('rev' in patch || 'dly' in patch) { const t = this.track(id); this.synth.setSends(id, { rev: t.rev ?? 0, dly: t.dly ?? 0 }); } }
+  setTrack(id, patch, persist = true) { this.set({ tracks: this.s.tracks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }, persist); if ('level' in patch) this.skFollow(this.track(id)); if ('rev' in patch || 'dly' in patch) { const t = this.track(id); this.synth.setSends(id, { rev: t.rev ?? 0, dly: t.dly ?? 0 }); }
+    if ('strip' in patch) this.synth.setStrip(id, this.stripFor(this.track(id))); if ('choke' in patch) this.synth.choke[id] = patch.choke !== false; }
+  // el canal (EQ, filtro, saturación) es Pro: en Free la pista suena plana
+  stripFor(t) { return t && this.can('canal') ? t.strip || null : null; }
+  setStrip(id, patch, persist = true) { const t = this.track(id); if (!t) return; if (!this.can('canal')) { if (persist) location.hash = '#/cuenta?plan'; return; } this.setTrack(id, { strip: { ...(t.strip || {}), ...patch } }, persist); }
+  // remate ahora: el compás que suena termina con el remate de cada pista
+  fillNow() { if (!this.s.playing) return; this.live.fillManual = Math.floor(this.live.step / this.C.len); this.emit(); }
   track(id = this.s.selTrack) { return this.s.tracks.find((t) => t.id === id); }
   pads(track) { return (this.D.modos[track.sense] || this.D.modos.gusto).pads; }
   // estado en vivo de cada pista (rejilla, frecuencias y la historia por neurona para la gráfica del inspector)
@@ -581,7 +588,7 @@ export class Session {
     const C = this.C, pos = n % C.len;
     if (s.metro) { const c = clickAt(C, pos); if (c) this.synth.click(at, c); }
     if (s.data && n > 0 && n % s.perRow === 0) { s.row = (s.row + 1) % s.data.rows; queueMicrotask(() => this.emit()); }
-    this.live.step = n; if (pos === 0) onBar(this, Math.floor(n / C.len));
+    this.live.step = n; if (pos === 0) { const bar = Math.floor(n / C.len); onBar(this, bar); L.fillBar = this.isFillBar(bar); }
     if (s.autoLanes?.length) this.batch(() => this.automate(n));
     this.opto(n, at);
     const R = this.rates(); L.lastRates = R;
@@ -589,26 +596,36 @@ export class Session {
     let active = 0; for (let i = 0; i < cnt.length; i++) if (cnt[i]) active++;
     L.active = active; L.hist.push(active); L.hist.shift(); L.step = n; L.stepAt = at;
     const flyOn = this.kolink.step(n); // llamada y respuesta con el K.O.: en tu compás la mosca escucha
+    // remate: en el último tiempo del compás antes de un cambio (escena, parte de la canción, cada 4/8 compases o «Remate ahora»)
+    const fillOn = !!(L.fillBar || s.pendingScene || L.fillManual === Math.floor(n / C.len)), zone = Math.max(2, Math.round(C.len / 4)), inZone = fillOn && pos >= C.len - zone;
     const acc = accent(C, pos, s.acento ?? 0), swingMs = pos % 2 ? ((s.swing - 50) / 50) * stepMs : 0, curve = CURVES[s.curve];
     for (const t of s.tracks) {
-      const pads = this.pads(t), lanes = L.lanes[t.id], rate = L.rate[t.id], on = this.audible(t);
+      const pads = this.pads(t), lanes = L.lanes[t.id], rate = L.rate[t.id], on = this.audible(t), fill = inZone ? t.fill || 'off' : 'off';
+      // la mosca se suelta: al entrar al remate sus neuronas reciben un empujón y toca aunque la pista esté congelada
+      if (fill === 'mosca' && pos === C.len - zone && on) pads.forEach((p) => { this.sim.g[p.idx] += this.D.params.w_poi * 2.5 * (s.intensidad ?? 1); });
+      const roll = fill === 'redoble' ? this.rollPad(t) : -1, ri = pos - (C.len - zone);
       pads.forEach((p, k) => {
         const c = cnt[p.idx]; rate[k] = rate[k] * 0.9 + 0.1 * (c / (s.density / 1000));
         lanes[k][pos] = 0; L.rateHist[t.id][k][n % HIST] = rate[k]; L.spikes[t.id][k][n % HIST] = c;
         // vivo = toca la mosca · congelado = toca el patrón · ambos = el patrón más lo que agregue la mosca
-        const mode = t.play || 'vivo', fz = mode !== 'vivo' && t.frozen ? t.frozen[k][n % this.patLen(t)] : 0;
+        if (fill === 'corte') return; // corte: silencio antes del uno
+        const mode = fill === 'mosca' ? 'ambos' : t.play || 'vivo', fz = mode !== 'vivo' && t.frozen ? t.frozen[k][n % this.patLen(t)] : 0;
         let vel = 0;
         if (c && on && mode !== 'congelado') { const x = Math.min(1, c / 3), ghost = s.ghost && p.inhibidora ? 0.6 : 1; vel = Math.round((s.velMin + (s.velMax - s.velMin) * curve(x)) * ghost * t.level); }
         if (fz && on && Math.random() * 100 < (t.prob?.[k]?.[n % this.patLen(t)] ?? 100)) vel = Math.max(vel, Math.round(fz * t.level));
+        if (k === roll && on) vel = Math.max(vel, Math.round((62 + 60 * (ri + 1) / zone) * t.level)); // redoble que crece hasta el uno
         if (vel) { const g = flyOn ? this.xfGain(t) : 0; vel = g ? Math.max(1, Math.min(127, Math.round(vel * acc * g))) : 0; }
         if (!vel) return;
         const when = at + swingMs + (Math.random() * 2 - 1) * s.humanize;
+        L.lastPad[t.id] = k;
         const r = this.route(t, k, undefined, fz ? t.deg?.[k]?.[n % this.patLen(t)] || 0 : 0);
         lanes[k][pos] = vel;
         const port = this.portFor(t);
         const notes = r.chord && r.note != null ? r.chord : [r.note]; // acorde: todas las notas, las añadidas un poco más suaves
         if (this.toDevice(t, port) && r.note != null) notes.forEach((nt, j) => this.ko.hit(nt, j ? Math.round(vel * 0.8) : vel, r.ch, r.voice === 'tono' ? stepMs * 0.9 : 60, when, port));
         if (this.toKit(t, port)) notes.forEach((nt, j) => this.sound({ ...r, note: nt }, j ? Math.round(vel * 0.7) : vel, when, t, k));
+        if (k === roll && pos === C.len - 1) { const w2 = when + stepMs / 2, v2 = Math.min(127, vel + 6); // el último golpe del redoble va doble (fusas)
+          if (this.toDevice(t, port) && r.note != null) this.ko.hit(r.note, v2, r.ch, 50, w2, port); if (this.toKit(t, port)) this.sound(r, v2, w2, t, k); }
         const mt = L.meter[t.id]; if (!mt || when - mt.at > 60 || vel > mt.vel) L.meter[t.id] = { at: when, vel };
         L.lastHitAt[t.id + k] = when;
         if (this.rec) notes.forEach((nt, j) => this.rec.events.push({ t: when - this.rec.t0, step: n - this.rec.n0, track: t.id, pad: k, neuron: p.tipo, note: nt ?? 0, vel: j ? Math.round(vel * 0.8) : vel, ch: r.ch, voice: r.voice, port: port?.name, ...(j ? { chord: 1 } : {}) }));
@@ -625,6 +642,16 @@ export class Session {
     }
     if (s.data) L.rowHist[s.row] = L.mn9;
     this.stepListeners.forEach((f) => f(n, cnt));
+  }
+  // ¿este compás termina en remate? cada 4/8 compases, o el último compás de una parte de la canción
+  isFillBar(bar) {
+    const s = this.s, ev = s.fillEvery || 0; if (ev && (bar + 1) % ev === 0) return true;
+    const sp = this.songPos; return !!(s.songOn && sp && s.song.length && sp.bars === (s.song[sp.row]?.bars || 1) - 1);
+  }
+  // el pad del redoble: la caja (o tom, palmas, aro) de la pista; en una pista melódica, el último pad que sonó
+  rollPad(t) {
+    for (const v of ['caja', 'tom', 'palmas', 'aro']) { for (let k = 0; k < 12; k++) if (this.route(t, k).voice === v) return k; }
+    return this.live.lastPad?.[t.id] ?? 0;
   }
   // nota que llega del aparato → estimula la neurona que toca esa nota (como optogenética)
   // una nota que llega de un K.O.: la conversación decide qué neurona o sentido estimula

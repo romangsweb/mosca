@@ -33,10 +33,14 @@ export const TARGETS = [
     range(`lvl_${id}`, `Nivel pista ${i + 1}`, 'Mezcla', 20, 100, (s) => Math.round((s.track(id)?.level ?? 1) * 100), (s, v) => s.track(id) && s.setTrack(id, { level: v / 100 }, false)),
     range(`rev_${id}`, `Reverb pista ${i + 1}`, 'Mezcla', 0, 100, (s) => Math.round((s.track(id)?.rev ?? 0) * 100), (s, v) => s.track(id) && s.setTrack(id, { rev: v / 100 }, false)),
     trig(`mute_${id}`, `Silenciar pista ${i + 1}`, 'Mezcla', (s) => s.track(id) && s.setTrack(id, { mute: !s.track(id).mute })),
+    // canal (Pro): el filtro de DJ y la saturación de cada pista, para una perilla del sidekick o un movimiento de automatización
+    range(`flt_${id}`, `Filtro pista ${i + 1} (graves ↔ agudos)`, 'Canal', -100, 100, (s) => Math.round((s.track(id)?.strip?.filtro ?? 0) * 100), (s, v) => s.track(id) && s.setStrip(id, { filtro: Math.abs(v) < 4 ? 0 : v / 100 }, false)),
+    range(`drv_${id}`, `Saturación pista ${i + 1}`, 'Canal', 0, 100, (s) => Math.round((s.track(id)?.strip?.drive ?? 0) * 100), (s, v) => s.track(id) && s.setStrip(id, { drive: v / 100 }, false)),
   ]),
   trig('play', 'Tocar / detener', 'Acciones', (s) => s.toggle()),
   trig('rec', 'Grabar', 'Acciones', (s) => s.toggleRec()),
   trig('mutar', 'Mutar pista', 'Acciones', (s) => s.mutateTrack()),
+  trig('remate', 'Remate ahora', 'Acciones', (s) => s.fillNow()),
   trig('next', 'Siguiente escena', 'Escenas', (s) => { const have = SLOTS.filter((x) => s.s.scenes[x]); if (!have.length) return; const i = have.indexOf(s.s.sceneNow); s.launchScene(have[(i + 1) % have.length]); }),
   ...SLOTS.map((x) => trig(`scene_${x}`, `Escena ${x}`, 'Escenas', (s) => s.launchScene(x))),
 ];

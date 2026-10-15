@@ -49,6 +49,33 @@ function impulse(ctx, secs = 2.2) {
   return b;
 }
 export const FX_DEFAULT = { filtro: 1, comp: true, dlyBeats: 0.75, dlyFb: 0.38, limit: true };
+// ---------- canal por pista ----------
+// lo, mid, hi: dB (−12…12) · filtro: −1 (solo graves) … 0 (abierto) … 1 (solo agudos) · drive: 0…1 (saturación)
+export const STRIP_DEFAULT = { lo: 0, mid: 0, hi: 0, filtro: 0, drive: 0 };
+export const stripIsFlat = (st) => !st || ['lo', 'mid', 'hi', 'filtro', 'drive'].every((k) => !st[k]);
+const curves = new Map();
+function driveCurve(d) {
+  const key = Math.round(d * 50); if (curves.has(key)) return curves.get(key);
+  const k = 1 + (key / 50) * 24, n = 1024, c = new Float32Array(n), tk = Math.tanh(k);
+  for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; c[i] = Math.tanh(k * x) / tk; }
+  curves.set(key, c); return c;
+}
+function applyStrip(ctx, b, st) {
+  const x = { ...STRIP_DEFAULT, ...(st || {}) }, now = ctx.currentTime, sp = (p, v) => p.setTargetAtTime(v, now, 0.015);
+  sp(b.lo.gain, x.lo); sp(b.mid.gain, x.mid); sp(b.hi.gain, x.hi);
+  const f = Math.max(-1, Math.min(1, x.filtro));
+  if (f > 0.01) { b.flt.type = 'highpass'; sp(b.flt.frequency, 20 * Math.pow(150, f)); } // hasta 3 kHz: solo queda el brillo
+  else { b.flt.type = 'lowpass'; sp(b.flt.frequency, f < -0.01 ? 20000 * Math.pow(0.01, -f) : 20000); } // hasta 200 Hz: solo queda el cuerpo
+  sp(b.flt.Q, 0.7 + Math.abs(f) * 1.8); // un poco de resonancia al cerrarlo, como un filtro de DJ
+  const d = Math.max(0, Math.min(1, x.drive)); b.sh.curve = d > 0.01 ? driveCurve(d) : null; sp(b.mk.gain, 1 / (1 + d * 1.2)); // la saturación sube el volumen: lo compensamos
+}
+// choke: el hat cerrado corta al abierto (como en una batería de verdad) · state: { pista: nodo del hat abierto que suena }
+const CHOKE = new Set(['hat', 'hat abierto']);
+export function chokeOut(ctx, dest, state, track, name, t, on = true) {
+  if (!on || !CHOKE.has(name)) return dest;
+  const prev = state[track]; if (prev) { prev.gain.setValueAtTime(1, t); prev.gain.setTargetAtTime(0, t, 0.006); delete state[track]; }
+  const g = ctx.createGain(); g.connect(dest); if (name === 'hat abierto') state[track] = g; return g;
+}
 import { master } from './loudness.js';
 export function buildChain(ctx, dest, fx = FX_DEFAULT, bpm = 110) {
   const out = ctx.createGain(); out.gain.value = 0.7;
@@ -65,10 +92,19 @@ export function buildChain(ctx, dest, fx = FX_DEFAULT, bpm = 110) {
   const buses = {};
   const chain = {
     out, filt, comp, thru, rev, dly, fb, buses, lim, post,
-    bus(id, sends = {}) {
-      if (!buses[id]) { const g = ctx.createGain(), r = ctx.createGain(), d = ctx.createGain(); g.connect(out); g.connect(r).connect(rev); g.connect(d).connect(dly); buses[id] = { in: g, rev: r, dly: d }; }
-      const b = buses[id]; b.rev.gain.value = sends.rev ?? 0; b.dly.gain.value = sends.dly ?? 0; return b.in;
+    // cada pista: entrada → EQ de 3 bandas → filtro DJ → saturación → salida (y de ahí a la mezcla, la reverb y el delay)
+    bus(id, sends = {}, st) {
+      if (!buses[id]) {
+        const g = ctx.createGain(), r = ctx.createGain(), d = ctx.createGain(), mk = ctx.createGain();
+        const lo = ctx.createBiquadFilter(), mid = ctx.createBiquadFilter(), hi = ctx.createBiquadFilter(), flt = ctx.createBiquadFilter(), sh = ctx.createWaveShaper();
+        lo.type = 'lowshelf'; lo.frequency.value = 120; mid.type = 'peaking'; mid.frequency.value = 1000; mid.Q.value = 0.9; hi.type = 'highshelf'; hi.frequency.value = 6000;
+        flt.type = 'lowpass'; flt.frequency.value = 20000; flt.Q.value = 0.7; sh.oversample = '2x';
+        g.connect(lo).connect(mid).connect(hi).connect(flt).connect(sh).connect(mk); mk.connect(out); mk.connect(r).connect(rev); mk.connect(d).connect(dly);
+        buses[id] = { in: g, rev: r, dly: d, lo, mid, hi, flt, sh, mk, drive: 0 };
+      }
+      const b = buses[id]; b.rev.gain.value = sends.rev ?? 0; b.dly.gain.value = sends.dly ?? 0; if (st !== undefined) chain.strip(id, st); return b.in;
     },
+    strip(id, st) { const b = buses[id]; if (b) applyStrip(ctx, b, st); },
     set(f = FX_DEFAULT, tempo = bpm) {
       const x = { ...FX_DEFAULT, ...f };
       filt.frequency.value = 180 * Math.pow(18000 / 180, Math.max(0, Math.min(1, x.filtro)));
@@ -84,7 +120,7 @@ export function buildChain(ctx, dest, fx = FX_DEFAULT, bpm = 110) {
 }
 
 export class Synth {
-  constructor() { this.ctx = null; this.out = null; this.enabled = true; this.kit = null; this.kits = {}; this.chain = null; this.trackKit = {}; this.sends = {}; }
+  constructor() { this.ctx = null; this.out = null; this.enabled = true; this.kit = null; this.kits = {}; this.chain = null; this.trackKit = {}; this.sends = {}; this.strips = {}; this.choke = {}; this.open = {}; }
   ensure() {
     if (!this.ctx) {
       this.ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -102,13 +138,15 @@ export class Synth {
     o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 0.06);
   }
   setFx(fx, bpm) { this.ensure(); this.chain.set(fx, bpm); }
-  setSends(id, sends) { this.sends[id] = sends; if (this.chain) this.chain.bus(id, sends); }
+  setSends(id, sends) { this.sends[id] = sends; if (this.chain) this.chain.bus(id, sends, this.strips[id] ?? null); }
+  setStrip(id, st) { this.strips[id] = st || null; if (this.chain) this.chain.bus(id, this.sends[id], this.strips[id]); }
   // at: performance.now() en ms · track: id de la pista (su bus, su kit y sus envíos)
   play(name, vel, at = performance.now(), pitch = 0, track = null, pad = null) {
     if (!this.enabled || !name) return;
     const ctx = this.ensure(), t = Math.max(ctx.currentTime, ctx.currentTime + (at - performance.now()) / 1000);
     const kit = (track && this.kits[this.trackKit[track]]) || this.kit;
-    const dest = padOut(ctx, track ? this.chain.bus(track, this.sends[track]) : this.out, t, pad || undefined, kit?.[name]?.duration || 0.5);
+    const bus = track ? this.chain.bus(track, this.sends[track], this.chain.buses[track] ? undefined : this.strips[track] ?? null) : this.out;
+    const dest = padOut(ctx, chokeOut(ctx, bus, this.open, track || '-', name, t, this.choke[track] !== false), t, pad || undefined, kit?.[name]?.duration || 0.5);
     if (name !== 'tono' && kit?.[name]) playBuffer(ctx, dest, kit[name], vel, t, pitch);
     else voice(ctx, dest, name, vel, t, pitch);
     // sidechain: el bombo «empuja» a las demás pistas (baja su volumen un instante y vuelve)
@@ -138,11 +176,12 @@ export function playBuffer(ctx, dest, buffer, vel, t, pitch = 0) {
 export async function renderWav(take, kitFor, kit = null, opt = {}) {
   const sr = 44100, dur = take.durMs / 1000 + 2.5;
   const ctx = new OfflineAudioContext(2, Math.ceil(sr * dur), sr), chain = buildChain(ctx, ctx.destination, opt.fx, opt.bpm);
-  for (const id of new Set(take.events.map((e) => e.track))) chain.bus(id || 'x', opt.sends?.[id]);
-  for (const e of take.events) {
+  for (const id of new Set(take.events.map((e) => e.track))) chain.bus(id || 'x', opt.sends?.[id], opt.strips?.[id] ?? null);
+  const open = {}, events = [...take.events].sort((a, b) => a.t - b.t); // en orden, para que el choke corte al hat correcto
+  for (const e of events) {
     const n = kitFor(e), t = e.t / 1000 + 0.05, p = n === 'tono' ? e.note : (e.track === 'oido' ? 3 : 0) + (opt.padFor?.(e)?.tune || 0);
     const k = (opt.kits && opt.trackKit && opt.kits[opt.trackKit[e.track]]) || kit, pd = opt.padFor?.(e);
-    const dest = padOut(ctx, chain.bus(e.track || 'x', opt.sends?.[e.track]), t, pd || undefined, k?.[n]?.duration || 0.5);
+    const dest = padOut(ctx, chokeOut(ctx, chain.bus(e.track || 'x', opt.sends?.[e.track]), open, e.track || 'x', n, t, opt.choke?.[e.track] !== false), t, pd || undefined, k?.[n]?.duration || 0.5);
     if (n !== 'tono' && k?.[n]) playBuffer(ctx, dest, k[n], e.vel, t, p); else voice(ctx, dest, n, e.vel, t, p);
     const sc = opt.fx?.sc || 0;
     if (n === 'bombo' && sc > 0) for (const [id, b] of Object.entries(chain.buses)) { if (id === e.track) continue; const gn = b.in.gain; gn.setValueAtTime(1, t); gn.linearRampToValueAtTime(1 - sc * 0.85 * Math.min(1, e.vel / 110), t + 0.005); gn.linearRampToValueAtTime(1, t + 0.06 + sc * 0.18); }
