@@ -12,10 +12,13 @@ export default function KoTwin({ group: g0, onGroup }) {
   const [group, setGroup] = useState(g0 || session.track().group || 'A');
   const pads = useRef([]), rings = useRef([]), grp = useRef([]), mini = useRef([]), kx = useRef(null), ky = useRef(null), fad = useRef(null), scr = useRef(null);
   useEffect(() => { if (g0) setGroup(g0); }, [g0]);
+  const seen = useRef(0);
   useEffect(() => {
     let raf;
     const loop = () => {
       const now = performance.now(), K = session.kolink, out = {}, inn = {}, act = {};
+      // sigue al grupo que tocas en el aparato (el K.O. no avisa cuando cambias de grupo, pero sí qué pad tocas)
+      const last = K.inLog[K.inLog.length - 1]; if (last?.group && last.at > seen.current) { seen.current = last.at; if (last.group !== group && last.manual !== true) { setGroup(last.group); onGroup?.(last.group); } }
       for (const e of K.outLog) { const a = Math.exp(-(now - e.at) / 200); if (a < 0.02) continue; const key = `${e.group}${e.off}`; out[key] = Math.max(out[key] || 0, a); act[e.group] = Math.max(act[e.group] || 0, a); }
       for (const e of K.inLog) { if (!e.group) continue; const a = Math.exp(-(now - e.at) / 260); if (a < 0.02) continue; const key = `${e.group}${e.off}`; inn[key] = Math.max(inn[key] || 0, a); act[e.group] = Math.max(act[e.group] || 0, a * 0.8); }
       for (let off = 0; off < 12; off++) {
@@ -37,7 +40,7 @@ export default function KoTwin({ group: g0, onGroup }) {
   const press = (off) => {
     const note = 36 + GROUPS.indexOf(group) * 12 + off, t = session.s.tracks.find((x) => x.group === group) || session.track(), port = session.portFor(t) || session.ko.output;
     if (port) session.ko.hit(note, 110, t.ch || 1, 120, performance.now(), port);
-    session.kolink.inLog.push({ group, off, at: performance.now(), vel: 110 }); session.kolink.stimulate(t, off, 110);
+    session.kolink.inLog.push({ group, off, at: performance.now(), vel: 110, manual: true }); session.kolink.stimulate(t, off, 110);
   };
   return (
     <svg viewBox="0 0 300 430" style={{ width: '100%', maxWidth: 340, height: 'auto', display: 'block' }} role="img" aria-label={`K.O. II en pantalla, grupo ${group}`}>

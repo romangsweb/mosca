@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { session } from '../engine/session.js';
-import { CHARLA_DEFAULT, EXPR_DEFAULT, EXPR_SOURCES, EXPR_DESTS } from '../engine/ko.js';
+import { CHARLA_DEFAULT, EXPR_DEFAULT, EXPR_SOURCES, EXPR_DESTS, GROUPS, noteToPad } from '../engine/ko.js';
+import { session as S2, CIRCUITS, EXTRA_TRACKS, MAX_TRACKS } from '../engine/session.js';
+import { TARGETS, targetById, srcLabel } from '../engine/controls.js';
 import KoTwin from '../ui/KoTwin.jsx';
 import { useS, useTick, Icon, Seg } from '../ui/kit.jsx';
 
@@ -23,6 +25,55 @@ function Lane({ l, i, set }) {
       <input type="range" min={0} max={100} value={Math.round(l.depth * 100)} aria-label="Cantidad" onChange={(e) => set(i, { depth: +e.target.value / 100 })} style={{ accentColor: 'var(--acc)' }} />
       <div aria-hidden="true" style={{ height: 6, borderRadius: 3, background: 'var(--line)' }}><div style={{ width: `${Math.min(1, v) * 100}%`, maxWidth: '100%', height: '100%', borderRadius: 3, background: 'var(--acc)' }} /></div>
     </div>
+  );
+}
+
+// qué pista toca cada grupo del K.O. (y arreglarlo con un clic)
+function Grupos() {
+  const s = useS();
+  return (
+    <section className="panel" style={{ gap: 8 }} aria-label="Grupos del K.O.">
+      <h2 style={{ fontSize: 15 }}>Grupos del K.O. → pistas de la mosca</h2>
+      <p className="muted" style={{ margin: 0, fontSize: 12 }}>Cada grupo del K.O. habla con la pista que usa ese grupo. Si un grupo no tiene pista, sus pads estimulan a la pista elegida en el Estudio.</p>
+      {GROUPS.map((G) => {
+        const t = s.tracks.find((x) => x.group === G), slot = EXTRA_TRACKS.find((x) => x.group === G), on = t && S2.audible(t);
+        return (
+          <div key={G} className="row" style={{ gap: 10, fontSize: 12.5, padding: '6px 0', borderTop: '1px solid var(--line)' }}>
+            <span className="mono" style={{ width: 28, height: 28, borderRadius: 7, display: 'grid', placeItems: 'center', background: on ? 'var(--acc)' : 'var(--well)', color: on ? '#0B0B0C' : 'var(--sub)', fontWeight: 700 }}>{G}</span>
+            <span style={{ flex: 1 }}>{t ? <>{t.name} <span className="dim">· {CIRCUITS[t.sense]?.name}</span>{!on && <span style={{ color: '#FF8A4D' }}> · {s.tracks.indexOf(t) >= S2.trackLimit ? 'Pro: no suena' : 'silenciada'}</span>}</> : <span className="dim">sin pista → toca a «{S2.track().name}»</span>}</span>
+            {t && !on && s.tracks.indexOf(t) < S2.trackLimit && <button type="button" className="btn" style={{ height: 28 }} onClick={() => S2.setTrack(t.id, { mute: false, solo: false })}>Activar</button>}
+            {!t && slot && s.tracks.length < MAX_TRACKS && <button type="button" className="btn" style={{ height: 28 }} onClick={() => S2.addTrack()}>Crear pista{s.tracks.length >= S2.trackLimit && <span className="badge-pro">PRO</span>}</button>}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+// monitor MIDI: qué manda cada botón, perilla o pad, y a qué está conectado; lo que no hace nada se asigna aquí mismo
+function Monitor() {
+  const s = useS(); useTick(6);
+  const rows = session.kolink.mon.slice(0, 10), groups = [...new Set(TARGETS.map((t) => t.group))];
+  const what = (m) => {
+    const map = s.mappings.find((x) => x.src.type === m.type && x.src.ch === m.ch && x.src.num === m.num && (!x.src.port || !m.port || x.src.port === m.port));
+    if (map) return `→ ${targetById(map.target)?.label}`;
+    if (m.type === 'note') { const p = noteToPad(m.num); if (p && s.charla?.on !== false) { const t = s.tracks.find((x) => x.group === p.group && S2.audible(x)) || S2.track(); return `→ conversación: pad ${['.', '0', 'ENT', '1', '2', '3', '4', '5', '6', '7', '8', '9'][p.off]} de ${t.name}`; } }
+    return null;
+  };
+  const assign = (m, target) => { const src = { type: m.type, ch: m.ch, num: m.num, port: m.port }; if (S2.mappingsFull) { location.hash = '#/cuenta?plan'; return; } S2.set({ mappings: [...s.mappings.filter((x) => x.target !== target), { target, src }] }, true); };
+  return (
+    <section className="panel" style={{ gap: 8 }} aria-label="Monitor MIDI">
+      <div className="between"><h2 style={{ fontSize: 15 }}>Monitor: lo que manda tu K.O.</h2><span className="mono dim" style={{ fontSize: 10 }}>{rows.length ? 'EN VIVO' : 'TOCA ALGO EN EL K.O.'}</span></div>
+      <p className="muted" style={{ margin: 0, fontSize: 12 }}>Mueve una perilla, el fader o toca un botón del K.O. Si manda algo que no hace nada, asígnalo aquí: por ejemplo el fader a «Intensidad» o un botón a «Mutar pista».</p>
+      {rows.map((m, i) => { const w = what(m); return (
+        <div key={`${m.at}-${i}`} className="row" style={{ gap: 8, fontSize: 11.5, opacity: Math.max(0.45, 1 - i * 0.06) }}>
+          <span className="mono" style={{ width: 150, flex: 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{srcLabel({ type: m.type, ch: m.ch, num: m.num })}{m.type !== 'pb' ? ` = ${m.val}` : ''}</span>
+          <span style={{ flex: 1, minWidth: 0, color: w ? 'var(--acc)' : 'var(--dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w || 'no hace nada'}</span>
+          {!w && <select className="input" style={{ height: 26, fontSize: 11, width: 170 }} value="" aria-label="Asignar a" onChange={(e) => e.target.value && assign(m, e.target.value)}>
+            <option value="">Asignar a…</option>{groups.map((g) => <optgroup key={g} label={g}>{TARGETS.filter((t) => t.group === g && (t.kind === 'trigger' || m.type !== 'note')).map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</optgroup>)}
+          </select>}
+        </div>
+      ); })}
+    </section>
   );
 }
 
@@ -67,6 +118,7 @@ export default function KO() {
           <p className="dim" style={{ margin: 0, fontSize: 11.5 }}>El K.O. manda MIDI por canal 1 de fábrica. Si no llega nada, revisa en el K.O.: SHIFT + SYSTEM → MIDI (110 = recibe todo, manda por canal 1).</p>
         </section>
       </div>
+      <div className="cols" style={{ alignItems: 'stretch' }}><div style={{ flex: '1 1 380px' }}><Grupos /></div><div style={{ flex: '1 1 460px' }}><Monitor /></div></div>
       <section className="panel" style={{ gap: 12 }} aria-label="Expresión neuronal">
         <div className="between"><h2 className="row" style={{ gap: 8, fontSize: 15 }}><Icon name="mezcla" size={16} />Expresión: la mosca mueve tu K.O.</h2>
           <input type="checkbox" checked={e.on} onChange={(ev) => setE({ on: ev.target.checked })} aria-label="Encender expresión" style={{ width: 18, height: 18, accentColor: 'var(--acc)' }} /></div>

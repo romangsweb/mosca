@@ -95,7 +95,7 @@ export class Session {
       onStop: () => { if (this.s.playing) this.stop(); },
       onNote: (m) => this.onKoNote(m),
       onRaw: (m) => { this.live.lastRaw = { ...m, at: performance.now() }; },
-      onAny: (m) => { this._midiAt = performance.now(); this.live.lastMsg = { ...m, at: performance.now() }; handleMidi(this, m); },
+      onAny: (m) => { this._midiAt = performance.now(); this.live.lastMsg = { ...m, at: performance.now() }; this.kolink?.monitor(m); handleMidi(this, m); },
       onState: (st) => this.set({ ko: { ...st, error: null } }),
     });
     // cada nota que sale hacia un aparato queda registrada: filtro de eco de la conversación y K.O. en pantalla
