@@ -70,7 +70,7 @@ export function melodicChord(pads, k, track, bar = 0, deg = 0) {
 // ¿Qué nota y canal toca la neurona k de una pista con este perfil? (null = no manda MIDI)
 export function route(profile, track, k, pads, overrides = {}, bar = 0, deg = 0) {
   const off = track.map[k], voice = track.kit[off];
-  if (track.mode === 'melodia' || profile.kind === 'melodico') { const notes = melodicChord(pads, k, track, bar, deg); return { note: notes[0], chord: notes, ch: overrides.ch ?? profile.ch, voice: 'tono' }; }
+  if (track.mode === 'melodia' || profile.kind === 'melodico') { const notes = melodicChord(pads, k, track, bar, deg); return { note: notes[0], chord: notes, ch: overrides.ch ?? (profile.id === 'ko2' ? track.melCh || track.ch || 1 : profile.ch), voice: 'tono' }; }
   switch (profile.kind) {
     case 'grupos': return { note: (profile.base ?? GROUP_BASE[track.group]) + off, ch: overrides.ch ?? (profile.id === 'ko2' ? track.ch : profile.ch), voice };
     case 'voces': return { note: (overrides.notes || profile.notes)[voice] ?? 36, ch: overrides.ch ?? profile.ch, voice };

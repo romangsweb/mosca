@@ -18,10 +18,11 @@ import { compas, clickAt, accent } from './compas.js';
 import { liveMeter } from './loudness.js';
 import { World, FEEDS } from './world.js';
 import { Vision } from './vision.js';
+import { KoLink, CHARLA_DEFAULT } from './ko.js';
 import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud , shareTake, unshareTake, kitIndex, uploadSample, downloadSample, deleteSample, uploadTakeAudio, downloadTakeAudio, deleteTakeAudio } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
-const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes', 'opto', 'taste', 'compas', 'acento', 'lufs', 'xfade', 'intensidad', 'mundo'];
+const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes', 'opto', 'taste', 'compas', 'acento', 'lufs', 'xfade', 'intensidad', 'mundo', 'charla', 'expr'];
 
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'], olfato: ['vinagre', 'co2', 'geosmina'], cortejo: ['canto', 'cva', 'deseo'], vision: ['acercar', 'movimiento', 'luz'] };
 // circuitos: cada uno es una parte real del mismo cerebro, con sus sensores y su neurona de salida
@@ -73,7 +74,7 @@ const DEFAULTS = {
   sk: { follow: false, fxAuto: false, fx: [0, 1] },
   fx: { ...FX_DEFAULT }, metro: false, countIn: 1, autoLanes: [],
   taste: { on: true, likes: {}, dislikes: {}, n: 0, plastic: {} },
-  compas: '4/4', acento: 0.35, lufs: 'streaming', xfade: 0.5, intensidad: 1, mundo: { mix: 1 },
+  compas: '4/4', acento: 0.35, lufs: 'streaming', xfade: 0.5, intensidad: 1, mundo: { mix: 1 }, charla: { ...CHARLA_DEFAULT }, expr: null,
   opto: { on: false, mode: 'activar', target: 'pad', power: 0.6, pattern: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] },
   follow: { source: 'entrada', tempo: true, key: true, autoPlay: true, offset: 0 },
   oidoSource: 'manual', dataMap: {}, perRow: 16,
@@ -87,7 +88,7 @@ export class Session {
     this.s.takes = []; this.s.ready = false; this.s.user = null; Object.assign(this.s, NO_PLAN); this.s.sync = cloudEnabled ? 'local' : 'off'; this.s.mutHistory = {}; this.s.data = null; this.s.row = 0; this.s.saved = Date.now();
     this.live = { step: 0, pos: 0, active: 0, mn9: 0, groom: 0, rate: {}, lanes: {}, out: {}, hist: new Array(64).fill(0), counts: null, lastHitAt: {}, rowHist: [], rateHist: {}, spikes: {}, meter: {} };
     if (typeof window !== 'undefined') { addEventListener('pagehide', () => this.flush()); document.addEventListener('visibilitychange', () => document.hidden && this.flush()); }
-    this.rec = null; this.ear = new Ear(); this.synth = new Synth(); this.capture = new Capture(); this.world = new World(this); this.vision = new Vision();
+    this.rec = null; this.ear = new Ear(); this.synth = new Synth(); this.capture = new Capture(); this.world = new World(this); this.vision = new Vision(); this.kolink = new KoLink(this, SENSES);
     this.ko = new KO2({
       onStep: (n, at) => this.step(n, at),
       onStart: () => { if (!this.s.playing) this.play(); },
@@ -97,6 +98,8 @@ export class Session {
       onAny: (m) => { this._midiAt = performance.now(); this.live.lastMsg = { ...m, at: performance.now() }; handleMidi(this, m); },
       onState: (st) => this.set({ ko: { ...st, error: null } }),
     });
+    // cada nota que sale hacia un aparato queda registrada: filtro de eco de la conversación y K.O. en pantalla
+    const hit = this.ko.hit.bind(this.ko); this.ko.hit = (note, vel, ch, len, at, port = this.ko.output) => { if (port) this.kolink.noteOut(note, port); return hit(note, vel, ch, len, at, port); };
   }
   async load() {
     try { await this.loadCore(); } catch (e) { console.error('Fly Punch no pudo cargar el cerebro', e); this.set({ loadError: String(e?.message || e) }); }
@@ -544,7 +547,7 @@ export class Session {
   get monitorOn() { return this.s.monitor === 'siempre' || (this.s.monitor === 'auto' && (!this.ko.connected || this.profile.kind === 'interno')); }
   // ---------- transporte ----------
   play() { this.synth.ensure(); this.sim.reset(); this.live.step = 0; this.live.countIn = 0; this.s.row = 0; this.morphState = null; if (this.s.songOn) this.songPos = { row: 0, bars: 0 }; this.ko.start(); this.set({ playing: true }); }
-  stop() { this.ko.stop(); if (this._recArm) { this._recArm = false; this.set({ rec: false, counting: false }); } else if (this.s.rec) this.toggleRec(); this.morphState = null; this.set({ playing: false, pendingScene: null }); }
+  stop() { this.ko.stop(); this.kolink.reset(); if (this._recArm) { this._recArm = false; this.set({ rec: false, counting: false }); } else if (this.s.rec) this.toggleRec(); this.morphState = null; this.set({ playing: false, pendingScene: null }); }
   toggle() { this.s.playing ? this.stop() : this.play(); }
   // ---------- un paso de semicorchea ----------
   rates() {
@@ -558,6 +561,7 @@ export class Session {
     morphRates(this, r, this.live.step);
     // Mundo en vivo: clima, sismos, Wikipedia, mercado
     if (this.s.mundo && Object.keys(FEEDS).some((id) => this.s.mundo[id]?.on)) this.world.apply(r);
+    this.kolink.applyPulses(r); // golpes del K.O. a un sentido
     // macro «Intensidad» de Directo: escala todos los estímulos a la vez (×0 a ×2)
     const ki = this.can('directo') ? this.s.intensidad ?? 1 : 1; if (ki !== 1) for (const x of Object.keys(r)) r[x] *= ki;
     // las pistas silenciadas no reciben estímulo de su sentido: así no ensucian el cerebro
@@ -568,6 +572,7 @@ export class Session {
   }
   step(n, at) {
     const s = this.s, D = this.D, L = this.live, stepMs = this.ko.stepMs;
+    if (s.sendingTake) { L.step = n; L.stepAt = at; return; } // mandando una toma al K.O.: solo corre el reloj, la mosca no toca
     if (L.countIn > 0) { // compás de cuenta: solo clic, la mosca espera
       { const c = clickAt(this.C, n % this.C.len); if (c) this.synth.click(at, c); } L.step = n; L.stepAt = at; L.countIn--;
       if (!L.countIn) { this.ko.step = 0; if (this._recArm) { this._recArm = false; this.startRec(at + stepMs, 0); } } // el compás 1 empieza después de la cuenta
@@ -583,6 +588,7 @@ export class Session {
     const cnt = this.sim.advance(s.density, R); L.counts = cnt;
     let active = 0; for (let i = 0; i < cnt.length; i++) if (cnt[i]) active++;
     L.active = active; L.hist.push(active); L.hist.shift(); L.step = n; L.stepAt = at;
+    const flyOn = this.kolink.step(n); // llamada y respuesta con el K.O.: en tu compás la mosca escucha
     const acc = accent(C, pos, s.acento ?? 0), swingMs = pos % 2 ? ((s.swing - 50) / 50) * stepMs : 0, curve = CURVES[s.curve];
     for (const t of s.tracks) {
       const pads = this.pads(t), lanes = L.lanes[t.id], rate = L.rate[t.id], on = this.audible(t);
@@ -594,7 +600,7 @@ export class Session {
         let vel = 0;
         if (c && on && mode !== 'congelado') { const x = Math.min(1, c / 3), ghost = s.ghost && p.inhibidora ? 0.6 : 1; vel = Math.round((s.velMin + (s.velMax - s.velMin) * curve(x)) * ghost * t.level); }
         if (fz && on && Math.random() * 100 < (t.prob?.[k]?.[n % this.patLen(t)] ?? 100)) vel = Math.max(vel, Math.round(fz * t.level));
-        if (vel) { const g = this.xfGain(t); vel = g ? Math.max(1, Math.min(127, Math.round(vel * acc * g))) : 0; }
+        if (vel) { const g = flyOn ? this.xfGain(t) : 0; vel = g ? Math.max(1, Math.min(127, Math.round(vel * acc * g))) : 0; }
         if (!vel) return;
         const when = at + swingMs + (Math.random() * 2 - 1) * s.humanize;
         const r = this.route(t, k, undefined, fz ? t.deg?.[k]?.[n % this.patLen(t)] || 0 : 0);
@@ -612,7 +618,7 @@ export class Session {
     const g = D.modos.oido.pads[11].idx; L.groom = L.groom * 0.9 + 0.1 * (cnt[g] / (s.density / 1000));
     for (const [m, i] of Object.entries(D.salidas || {})) L.out[m] = (L.out[m] || 0) * 0.9 + 0.1 * (cnt[i] / (s.density / 1000));
     const fx = this.profile.fx;
-    if (s.fxAuto && fx && this.ko.connected && n % 2 === 0) { this.ko.cc(fx.x, Math.min(127, L.mn9 * 1.4)); this.ko.cc(fx.y, Math.min(127, active * 2)); }
+    this.kolink.expression(n); // la mosca mueve pitch, vibrato y efectos del K.O.
     if (s.sk?.fxAuto && n % 2 === 0 && this.can('controles')) { // la mosca mueve los efectos del sidekick: MN9 → tira 1, acicalamiento → tira 2
       const out = this.sidekick.output, v = [Math.min(127, L.mn9 * 1.4), Math.min(127, L.groom * 1.4)];
       this._skFx = this._skFx || [-9, -9]; v.forEach((x, k) => { if (Math.abs(x - this._skFx[k]) >= 2) { skSend.fxAmount(out, k + 1, x); this._skFx[k] = x; } });
@@ -621,9 +627,8 @@ export class Session {
     this.stepListeners.forEach((f) => f(n, cnt));
   }
   // nota que llega del aparato → estimula la neurona que toca esa nota (como optogenética)
-  onKoNote({ note }) {
-    for (const t of this.s.tracks) for (let k = 0; k < 12; k++) if (this.route(t, k).note === note) this.sim.g[this.pads(t)[k].idx] += this.D.params.w_poi * 2;
-  }
+  // una nota que llega de un K.O.: la conversación decide qué neurona o sentido estimula
+  onKoNote(m) { if (this.D) this.kolink.noteIn(m); }
   tapPad(k, track = this.track()) {
     this.sim.g[this.pads(track)[k].idx] += this.D.params.w_poi * 2;
     const r = this.route(track, k); this.synth.ensure();
@@ -718,6 +723,17 @@ export class Session {
     const shareId = await shareTake(id, this.s.alias || '', t.shareId); this.set({ takes: this.s.takes.map((x) => (x.id === id ? { ...x, shared: true, shareId } : x)) }); return shareId;
   }
   async unshare(id) { await unshareTake(id); this.set({ takes: this.s.takes.map((x) => (x.id === id ? { ...x, shared: false } : x)) }); }
+  // mandar una toma al K.O.: arranca el reloj (el K.O. debe estar en «sincronía entrante» y grabando) y toca solo hacia los aparatos
+  sendTakeToKO(take, onEnd) {
+    if (this.s.playing) this.stop();
+    const prevClock = this.ko.clockOut; this.ko.clockOut = true; this.stopTake();
+    const stepMs = 60000 / (take.bpm || this.s.bpm) / 4, bars = Math.max(1, Math.ceil(take.durMs / (stepMs * this.C.len)));
+    this.setBpm(take.bpm || this.s.bpm); this.ko.start(); this.set({ sendingTake: true });
+    const t0 = this.ko.nextAt, timers = [];
+    for (const e of take.events) timers.push(setTimeout(() => { const tr = this.track(e.track) || this.track(), port = (e.port && this.ko.outPort(e.port)) || this.portFor(tr) || this.ko.output; this.ko.hit(e.note, e.vel, e.ch, 60, t0 + e.t, port); }, Math.max(0, t0 + e.t - performance.now() - 40)));
+    timers.push(setTimeout(() => { this.ko.stop(); this.ko.clockOut = prevClock; this.takeTimers = null; this.set({ sendingTake: false }); onEnd?.(); }, t0 + bars * this.C.len * stepMs - performance.now() + 20));
+    this.takeTimers = timers;
+  }
   // toma editada en el editor de notas: se guarda como toma nueva (la original no se toca)
   async saveEditedTake(orig, edited) {
     if (this.takesLimitReached) { this.set({ notice: 'limite' }); return null; }

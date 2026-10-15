@@ -5,6 +5,7 @@ import { session } from '../engine/session.js';
 import { PAD_KEYS, GROUP_BASE } from '../engine/midi.js';
 import { VOICES, VOICE_CAT, DEFAULT_KIT } from '../engine/synth.js';
 import { useS, Seg, Icon } from '../ui/kit.jsx';
+import { EXPR_DEFAULT } from '../engine/ko.js';
 import { COMPASES, compas } from '../engine/compas.js';
 
 function Slider({ id, label, value, min, max, unit, help, onChange, color }) {
@@ -123,7 +124,7 @@ export default function Sonido() {
         <section className="panel" style={{ gap: 0 }}>
           <Toggle label="Enviar notas al aparato" desc={`Cada disparo toca una nota en ${session.profile.name}. Cámbialo en Equipo.`} checked={s.sendMidi} onChange={(v) => session.set({ sendMidi: v }, true)} />
           <Toggle label="Fly Punch marca el tempo (maestro)" desc="Manda reloj y Start/Stop: el secuenciador del K.O. II arranca junto con la mosca y puedes grabar sus patrones encima. En el K.O. II: SHIFT + ERASE, código 101, ENTER. Si lo dejas apagado y el K.O. manda reloj (código 102), Fly Punch lo sigue." checked={s.clockOut} onChange={(v) => session.setClockOut(v)} />
-          {session.profile.fx && <Toggle label="La mosca mueve los efectos" desc="MN9 controla la perilla X de efectos (CC 12) y la actividad total la perilla Y (CC 13). Elige un efecto en el K.O. II para oírlo." checked={s.fxAuto} onChange={(v) => session.set({ fxAuto: v }, true)} />}
+          {session.profile.fx && <Toggle label="La mosca mueve los efectos" desc="La salida de la pista controla la perilla X de efectos (CC 12) y la actividad total la perilla Y (CC 13). Elige un efecto en el K.O. II para oírlo. Más opciones (pitch, vibrato, sustain) en la página K.O. II." checked={s.expr ? s.expr.on : !!s.fxAuto} onChange={(v) => session.set({ fxAuto: v, expr: { ...(s.expr || EXPR_DEFAULT), on: v } }, true)} />}
           <Toggle label="Sonido interno" desc="Cuándo suena el kit de la compu en las pistas en «Auto». Para elegirlo por pista, usa Mezcla.">
             <Seg label="Sonido interno" items={[['auto', 'Solo sin K.O.'], ['siempre', 'Siempre'], ['nunca', 'Nunca']]} value={s.monitor} onChange={(v) => session.set({ monitor: v }, true)} />
           </Toggle>
