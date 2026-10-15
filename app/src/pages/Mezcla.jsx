@@ -268,9 +268,7 @@ export default function Mezcla() {
           <button type="button" className={`btn lg ${s.playing ? 'primary' : 'acc'}`} onClick={() => session.toggle()}><Icon name={s.playing ? 'stop' : 'play'} size={12} fill="currentColor" />{s.playing ? 'Detener' : 'Tocar'}</button>
         </div>
       </div>
-      <div className="well mono" style={{ flex: 'none', padding: '10px 14px', fontSize: 11, lineHeight: 1.7, color: 'var(--sub)', overflowX: 'auto', whiteSpace: 'nowrap' }} aria-label="Flujo de la señal">
-        MOSCA → {s.tracks.map((t) => { const p = session.portFor(t), dv = session.toDevice(t, p), k = session.toKit(t, p); return `${t.name.toUpperCase()} → ${[dv && (p?.name || session.profileFor(t).name), k && 'COMPU'].filter(Boolean).join(' + ') || '—'}`; }).join('   ·   ')}   ·   APARATOS → SIDEKICK → ENTRADA
-      </div>
+      
       <Consola />
       <Acompanar />
       <SidekickPanel />

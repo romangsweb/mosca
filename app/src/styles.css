@@ -241,3 +241,17 @@ button, .btn, .iconbtn, .pad, .cell, .seg button, .knob svg, input[type=range] {
 @media (max-width: 1599px) { .transport .clk:not(.acc) { display: none; } }
 /* en pantallas medianas el compás se elige en Sonido › Ritmo; así el transporte no tapa el botón del aparato */
 @media (max-width: 1399px) { .transport .tsel { display: none; } }
+/* pantallas bajas (MacBook de 13–14", iPad horizontal): riel compacto y estudio que cabe sin desplazarse tanto */
+@media (max-height: 900px) {
+  .rail { gap: 0; padding: 6px 0; } .rail a { padding: 5px 0 4px; gap: 2px; font-size: 9.5px; } .rail a svg { width: 18px; height: 18px; } .rail-sep { margin: 3px 0; }
+  .studio-top { min-height: 340px; } .studio-bottom { height: 270px; }
+}
+/* la guía: cada consejo puede ocupar dos líneas en vez de cortarse a media palabra */
+.guide > span { flex: 1 1 0; white-space: normal; line-height: 1.35; }
+.guide > a, .guide > button { flex: none; }
+
+/* el botón del aparato se encoge antes de pisar el transporte */
+.topbar .devlink { min-width: 0; flex: 0 1 auto; overflow: hidden; }
+.topbar .devname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+@media (max-width: 1279px) { .topbar .devname { display: none; } }
+@media (max-width: 1279px) { .seg button { padding: 0 8px; } }

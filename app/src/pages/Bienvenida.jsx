@@ -48,7 +48,7 @@ export default function Bienvenida() {
         <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse at 50% 62%, rgba(255,106,26,.08), transparent 50%), radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.7))' }} />
         <div className="row" style={{ position: 'relative', gap: 12 }}><Logo size={30} /><span style={{ fontWeight: 600, fontSize: 17 }}>Fly Punch</span></div>
         <div style={{ position: 'relative', maxWidth: 520, animation: 'rise .6s ease-out both' }}>
-          <p className="label" style={{ margin: '0 0 14px', fontSize: 10 }}>Conectoma FlyWire · 4 circuitos reales · MIDI</p>
+          <p className="label" style={{ margin: '0 0 14px', fontSize: 10 }}>Conectoma FlyWire · 5 circuitos reales · MIDI</p>
           <h1 style={{ fontSize: 'clamp(36px, 4.2vw, 56px)', lineHeight: 1.02, letterSpacing: '-.035em' }}>Un cerebro real de mosca toca tu música.</h1>
           <p style={{ margin: '18px 0 0', fontSize: 16, lineHeight: 1.6, color: '#A6A6AE', maxWidth: 460 }}>Las neuronas reaccionan a sabores, sonidos y datos. Cada una que dispara toca un pad, a tempo.</p>
         </div>

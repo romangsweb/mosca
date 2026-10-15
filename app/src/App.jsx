@@ -136,8 +136,8 @@ export default function App() {
         </div>
         <Transport s={s} />
         <div className="side right">
-          <a href="#/equipo" className="btn ghost hide-sm" title={s.ko.output ? `Conectado: ${s.ko.output}` : 'Elegir y conectar un aparato'}>
-            <span className={`status-dot${s.ko.output || session.profile.kind === 'interno' ? ' on' : ''}`} />{session.profile.kind === 'interno' ? 'Sonido interno' : s.ko.output ? session.profile.name : `Conectar ${session.profile.name}`}
+          <a href="#/equipo" className="btn ghost hide-sm devlink" title={s.ko.output ? `Conectado: ${s.ko.output}` : 'Elegir y conectar un aparato'}>
+            <span className={`status-dot${s.ko.output || session.profile.kind === 'interno' ? ' on' : ''}`} /><span className="devname">{session.profile.kind === 'interno' ? 'Sonido interno' : s.ko.output ? session.profile.name : `Conectar ${session.profile.name}`}</span>
           </a>
           <TrialBadge />
           <button type="button" className="iconbtn" aria-label="Deshacer" title="Deshacer (⌘Z)" disabled={!s.canUndo} onClick={() => session.undo()}><Icon name="deshacer" size={15} /></button>

@@ -11,7 +11,7 @@ const DOCS = [
     <p>Conecta el K.O. II con un cable USB-C de datos <strong>directo a la computadora</strong> (los docks a veces bloquean el MIDI). Abre Fly Punch en Chrome o Edge y pulsa <code>Conectar K.O. II</code> arriba a la derecha.</p>
     <p>En el K.O. II elige un kit y deja el grupo <code>C</code> para la pista Gusto y el grupo <code>A</code> para Oído. Pulsa <code>Tocar</code> (o la barra espaciadora).</p></>],
   ['Cómo piensa la mosca', <>
-    <p>Fly Punch simula {session.D?.n || 'cientos de'} neuronas reales del conectoma <strong>FlyWire</strong> (v783) con el modelo de Shiu et al. (Nature, 2024): cada neurona acumula voltaje, dispara al pasar un umbral y empuja a las neuronas a las que está conectada, con los pesos medidos en el conectoma. Son cuatro circuitos del mismo cerebro —gusto, oído, olfato y cortejo—, elegidos simulando el cerebro completo (138 639 neuronas) y quedándonos con las que responden a cada estímulo.</p>
+    <p>Fly Punch simula {session.D?.n || 'cientos de'} neuronas reales del conectoma <strong>FlyWire</strong> (v783) con el modelo de Shiu et al. (Nature, 2024): cada neurona acumula voltaje, dispara al pasar un umbral y empuja a las neuronas a las que está conectada, con los pesos medidos en el conectoma. Son cinco circuitos del mismo cerebro —gusto, oído, olfato, cortejo y visión—, elegidos simulando el cerebro completo (138 639 neuronas) y quedándonos con las que responden a cada estímulo.</p>
     <p>Ajustes al modelo, para que los circuitos de olfato no se enciendan en avalancha: sin conexiones entre células de Kenyon ni entre neuronas olfativas (son axo-axónicas), sin sinapsis de neuromodulación (dopamina, serotonina, octopamina; no son excitación rápida) y sin las sinapsis químicas excitadoras de las interneuronas locales del lóbulo antenal (en la mosca actúan sobre todo por uniones eléctricas). Del cuerpo fungiforme se incluye una muestra de 40 células de Kenyon.</p>
     <p>Los sabores y sonidos entran como disparos al azar en los sensores. Lo que oyes es la respuesta del circuito: por ejemplo, el amargo activa inhibidoras que apagan a MN9, la neurona que hace comer a la mosca.</p>
     <p>Es un modelo simplificado: reproduce bien qué neuronas se activan, no su biología completa.</p></>],
@@ -97,13 +97,13 @@ function PlanTab({ s, yearly, setYearly }) {
   else if (session.canTrial) cta = <><button type="button" className="btn lg acc" disabled={busy} onClick={start}>{busy ? 'Activando…' : 'Probar 7 días gratis'}</button>{payEnabled && <button type="button" className="btn ghost" style={{ marginTop: 6 }} disabled={busy} onClick={buy}>O suscríbete ya</button>}</>;
   else cta = payEnabled ? pay : <button type="button" className="btn lg" disabled>Pago disponible pronto</button>;
   const PLANS = [
-    ['Free', !pro ? 'TU PLAN' : '', '$0', 'para siempre', ['Los 4 circuitos: gusto, oído, olfato y cortejo', '2 pistas en el K.O. II (grupos A y C)', 'Kits Análogo e Insectos', '5 tomas en la nube con cuenta', 'Exportar a MIDI, CSV y video'], <button key="f" type="button" className="btn lg" disabled>{!pro ? 'Plan actual' : 'Incluido'}</button>, false],
+    ['Free', !pro ? 'TU PLAN' : '', '$0', 'para siempre', ['Los 5 circuitos: gusto, oído, olfato, cortejo y visión', '2 pistas en el K.O. II (grupos A y C)', 'Kits Análogo e Insectos', '5 tomas en la nube con cuenta', 'Exportar a MIDI, CSV y video'], <button key="f" type="button" className="btn lg" disabled>{!pro ? 'Plan actual' : 'Incluido'}</button>, false],
     ['Pro', trial ? 'PRUEBA' : pro ? 'TU PLAN' : 'RECOMENDADO', yearly ? '$100' : '$10', yearly ? 'USD / año · 2 meses gratis' : 'USD / mes', ['Todo lo de Free', '4 pistas: los 4 grupos del K.O. II', 'Directo: crossfader y macros en vivo', 'Melodía con acordes y progresiones', 'Todos los kits y tu propio kit en la nube', 'La mosca aprende tu gusto', 'Canción con 8 escenas', 'WAV masterizado y pistas separadas', 'Tomas ilimitadas y audio real en la nube', 'Modo Datos: tus CSV como estímulo'], cta, true],
   ];
   return (
     <>
       <div className="between" style={{ flexWrap: 'wrap' }}>
-        <div><h1>Plan</h1><p className="muted" style={{ margin: '4px 0 0' }}>{trial ? `Estás probando Pro: quedan ${daysLeft(s.trialEnds)} días. Al terminar vuelves a Free y conservas tus tomas.` : 'Los 4 circuitos, el MIDI y el video son gratis.'}</p></div>
+        <div><h1>Plan</h1><p className="muted" style={{ margin: '4px 0 0' }}>{trial ? `Estás probando Pro: quedan ${daysLeft(s.trialEnds)} días. Al terminar vuelves a Free y conservas tus tomas.` : 'Los 5 circuitos, el MIDI y el video son gratis.'}</p></div>
         <Seg label="Facturación" items={[['m', 'Mensual'], ['a', 'Anual']]} value={yearly ? 'a' : 'm'} onChange={(v) => setYearly(v === 'a')} />
       </div>
       <div className="cols" style={{ gap: 16 }}>

@@ -151,8 +151,8 @@ export default function Consola({ compact = false }) {
   };
   const W = { bolsillo: 190, mezclador: 210, interno: 170 };
   return (
-    <section aria-label="Consola: lo que está sonando" style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: compact ? 'nowrap' : 'wrap', overflowX: compact ? 'auto' : undefined, padding: 12, borderRadius: 14, background: 'linear-gradient(#141518, #0F1012)', border: '1px solid #26282C' }}>
-      {list.map((d) => <div key={d.key} style={{ flex: `0 0 ${W[d.prof.art] || 260}px` }}>{face(d)}</div>)}
+    <section aria-label="Consola: lo que está sonando" style={{ flex: 'none', display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: compact ? 'nowrap' : 'wrap', overflowX: compact ? 'auto' : undefined, padding: 12, borderRadius: 14, background: 'linear-gradient(#141518, #0F1012)', border: '1px solid #26282C' }}>
+      {list.map((d) => <div key={d.key} style={{ flex: `0 0 ${Math.round((W[d.prof.art] || 260) * (compact ? 0.68 : 1))}px` }}>{face(d)}</div>)}
     </section>
   );
 }

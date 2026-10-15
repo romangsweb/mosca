@@ -23,6 +23,12 @@ export default function Vision() {
     };
     raf = requestAnimationFrame(draw); return () => cancelAnimationFrame(raf);
   }, []);
+  // borra la copia guardada de los datos (y el service worker viejo, que la servía para siempre) y recarga
+  const refreshBrain = async () => {
+    try { for (const k of await caches.keys()) await caches.delete(k); } catch {}
+    try { for (const r of (await navigator.serviceWorker?.getRegistrations()) || []) await r.update(); } catch {}
+    location.reload();
+  };
   const start = async () => {
     setBusy(true); setErr(null);
     try { await session.vision.start(); session.emit(); } catch (e) { setErr(e?.name === 'NotAllowedError' ? 'No diste permiso para usar la cámara. Revisa el candado de la barra de direcciones.' : 'No encontramos una cámara.'); }
@@ -40,7 +46,7 @@ export default function Vision() {
           <button type="button" className="btn lg primary" onClick={() => session.toggle()}><Icon name={s.playing ? 'stop' : 'play'} size={12} fill="currentColor" />{s.playing ? 'Detener' : 'Tocar'}</button>
         </div>
       </div>
-      {!has && <p className="muted">Este cerebro aún no trae el circuito de Visión. Recarga la página cuando se publique la versión nueva.</p>}
+      {!has && <div className="well row" style={{ padding: 12, gap: 10, flexWrap: 'wrap' }}><span style={{ flex: 1, fontSize: 13 }}>Tu navegador tiene guardada una versión vieja del cerebro, sin el circuito de Visión.</span><button type="button" className="btn acc" onClick={refreshBrain}>Actualizar el cerebro</button></div>}
       {err && <p role="alert" style={{ margin: 0, color: '#FF8A4D' }}>{err}</p>}
       {has && !track && <div className="well row" style={{ padding: 12, gap: 10, flexWrap: 'wrap' }}><span style={{ flex: 1, fontSize: 13 }}>Ninguna pista que suene usa el circuito de Visión, así que la cámara no tocará nada.</span><button type="button" className="btn acc" onClick={useVision}>Usar Visión en la pista {session.track().name}</button></div>}
       <div className="cols" style={{ alignItems: 'stretch' }}>

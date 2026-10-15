@@ -49,9 +49,9 @@ function TrackPad({ t }) {
         <div aria-hidden="true" style={{ width: 54, height: 6, borderRadius: 3, background: 'var(--line)' }}><div style={{ width: `${(on ? g : 0) * 100}%`, height: '100%', borderRadius: 3, background: 'var(--acc)', transition: 'width .1s' }} /></div>
       </div>
       <div className="row" style={{ gap: 6 }}>
-        <button type="button" className="btn" style={{ flex: 1 }} onClick={() => session.mutateTrack(t.id)}><Icon name="dado" size={13} />Mutar</button>
-        <button type="button" className="btn" style={{ flex: 1 }} onClick={() => { if (!session.freeze(t.id)) session.set({ notice: 'congelar' }); }}><Icon name="nieve" size={13} />Congelar</button>
-        <button type="button" className="btn" style={{ flex: 1 }} disabled={(t.play || 'vivo') === 'vivo'} onClick={() => session.setTrack(t.id, { play: 'vivo' })} title="Vuelve a que toque la mosca">Soltar</button>
+        <button type="button" className="btn" style={{ flex: 1, minWidth: 0, padding: '0 8px' }} onClick={() => session.mutateTrack(t.id)}><Icon name="dado" size={13} />Mutar</button>
+        <button type="button" className="btn" style={{ flex: 1, minWidth: 0, padding: '0 8px' }} onClick={() => { if (!session.freeze(t.id)) session.set({ notice: 'congelar' }); }}><Icon name="nieve" size={13} />Congelar</button>
+        <button type="button" className="btn" style={{ flex: 1, minWidth: 0, padding: '0 8px' }} disabled={(t.play || 'vivo') === 'vivo'} onClick={() => session.setTrack(t.id, { play: 'vivo' })} title="Vuelve a que toque la mosca">Soltar</button>
       </div>
     </section>
   );
@@ -76,11 +76,13 @@ export default function Directo() {
         </div>
       </div>
 
+      {/* la consola y las escenas lado a lado: lo que suena y lo que vas a lanzar, en una sola mirada */}
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'stretch' }}>
       <Consola compact />
-      <section className="panel" style={{ gap: 10 }} aria-label="Escenas">
+      <section className="panel" style={{ gap: 10, flex: '1 1 460px', minWidth: 0 }} aria-label="Escenas">
         <div className="between"><h2>Escenas <span className="mono muted" style={{ fontSize: 10, fontWeight: 400 }}>· TECLAS 1–8 · ENTRAN AL SIGUIENTE COMPÁS</span></h2>
           <div style={{ width: 160, height: 4, borderRadius: 2, background: 'var(--line)' }} aria-hidden="true"><div style={{ width: `${barFrac * 100}%`, height: '100%', borderRadius: 2, background: 'var(--text)' }} /></div></div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
           {SLOTS.map((slot, i) => {
             const sc = s.scenes[slot], now = s.sceneNow === slot, pend = s.pendingScene === slot, col = SCENE_COLORS[slot];
             return (
@@ -97,6 +99,7 @@ export default function Directo() {
         </div>
         {!anyScene && <p className="muted" style={{ margin: 0, fontSize: 12 }}>Aún no tienes escenas. Guárdalas en el Estudio (tira de Escenas) o crea la canción de ejemplo en <a href="#/cancion">Canción</a>.</p>}
       </section>
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
         {s.tracks.map((t) => <TrackPad key={t.id} t={t} />)}
