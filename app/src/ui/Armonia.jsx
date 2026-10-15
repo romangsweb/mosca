@@ -1,8 +1,42 @@
 import { useEffect, useMemo, useState } from 'react';
 import { contextoVivo, contextoToma, pedir, cuota, cambios, aplicar, ERRORES } from '../engine/productor.js';
 import { session } from '../engine/session.js';
-import { keyName, chordName, analyzeTake, harmonyEvents, fixClashes } from '../engine/armonia.js';
+import { keyName, chordName, analyzeTake, harmonyEvents, fixClashes, voicing } from '../engine/armonia.js';
+import { NOTE_NAMES } from '../engine/devices.js';
 import { useS, useTick, Seg, Icon } from './kit.jsx';
+
+// Rueda de armonía: el círculo de quintas. Afuera los acordes mayores, adentro sus relativos menores; se iluminan los seis
+// acordes de la tonalidad, el de ahora late en naranja y una estela une los últimos. Tocar una casilla suena ese acorde.
+const QUINTAS = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5];
+const posOf = (c) => (c ? QUINTAS.indexOf(c.q === 'may' ? c.root : (c.root + 3) % 12) : -1); // un menor vive bajo su relativo mayor
+export function Rueda({ H, size = 240 }) {
+  const R = size / 2, rO = R - 4, rM = R * 0.66, rI = R * 0.36, key = H?.key, rel = key ? (key.modo === 'mayor' ? key.tonic : (key.tonic + 3) % 12) : null, kp = rel != null ? QUINTAS.indexOf(rel) : -1;
+  const near = (i) => kp >= 0 && [kp - 1, kp, kp + 1].map((x) => (x + 12) % 12).includes(i);
+  const seg = (i, r0, r1) => { const a0 = ((i - 0.5) / 12) * 2 * Math.PI - Math.PI / 2, a1 = ((i + 0.5) / 12) * 2 * Math.PI - Math.PI / 2, p = (r, a) => `${R + r * Math.cos(a)} ${R + r * Math.sin(a)}`; return `M${p(r0, a0)} L${p(r1, a0)} A${r1} ${r1} 0 0 1 ${p(r1, a1)} L${p(r0, a1)} A${r0} ${r0} 0 0 0 ${p(r0, a0)}Z`; };
+  const mid = (i, r) => { const a = (i / 12) * 2 * Math.PI - Math.PI / 2; return [R + r * Math.cos(a), R + r * Math.sin(a)]; };
+  const cur = H?.chord, cp = posOf(cur), trail = (H?.hist || []).slice(-6).map((c) => ({ i: posOf(c), r: c.q === 'may' ? (rO + rM) / 2 : (rM + rI) / 2 })).filter((p) => p.i >= 0);
+  const play = (root, q) => { const v = voicing({ root, q }); const t = performance.now() + 20; v.forEach((n, j) => session.synth.play('pad', 80 - j * 4, t + j * 6, n, 'armonia', null, 1.2)); };
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, maxWidth: '100%', height: 'auto', flex: 'none' }} role="img" aria-label={`Círculo de quintas${key ? `: ${keyName(key)}` : ''}${cur ? `, acorde ${chordName(cur)}` : ''}`}>
+      {QUINTAS.map((pc, i) => {
+        const mn = (pc + 9) % 12, onM = cur && cp === i && cur.q === 'may', onm = cur && cp === i && cur.q !== 'may', inK = near(i), tonM = key && key.modo === 'mayor' && pc === key.tonic, tonm = key && key.modo === 'menor' && mn === key.tonic;
+        const [xM, yM] = mid(i, (rO + rM) / 2), [xm, ym] = mid(i, (rM + rI) / 2);
+        return (
+          <g key={pc}>
+            <path d={seg(i, rM, rO)} fill={onM ? '#FF6A1A' : inK ? 'rgba(236,236,238,.16)' : 'rgba(236,236,238,.04)'} stroke={tonM ? '#ECECEE' : 'var(--line)'} strokeWidth={tonM ? 1.6 : 1} style={{ cursor: 'pointer', transition: 'fill .25s' }} onClick={() => play(pc, 'may')}><title>{NOTE_NAMES[pc]} mayor · tocar</title></path>
+            <path d={seg(i, rI, rM)} fill={onm ? '#FF6A1A' : inK ? 'rgba(236,236,238,.11)' : 'rgba(236,236,238,.025)'} stroke={tonm ? '#ECECEE' : 'var(--line)'} strokeWidth={tonm ? 1.6 : 1} style={{ cursor: 'pointer', transition: 'fill .25s' }} onClick={() => play(mn, 'men')}><title>{NOTE_NAMES[mn]} menor · tocar</title></path>
+            <text x={xM} y={yM + 4} textAnchor="middle" fontSize={size / 20} fontWeight="600" fill={onM ? '#0B0B0C' : inK ? 'var(--text)' : 'var(--dim)'} pointerEvents="none">{NOTE_NAMES[pc]}</text>
+            <text x={xm} y={ym + 3.5} textAnchor="middle" fontSize={size / 25} fill={onm ? '#0B0B0C' : inK ? 'var(--text)' : 'var(--dim)'} pointerEvents="none">{NOTE_NAMES[mn]}m</text>
+          </g>
+        );
+      })}
+      {trail.length > 1 && <polyline points={trail.map((p) => mid(p.i, p.r).join(',')).join(' ')} fill="none" stroke="rgba(255,106,26,.55)" strokeWidth="1.5" strokeDasharray="3 3" />}
+      {cur && cp >= 0 && <circle cx={mid(cp, cur.q === 'may' ? (rO + rM) / 2 : (rM + rI) / 2)[0]} cy={mid(cp, cur.q === 'may' ? (rO + rM) / 2 : (rM + rI) / 2)[1]} r={size / 13} fill="none" stroke="#FF6A1A" strokeWidth="1.5"><animate attributeName="r" values={`${size / 15};${size / 10};${size / 15}`} dur="1.6s" repeatCount="indefinite" /><animate attributeName="opacity" values="0.9;0;0.9" dur="1.6s" repeatCount="indefinite" /></circle>}
+      <text x={R} y={R - 2} textAnchor="middle" fontSize={size / 16} fontWeight="650" fill="var(--text)">{key ? NOTE_NAMES[key.tonic] + (key.modo === 'menor' ? 'm' : '') : '—'}</text>
+      <text x={R} y={R + size / 16} textAnchor="middle" fontSize={size / 28} fill="var(--dim)" fontFamily="JetBrains Mono, monospace">{key ? key.modo.toUpperCase() : 'SIN TONALIDAD'}</text>
+    </svg>
+  );
+}
 
 // Armonía en vivo: lo que deduce de la mosca (tonalidad y acordes) y el acompañamiento que la sigue
 export function ArmoniaPanel() {
@@ -13,6 +47,9 @@ export function ArmoniaPanel() {
   return (
     <section className="panel" style={{ gap: 12 }} aria-label="Armonía">
       <div className="panel-head"><h2>Armonía</h2><span className="muted" style={{ fontSize: 11 }}>El análisis se calcula aquí, sin internet</span></div>
+      <div className="row" style={{ gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+      <Rueda H={H} size={220} />
+      <div style={{ flex: '1 1 260px', minWidth: 0 }}>
       {!H?.key ? (
         <p className="muted" style={{ margin: 0, fontSize: 13 }}>{hasMel ? 'Dale a Tocar: en un par de compases aparece la tonalidad y el acorde de lo que toca la mosca.' : <>Pon una pista en <strong>Melodía</strong> (Estudio › Pads) y dale a Tocar: aquí verás la tonalidad y los acordes de la mosca.</>}</p>
       ) : (
@@ -24,6 +61,9 @@ export function ArmoniaPanel() {
           <span className="row" style={{ gap: 4, flexWrap: 'wrap' }}>{H.hist.map((c, i) => <span key={c.at} className="chip mono" style={{ opacity: 0.4 + 0.6 * (i + 1) / H.hist.length }}>{chordName(c)}</span>)}</span>
         </div>
       )}
+      <p className="dim" style={{ margin: '10px 0 0', fontSize: 11 }}>En la rueda, vecinos = acordes que suenan bien juntos. Iluminados: los seis de la tonalidad. Toca una casilla para oír ese acorde.</p>
+      </div>
+      </div>
       <div className="row" style={{ gap: 8, flexWrap: 'wrap', borderTop: '1px solid var(--line)', paddingTop: 12 }}>
         <button type="button" className={`btn ${a.on && pro ? 'acc' : ''}`} aria-pressed={!!a.on} onClick={() => (pro ? set({ on: !a.on }) : (location.hash = '#/cuenta?plan'))}>{a.on && pro ? 'Acompañando' : 'Acompañar a la mosca'}{!pro && <span className="badge-pro" style={{ marginLeft: 6 }}>PRO</span>}</button>
         <Seg label="Qué toca la armonía" items={[['acordes', 'Acordes'], ['bajo', 'Bajo'], ['ambos', 'Ambos']]} value={a.modo || 'acordes'} onChange={(v) => set({ modo: v })} />

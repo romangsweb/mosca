@@ -9,6 +9,7 @@ import { SK_PRESET, SK_FX } from '../engine/sidekick.js';
 import { TARGETS } from '../engine/controls.js';
 import { Acompanar } from '../ui/Acompanar.jsx';
 import Consola from '../ui/Consola.jsx';
+import Espectro from '../ui/Espectro.jsx';
 import { kitName } from '../ui/SoundRoute.jsx';
 
 // Mezcla: una tira por pista (a dónde va, nivel, silencio, solo), la compu (kit interno) y la entrada de audio
@@ -297,6 +298,7 @@ export default function Mezcla() {
       </div>
       
       <Consola />
+      <Espectro />
       <Acompanar />
       <SidekickPanel />
       <div className="cols" style={{ alignItems: 'stretch' }}>

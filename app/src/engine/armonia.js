@@ -30,7 +30,7 @@ export function histogram(notes) { const h = new Array(12).fill(0); for (const {
 // prior: tonalidades que declaran tus pistas (tónica y modo de su escala): ayudan a desempatar entre relativas (Do menor ↔ Mi♭ mayor)
 export function detectKey(h, prior = []) {
   if (h.reduce((a, b) => a + b, 0) <= 0) return null;
-  const all = [], bonus = (k, m) => (prior.some((p) => p.tonic === k && p.modo === m) ? 0.12 : 0);
+  const all = [], bonus = (k, m) => (prior.some((p) => p.tonic === k && p.modo === m) ? 0.2 : 0);
   for (let k = 0; k < 12; k++) { all.push({ tonic: k, modo: 'mayor', r: corr(h, rot(KK_MAY, k)) + bonus(k, 'mayor') }, { tonic: k, modo: 'menor', r: corr(h, rot(KK_MEN, k)) + bonus(k, 'menor') }); }
   all.sort((a, b) => b.r - a.r);
   const [a, b] = all; return { tonic: a.tonic, modo: a.modo, r: a.r, conf: Math.max(0, Math.min(1, (a.r - b.r) * 4 + (a.r - 0.5))), alt: { tonic: b.tonic, modo: b.modo } };
