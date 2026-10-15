@@ -170,7 +170,7 @@ input[type='range'] { accent-color: var(--text); }
 .lane-names span { font: 9.5px/1 'JetBrains Mono', monospace; color: var(--sub); display: flex; align-items: center; white-space: nowrap; overflow: hidden; }
 .lane-names span.sel { color: var(--text); }
 .lane-grid { position: relative; flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(16, 1fr); grid-template-rows: repeat(12, 1fr); gap: 3px; }
-.cell { border-radius: 3px; background: var(--cell); transition: background .35s; }
+.cell { border-radius: 3px; background: var(--cell); transition: background .35s; font: 600 8px 'JetBrains Mono', monospace; color: var(--text); display: grid; place-items: center; line-height: 1; overflow: hidden; }
 .cell.beat { box-shadow: inset 1px 0 0 var(--cell-sep); }
 .playhead { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--text); opacity: .7; border-radius: 1px; pointer-events: none; }
 .meters { display: flex; gap: 3px; padding-left: 8px; border-left: 1px solid var(--line); }

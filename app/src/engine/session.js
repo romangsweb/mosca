@@ -405,6 +405,11 @@ export class Session {
     if (!frozen[k][pos]) { frozen[k][pos] = 100; prob[k][pos] = 100; } else if (prob[k][pos] >= 100) prob[k][pos] = 50; else { frozen[k][pos] = 0; prob[k][pos] = 100; }
     this.setTrack(tid, { frozen, prob, play: t.play === 'vivo' ? 'congelado' : t.play });
   }
+  // Melodía: subir o bajar la nota de un paso del patrón (en grados de la escala, de −7 a +7)
+  setStepDeg(tid, k, pos, delta) {
+    const t = this.track(tid), deg = (t.deg || Array.from({ length: 12 }, () => new Array(16).fill(0))).map((r) => [...r]);
+    deg[k][pos] = Math.max(-7, Math.min(7, (deg[k][pos] || 0) + delta)); this.setTrack(tid, { deg });
+  }
   copyPattern(from, to) {
     const a = this.track(from); if (!a?.frozen) return;
     this.setTrack(to, { frozen: a.frozen.map((r) => [...r]), prob: a.prob?.map((r) => [...r]) || null, len: a.len || null, play: this.track(to).play === 'vivo' ? 'congelado' : this.track(to).play });
@@ -514,8 +519,8 @@ export class Session {
   // salida por pista (Pro): cada pista puede ir a otro perfil y puerto; si no, la del Equipo principal
   profileFor(t) { return t.out?.device && this.can('multi') ? profileById(t.out.device) : this.profile; }
   portFor(t) { if (t.out?.port && this.can('multi')) return this.ko.outPort(t.out.port); return this.profileFor(t).kind === 'interno' ? null : this.ko.output; }
-  route(t, k, bar = Math.floor((this.live.step || 0) / this.C.len)) {
-    const prof = this.profileFor(t), r = route(prof, t, k, this.pads(t), this.s.devOverrides[prof.id] || {}, bar);
+  route(t, k, bar = Math.floor((this.live.step || 0) / this.C.len), deg = 0) {
+    const prof = this.profileFor(t), r = route(prof, t, k, this.pads(t), this.s.devOverrides[prof.id] || {}, bar, deg);
     // sin Pro, lo melódico no sale por MIDI y suena con la voz de batería del pad
     if (r.voice === 'tono' && !this.can('melodia')) return { note: null, ch: r.ch, voice: t.kit[t.map[k]] };
     return r;
@@ -585,7 +590,7 @@ export class Session {
         if (vel) { const g = this.xfGain(t); vel = g ? Math.max(1, Math.min(127, Math.round(vel * acc * g))) : 0; }
         if (!vel) return;
         const when = at + swingMs + (Math.random() * 2 - 1) * s.humanize;
-        const r = this.route(t, k);
+        const r = this.route(t, k, undefined, fz ? t.deg?.[k]?.[n % this.patLen(t)] || 0 : 0);
         lanes[k][pos] = vel;
         const port = this.portFor(t);
         const notes = r.chord && r.note != null ? r.chord : [r.note]; // acorde: todas las notas, las añadidas un poco más suaves
@@ -706,6 +711,13 @@ export class Session {
     const shareId = await shareTake(id, this.s.alias || '', t.shareId); this.set({ takes: this.s.takes.map((x) => (x.id === id ? { ...x, shared: true, shareId } : x)) }); return shareId;
   }
   async unshare(id) { await unshareTake(id); this.set({ takes: this.s.takes.map((x) => (x.id === id ? { ...x, shared: false } : x)) }); }
+  // toma editada en el editor de notas: se guarda como toma nueva (la original no se toca)
+  async saveEditedTake(orig, edited) {
+    if (this.takesLimitReached) { this.set({ notice: 'limite' }); return null; }
+    const { where, shared, shareId, cloudAudio, localAudio, hasAudio, cloud, ...rest } = edited;
+    const take = { ...rest, id: crypto.randomUUID(), name: `${orig.name} · editada`.slice(0, 80), date: Date.now(), owner: this.s.user?.id || null, cloud: false, editedFrom: orig.id };
+    await takePut(take); this.set({ lastTake: take.id }); await this.refreshTakes(); return take.id;
+  }
   async renameTake(id, name) {
     const t = this.s.takes.find((x) => x.id === id); if (!t) return;
     if (t.where === 'nube') await renameTakeCloud(id, name).catch((e) => console.warn(e));

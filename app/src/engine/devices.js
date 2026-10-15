@@ -59,18 +59,18 @@ export function melodicNote(pads, k, track, bar = 0) {
   return degNote(track, d);
 }
 // las notas del acorde de la neurona k (la primera es la principal)
-export function melodicChord(pads, k, track, bar = 0) {
+export function melodicChord(pads, k, track, bar = 0, deg = 0) {
   const order = pads.map((p, i) => [RANK[p.clase] ?? 3, p.inhibidora ? 1 : 0, i]).sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]).map((x) => x[2]);
-  const prog = (PROGS[track.prog] || PROGS.ninguna)[1], d = order.indexOf(k) + prog[bar % prog.length];
+  const prog = (PROGS[track.prog] || PROGS.ninguna)[1], d = order.indexOf(k) + prog[bar % prog.length] + deg; // deg: nota fijada a mano en ese paso
   // el bajo (motoneuronas y descendentes, las primeras del orden) toca nota sola para no embarrar
   const shape = order.indexOf(k) < 2 ? [0] : (CHORDS[track.chord] || CHORDS.nota)[1];
   return shape.map((x) => degNote(track, d + x));
 }
 
 // ¿Qué nota y canal toca la neurona k de una pista con este perfil? (null = no manda MIDI)
-export function route(profile, track, k, pads, overrides = {}, bar = 0) {
+export function route(profile, track, k, pads, overrides = {}, bar = 0, deg = 0) {
   const off = track.map[k], voice = track.kit[off];
-  if (track.mode === 'melodia' || profile.kind === 'melodico') { const notes = melodicChord(pads, k, track, bar); return { note: notes[0], chord: notes, ch: overrides.ch ?? profile.ch, voice: 'tono' }; }
+  if (track.mode === 'melodia' || profile.kind === 'melodico') { const notes = melodicChord(pads, k, track, bar, deg); return { note: notes[0], chord: notes, ch: overrides.ch ?? profile.ch, voice: 'tono' }; }
   switch (profile.kind) {
     case 'grupos': return { note: (profile.base ?? GROUP_BASE[track.group]) + off, ch: overrides.ch ?? (profile.id === 'ko2' ? track.ch : profile.ch), voice };
     case 'voces': return { note: (overrides.notes || profile.notes)[voice] ?? 36, ch: overrides.ch ?? profile.ch, voice };

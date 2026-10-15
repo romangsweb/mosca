@@ -193,6 +193,7 @@ export default function Estudio() {
             </div>
           </div>
           {view2 === 'mov' ? <Suspense fallback={null}><Automation /></Suspense> : view2 === 'luz' ? <Suspense fallback={null}><Opto /></Suspense> : <Lanes track={track} selPad={selPad} />}
+          {track.mode === 'melodia' && track.play && track.play !== 'vivo' && view2 === 'disparos' && <span className="dim" style={{ fontSize: 11 }}>Melodía: gira la rueda (o clic derecho; Mayús + clic derecho baja) sobre un paso encendido para subir o bajar su nota dentro de la escala.</span>}
           <SoundRoute tracks={[track]} compact />
         </section>
       </div>
