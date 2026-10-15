@@ -8,7 +8,11 @@ const KO_MATCH = profileById('ko2').match;
 // nota → grupo y pad del K.O. (notas 36–83: cuatro grupos de 12 pads)
 export const noteToPad = (note) => (note >= 36 && note <= 83 ? { group: GROUPS[Math.floor((note - 36) / 12)], off: (note - 36) % 12 } : null);
 
-export const CHARLA_DEFAULT = { on: true, modo: 'vivo', destino: 'neurona', fuerza: 0.6, eco: true };
+export const CHARLA_DEFAULT = { on: true, modo: 'vivo', destino: 'neurona', fuerza: 0.6, eco: true, curva: 'lineal', pads: {} };
+// cuánto pesa la fuerza con que tocas: lineal, suave (los golpes flojos ya cuentan) o dura (solo los fuertes)
+export const CURVAS = { lineal: (x) => x, suave: (x) => Math.sqrt(x), dura: (x) => x * x * x };
+// lo que puede hacer un pad elegido a mano: estimular cualquier neurona (n:índice) o dar un golpe a un sentido (s:nombre)
+export const padKey = (group, off) => `${group || '-'}${off}`;
 export const EXPR_DEFAULT = { on: false, lanes: [{ src: 'salida', dest: 'cc12', depth: 1, inv: false }, { src: 'activas', dest: 'cc13', depth: 1, inv: false }, { src: 'ninguna', dest: 'pb', depth: 0.6, inv: false }, { src: 'ninguna', dest: 'cc1', depth: 0.8, inv: false }] };
 export const EXPR_SOURCES = [['ninguna', '— nada —'], ['salida', 'Salida de la pista elegida'], ['activas', 'Neuronas activas'], ['out:gusto', 'MN9 (gusto)'], ['out:oido', 'Acicalamiento (oído)'], ['out:olfato', 'Salida del olfato'], ['out:cortejo', 'Salida del cortejo'], ['out:vision', 'Fibra gigante (visión)']];
 export const EXPR_DESTS = [['cc12', 'Efecto · perilla X (CC 12)'], ['cc13', 'Efecto · perilla Y (CC 13)'], ['pb', 'Pitch (se hunde)'], ['cc1', 'Vibrato (CC 1)'], ['cc64', 'Sustain (CC 64)']];
@@ -28,11 +32,14 @@ export class KoLink {
     const p = noteToPad(note) || { group: null, off: ((note % 12) + 12) % 12 };
     this.inLog.push({ ...p, at: now, vel }); if (this.inLog.length > 96) this.inLog.shift();
     const t = (p.group && S.s.tracks.find((x) => x.group === p.group && S.audible(x))) || S.track();
-    if (c.modo === 'pregunta' && S.s.playing && this.turno() === 'tu') { const pos = S.live.step % S.C.len; this.eco.set(pos, [...(this.eco.get(pos) || []), { t: t.id, off: p.off, vel }]); }
-    this.stimulate(t, p.off, vel, c);
+    if (c.modo === 'pregunta' && S.s.playing && this.turno() === 'tu') { const pos = S.live.step % S.C.len; this.eco.set(pos, [...(this.eco.get(pos) || []), { t: t.id, off: p.off, vel, key: padKey(p.group, p.off) }]); }
+    this.stimulate(t, p.off, vel, c, padKey(p.group, p.off));
   }
-  stimulate(t, off, vel, c = { ...CHARLA_DEFAULT, ...this.S.s.charla }) {
-    const S = this.S, k = Math.max(0, t.map.indexOf(off)), pads = S.pads(t), amt = (vel / 127) * (0.3 + 1.7 * c.fuerza);
+  stimulate(t, off, vel, c = { ...CHARLA_DEFAULT, ...this.S.s.charla }, key = null) {
+    const S = this.S, k = Math.max(0, t.map.indexOf(off)), pads = S.pads(t), amt = (CURVAS[c.curva] || CURVAS.lineal)(Math.min(1, vel / 127)) * (0.3 + 1.7 * c.fuerza);
+    const own = key && c.pads?.[key]; // un pad asignado a mano manda sobre todo lo demás
+    if (own?.startsWith('n:')) { const i = +own.slice(2); if (i < S.D.n) { S.sim.g[i] += S.D.params.w_poi * 3 * amt; S.live.koHit = { at: performance.now(), idx: i }; } return; }
+    if (own?.startsWith('s:')) { this.pulses.push({ sense: own.slice(2), s: amt, at: performance.now() }); S.live.koHit = { at: performance.now(), sense: own.slice(2) }; return; }
     if (c.destino === 'sentido') { const sens = this.senses[t.sense] || []; if (sens.length) this.pulses.push({ sense: sens[off % sens.length], s: amt, at: performance.now() }); }
     else S.sim.g[pads[k].idx] += S.D.params.w_poi * 3 * amt; // golpe a la neurona de ese pad
     S.live.koHit = { at: performance.now(), track: t.id, k };
@@ -44,7 +51,7 @@ export class KoLink {
     const S = this.S, c = { ...CHARLA_DEFAULT, ...S.s.charla }; if (!c.on || c.modo !== 'pregunta') return true;
     const turno = this.turno(n), pos = n % S.C.len;
     if (turno === 'tu' && pos === 0) this.eco.clear(); // un compás nuevo para escucharte
-    if (turno === 'mosca' && c.eco) for (const h of this.eco.get(pos) || []) { const t = S.track(h.t); if (t) this.stimulate(t, h.off, h.vel * 0.8, c); } // la mosca «recuerda» tu frase
+    if (turno === 'mosca' && c.eco) for (const h of this.eco.get(pos) || []) { const t = S.track(h.t); if (t) this.stimulate(t, h.off, h.vel * 0.8, c, h.key); } // la mosca «recuerda» tu frase
     S.live.turno = turno;
     return turno === 'mosca';
   }
