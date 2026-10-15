@@ -255,3 +255,13 @@ button, .btn, .iconbtn, .pad, .cell, .seg button, .knob svg, input[type=range] {
 .topbar .devname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 @media (max-width: 1279px) { .topbar .devname { display: none; } }
 @media (max-width: 1279px) { .seg button { padding: 0 8px; } }
+/* «Dile a la mosca»: panel lateral de conversación */
+.dile { position: fixed; top: 64px; right: 12px; bottom: 40px; width: min(400px, calc(100vw - 24px)); z-index: 35; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line2); border-radius: 16px; box-shadow: 0 18px 60px rgba(0,0,0,.45); animation: fadein .18s; }
+.dile-log { flex: 1; overflow-y: auto; padding: 14px 14px 6px; display: flex; flex-direction: column; gap: 10px; }
+.dile .msg { max-width: 88%; padding: 9px 12px; border-radius: 12px; font-size: 13.5px; line-height: 1.45; }
+.dile .msg.tu { align-self: flex-end; background: var(--text); color: var(--bg); border-bottom-right-radius: 4px; }
+.dile .msg.mosca { align-self: flex-start; background: var(--well); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.dile .msg.sistema { align-self: center; font-size: 12px; color: var(--sub); background: none; }
+@media (max-width: 1439px) { .hide-md { display: none !important; } }
+/* iPad vertical: el transporte baja a su propia fila para no pisar los botones */
+@media (max-width: 1000px) { .topbar { height: auto; flex-wrap: wrap; padding: 8px 12px; gap: 8px; } .topbar .side { flex: 1 1 40%; } .transport { order: 3; width: 100%; justify-content: center; } .dile { top: 112px; } }

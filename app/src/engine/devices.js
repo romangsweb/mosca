@@ -48,6 +48,8 @@ export const PROGS = {
   ninguna: ['Sin progresión', [0]], pop: ['I–V–vi–IV (pop)', [0, 4, 5, 3]], epica: ['i–VI–III–VII (épica)', [0, 5, 2, 6]],
   jazz: ['ii–V–I (jazz)', [1, 4, 0, 0]], andaluza: ['i–VII–VI–V (andaluza)', [0, 6, 5, 4]], dos: ['i–iv (dos acordes)', [0, 3]],
 };
+// la progresión de una pista: una de la lista o la que propuso el Productor IA (grados guardados en la pista)
+export const progOf = (track) => (track.prog === 'ia' && track.progIa?.length ? track.progIa : (PROGS[track.prog] || PROGS.ninguna)[1]);
 export const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
 // grado de la escala por neurona: motoneuronas y descendentes abajo (bajo), interneuronas en medio, sensores arriba
@@ -55,13 +57,13 @@ const RANK = { motoneurona: 0, descendente: 1, ascendente: 2, interneurona: 3, s
 const degNote = (track, d) => { const sc = (SCALES[track.scale] || SCALES.menor_pent)[1]; return (track.root ?? 48) + 12 * Math.floor(d / sc.length) + sc[((d % sc.length) + sc.length) % sc.length]; };
 export function melodicNote(pads, k, track, bar = 0) {
   const order = pads.map((p, i) => [RANK[p.clase] ?? 3, p.inhibidora ? 1 : 0, i]).sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]).map((x) => x[2]);
-  const prog = (PROGS[track.prog] || PROGS.ninguna)[1], d = order.indexOf(k) + prog[bar % prog.length];
+  const prog = progOf(track), d = order.indexOf(k) + prog[bar % prog.length];
   return degNote(track, d);
 }
 // las notas del acorde de la neurona k (la primera es la principal)
 export function melodicChord(pads, k, track, bar = 0, deg = 0) {
   const order = pads.map((p, i) => [RANK[p.clase] ?? 3, p.inhibidora ? 1 : 0, i]).sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]).map((x) => x[2]);
-  const prog = (PROGS[track.prog] || PROGS.ninguna)[1], d = order.indexOf(k) + prog[bar % prog.length] + deg; // deg: nota fijada a mano en ese paso
+  const prog = progOf(track), d = order.indexOf(k) + prog[bar % prog.length] + deg; // deg: nota fijada a mano en ese paso
   // el bajo (motoneuronas y descendentes, las primeras del orden) toca nota sola para no embarrar
   const shape = order.indexOf(k) < 2 ? [0] : (CHORDS[track.chord] || CHORDS.nota)[1];
   return shape.map((x) => degNote(track, d + x));

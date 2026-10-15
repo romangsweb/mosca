@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { contextoVivo, contextoToma, pedir, cuota, cambios, aplicar, ERRORES } from '../engine/productor.js';
 import { session } from '../engine/session.js';
 import { keyName, chordName, analyzeTake, harmonyEvents, fixClashes } from '../engine/armonia.js';
 import { useS, useTick, Seg, Icon } from './kit.jsx';
@@ -11,7 +12,7 @@ export function ArmoniaPanel() {
   const aligned = H?.key && s.tracks.filter((t) => t.mode === 'melodia').every((t) => t.root % 12 === H.key.tonic && (H.key.modo === 'mayor' ? /mayor/.test(t.scale) : /menor/.test(t.scale)));
   return (
     <section className="panel" style={{ gap: 12 }} aria-label="Armonía">
-      <div className="panel-head"><h2>Armonía</h2><span className="muted" style={{ fontSize: 11 }}>Teoría musical en código: sin IA, sin internet</span></div>
+      <div className="panel-head"><h2>Armonía</h2><span className="muted" style={{ fontSize: 11 }}>El análisis se calcula aquí, sin internet</span></div>
       {!H?.key ? (
         <p className="muted" style={{ margin: 0, fontSize: 13 }}>{hasMel ? 'Dale a Tocar: en un par de compases aparece la tonalidad y el acorde de lo que toca la mosca.' : <>Pon una pista en <strong>Melodía</strong> (Estudio › Pads) y dale a Tocar: aquí verás la tonalidad y los acordes de la mosca.</>}</p>
       ) : (
@@ -35,6 +36,7 @@ export function ArmoniaPanel() {
         <button type="button" className="btn" disabled={!H?.key || aligned} onClick={() => session.alignScales()} title="Pone todas las pistas en Melodía en esta tonalidad: quita los choques entre pistas">{aligned ? 'Pistas en la tonalidad' : `Alinear las pistas a ${keyName(H?.key)}`}</button>
         <span className="dim" style={{ fontSize: 11, flex: '1 1 260px' }}>La armonía va un compás detrás de la mosca: escucha lo que tocó y elige el acorde que mejor lo explica, con voces que se mueven lo menos posible. Las notas de la mosca no se tocan.</span>
       </div>
+      <Productor getContexto={() => contextoVivo(session)} ready={!!H?.key} />
     </section>
   );
 }
@@ -71,9 +73,47 @@ export function ArmoniaTake({ take, onClose, onDone }) {
             <button type="button" className="btn" disabled={busy || !(an.fuera + an.roce)} onClick={() => make('ajuste')} title="Cada nota que choca se mueve a la nota del acorde más cercana; el resto queda igual">Ajustar las {an.fuera + an.roce} que chocan</button>
           </div>
           <p className="dim" style={{ margin: 0, fontSize: 11 }}>Las dos crean una toma nueva; esta queda como está. La armonía se exporta como su propia pista en el MIDI y en las pistas separadas.</p>
+          <Productor getContexto={() => contextoToma(session, an, take)} />
           {msg && <p role="alert" style={{ margin: 0, color: '#FF8A4D', fontSize: 12 }}>{msg}</p>}
         </>)}
       </div>
+    </div>
+  );
+}
+
+// Productor IA (beta Pro): Gemini lee el análisis (no tus datos) y propone; tú decides con un clic
+export function Productor({ getContexto, ready = true }) {
+  const s = useS(), pro = session.can('armonia'), [pedido, setPedido] = useState(''), [busy, setBusy] = useState(false), [res, setRes] = useState(null), [err, setErr] = useState(null), [q, setQ] = useState(null), [hecho, setHecho] = useState(null);
+  useEffect(() => { if (s.user && pro) cuota().then(setQ).catch(() => {}); }, [s.user, pro]);
+  const go = async () => { setBusy(true); setErr(null); setRes(null); setHecho(null); try { const r = await pedir(getContexto(), pedido.trim()); setRes(r); setQ({ quedan: r.quedan, de: r.de }); } catch (e) { setErr(ERRORES[e.message] || ERRORES.red); } setBusy(false); };
+  const lista = res ? cambios(session, res) : [];
+  return (
+    <div className="well" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="between" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontWeight: 650 }}>Productor IA <span className="chip" style={{ marginLeft: 6 }}>BETA</span>{!pro && <span className="badge-pro" style={{ marginLeft: 6 }}>PRO</span>}</span>
+        {q && <span className="mono muted" style={{ fontSize: 11 }}>TE QUEDAN {q.quedan} DE {q.de} ESTE MES</span>}
+      </div>
+      <p className="dim" style={{ margin: 0, fontSize: 11.5 }}>Gemini lee el análisis de arriba (tonalidad, acordes, ajustes de tus pistas) y propone una progresión y ajustes. No recibe tu correo ni tus datos; no escribas datos personales en el pedido.</p>
+      {!s.user ? <a href="#/bienvenida" className="btn">Inicia sesión para usarlo</a> : !pro ? <a href="#/cuenta?plan" className="btn acc">Disponible en Pro</a> : (<>
+        <div className="row" style={{ gap: 8 }}>
+          <input className="input" style={{ flex: 1, minWidth: 0 }} maxLength={240} placeholder="Opcional: «más oscuro», «que suene a lo-fi», «quiero un drop»…" value={pedido} onChange={(e) => setPedido(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !busy && ready && go()} aria-label="Qué le pides al productor" />
+          <button type="button" className="btn acc" disabled={busy || !ready || q?.quedan === 0} onClick={go}>{busy ? 'Pensando…' : 'Pedir propuesta'}</button>
+        </div>
+        {!ready && <span className="dim" style={{ fontSize: 11 }}>Primero dale a Tocar con una pista en Melodía, para que haya algo que analizar.</span>}
+      </>)}
+      {err && <p role="alert" style={{ margin: 0, color: '#FF8A4D', fontSize: 12.5 }}>{err}</p>}
+      {res && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--line)', paddingTop: 10 }} aria-live="polite">
+          <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.55 }}>{res.explicacion}</p>
+          {lista.length > 0 && <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>{lista.map((x) => <li key={x}>{x}</li>)}</ul>}
+          {res.por_que && <p className="muted" style={{ margin: 0, fontSize: 12 }}>{res.por_que}</p>}
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            {lista.length > 0 && <button type="button" className="btn acc" onClick={() => { aplicar(session, res); setHecho('todo'); }}>{hecho === 'todo' ? 'Aplicado ✓' : 'Aplicar todo'}</button>}
+            {res.progresion && <button type="button" className="btn" onClick={() => { aplicar(session, res, { solo: 'progresion' }); setHecho('prog'); }}>{hecho === 'prog' ? 'Progresión aplicada ✓' : 'Solo la progresión'}</button>}
+            {hecho && <span className="dim" style={{ fontSize: 11 }}>Con ⌘Z lo deshaces.</span>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

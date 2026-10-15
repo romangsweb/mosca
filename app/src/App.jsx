@@ -1,3 +1,4 @@
+import DileMosca from './ui/DileMosca.jsx';
 import { isIOS, isStandalone } from './ui/Install.jsx';
 import { Component, useEffect, useState } from 'react';
 import { session } from './engine/session.js';
@@ -103,6 +104,7 @@ export default function App() {
     const k = (e) => {
       if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
       if (e.key === '?') { session.set({ atajos: !session.s.atajos }); return; }
+      if (e.key === '/') { e.preventDefault(); session.set({ dile: true }); return; }
       if (e.key === 'Escape' && session.s.atajos) { session.set({ atajos: false }); return; }
       if (e.code === 'Space') { e.preventDefault(); session.toggle(); }
       if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); e.shiftKey ? session.redo() : session.undo(); return; }
@@ -145,6 +147,7 @@ export default function App() {
           <TrialBadge />
           <button type="button" className="iconbtn" aria-label="Deshacer" title="Deshacer (⌘Z)" disabled={!s.canUndo} onClick={() => session.undo()}><Icon name="deshacer" size={15} /></button>
           <button type="button" className="iconbtn" aria-label="Rehacer" title="Rehacer (⇧⌘Z)" disabled={!s.canRedo} onClick={() => session.redo()}><Icon name="deshacer" size={15} style={{ transform: 'scaleX(-1)' }} /></button>
+          <button type="button" className={`btn ${s.dile ? 'acc' : ''}`} aria-pressed={!!s.dile} title="Dile a la mosca cómo quieres que se sienta (tecla /)" onClick={() => session.set({ dile: !s.dile })}><Icon name="hablar" size={15} /><span className="hide-md">Dile a la mosca</span></button>
           <button type="button" className="btn" aria-pressed={s.guide} onClick={() => session.set({ guide: !s.guide }, true)}>Guía</button>
           <button type="button" className="iconbtn" aria-label={night ? 'Cambiar a tema día' : 'Cambiar a tema noche'} onClick={() => session.set({ theme: night ? 'dia' : 'noche' }, true)}><Icon name={night ? 'sol' : 'luna'} size={15} /></button>
           <a href="#/cuenta" className="avatar" aria-label={`Cuenta, plan ${s.plan}`}><span className="mono muted" style={{ fontSize: 9, letterSpacing: '.1em' }}>{!s.user ? 'INVITADO' : session.onTrial ? 'PRUEBA' : s.plan.toUpperCase()}</span><span>{initials(s)}</span></a>
@@ -168,6 +171,7 @@ export default function App() {
         </nav>
         <main className="main" id="main"><Boundary key={page}><Page /></Boundary></main>
         {s.atajos && <Atajos />}
+        {s.dile && <DileMosca onClose={() => session.set({ dile: false })} />}
       </div>
       <StatusBar s={s} />
       {s.notice === 'restauracion' && (
@@ -195,7 +199,7 @@ export default function App() {
 // hoja de atajos: «?» la abre y la cierra
 const ATAJOS = [
   ['Tocar', [['Espacio', 'Tocar / detener'], ['R', 'Grabar una toma'], ['M', 'Metrónomo'], ['T', 'Marcar el tempo (tap)']]],
-  ['La mosca', [['G', 'Me gusta lo que tocó'], ['N', 'No me gusta'], ['F', 'Remate ahora']]],
+  ['La mosca', [['/', 'Dile a la mosca cómo sentirse'], ['G', 'Me gusta lo que tocó'], ['N', 'No me gusta'], ['F', 'Remate ahora']]],
   ['Directo', [['1 – 8', 'Lanzar escena A – H (entra al siguiente compás)'], ['L', 'Looper: grabar el loop o sumar una capa']]],
   ['Editar', [['⌘ Z', 'Deshacer'], ['⇧ ⌘ Z', 'Rehacer'], ['?', 'Esta hoja']]],
   ['Editor de notas', [['Supr', 'Borrar lo elegido'], ['Q', 'Cuantizar'], ['⌘ A', 'Elegir todas'], ['Flechas', 'Mover lo elegido'], ['Doble clic', 'Agregar una nota'], ['Esc', 'Soltar la selección o cerrar']]],

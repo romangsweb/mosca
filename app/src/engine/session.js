@@ -165,7 +165,7 @@ export class Session {
     this.hist.push(snap); if (this.hist.length > 60) this.hist.shift(); this.fut = []; this.set({ canUndo: this.hist.length > 1, canRedo: false });
   }
   restoreSnap(snap) {
-    this._restoring = true; const v = JSON.parse(snap);
+    this._restoring = true; const v = JSON.parse(snap); for (const k of ['onboarded', 'theme', 'guide', 'installHint', 'alias']) delete v[k]; // deshacer no toca preferencias de la app
     Object.assign(this.s, v, { tracks: v.tracks.map((t, i) => ({ ...DEFAULTS.tracks[i], ...t })) });
     this.ko.internalBpm = this.s.bpm; this.persist(); this.loadKit(); this._restoring = false;
     this.set({ canUndo: this.hist.length > 1, canRedo: this.fut.length > 0 });
