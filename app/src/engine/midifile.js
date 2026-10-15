@@ -14,7 +14,7 @@ export function takeToMidi(take, { namePads = true } = {}) {
     const evs = [];
     for (const e of take.events) if (e.track === tr.id) {
       const t0 = Math.round(e.t / msPerTick), c = (e.ch - 1) & 15;
-      evs.push([t0, 0x90 | c, e.note, e.vel], [t0 + 12, 0x80 | c, e.note, 0]);
+      evs.push([t0, 0x90 | c, e.note, e.vel], [t0 + Math.max(12, Math.round((e.durMs || 0) / msPerTick)), 0x80 | c, e.note, 0]); // los acordes de la armonía duran lo que suenan
     }
     evs.sort((a, b) => a[0] - b[0] || (a[1] & 0xF0) - (b[1] & 0xF0));
     const label = namePads ? `${tr.name} · grupo ${tr.group}` : tr.name;

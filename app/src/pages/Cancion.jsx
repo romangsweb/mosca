@@ -1,3 +1,4 @@
+import { ArmoniaPanel } from '../ui/Armonia.jsx';
 import { useState } from 'react';
 import { session } from '../engine/session.js';
 import { SLOTS, SCENE_COLORS } from '../engine/song.js';
@@ -151,6 +152,7 @@ export default function Cancion() {
 
       <Timeline s={s} />
       <p className="mono muted" style={{ margin: 0, fontSize: 11 }}>{rows.length} FILAS · {total} COMPASES · {Math.floor(secs / 60)}:{String(secs % 60).padStart(2, '0')} A {Math.round(session.ko.bpm)} BPM{s.songOn ? ' · SONANDO' : ''}</p>
+      <ArmoniaPanel />
 
       {(!saved.length || !playable) && (
         <div className="cols" style={{ alignItems: 'stretch' }}>

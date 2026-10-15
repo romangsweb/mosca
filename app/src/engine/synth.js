@@ -14,7 +14,7 @@ function noiseBuffer(ctx) {
 const env = (ctx, g, t, peak, dec) => { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + 0.002); g.gain.exponentialRampToValueAtTime(0.0001, t + dec); };
 
 // Toca una voz en ctx a tiempo t (segundos de ctx) hacia dest.
-export function voice(ctx, dest, name, vel, t, pitch = 0) {
+export function voice(ctx, dest, name, vel, t, pitch = 0, len = 0) {
   const v = Math.max(0.05, vel / 127), g = ctx.createGain(); g.connect(dest);
   const osc = (type, f) => { const o = ctx.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, t); return o; };
   const noise = (filterType, f, q = 1) => { const s = ctx.createBufferSource(); s.buffer = noiseBuffer(ctx); const fl = ctx.createBiquadFilter(); fl.type = filterType; fl.frequency.value = f; fl.Q.value = q; s.connect(fl).connect(g); return s; };
@@ -35,6 +35,12 @@ export function voice(ctx, dest, name, vel, t, pitch = 0) {
       const a = osc('sawtooth', f), b = osc(pitch < 52 ? 'square' : 'triangle', f * 1.004); a.connect(lp); b.connect(lp); lp.connect(g);
       g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.32 * v, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
       a.start(t); b.start(t); a.stop(t + dur + 0.02); b.stop(t + dur + 0.02); break;
+    }
+    case 'pad': { // colchón de la armonía: tres sierras desafinadas, filtro suave, ataque y caída lentos; len = segundos que se sostiene
+      const f = 440 * Math.pow(2, (pitch - 69) / 12), d = Math.max(0.3, len || 1.5), lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 0.7; lp.frequency.value = 900 + v * 1400;
+      const os = [0.996, 1, 1.005].map((k, i) => { const o = osc(i === 1 ? 'triangle' : 'sawtooth', f * k); o.connect(lp); return o; }); lp.connect(g);
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.11 * v, t + Math.min(0.25, d * 0.3)); g.gain.setValueAtTime(0.11 * v, t + d * 0.85); g.gain.linearRampToValueAtTime(0.0001, t + d + 0.25);
+      os.forEach((o) => { o.start(t); o.stop(t + d + 0.3); }); break;
     }
     case 'zap': { const o = osc('square', 1800 * p); o.frequency.exponentialRampToValueAtTime(120, t + 0.09); o.connect(g); env(ctx, g, t, 0.18 * v, 0.1); o.start(t); o.stop(t + 0.11); break; }
     default: break;
@@ -141,14 +147,14 @@ export class Synth {
   setSends(id, sends) { this.sends[id] = sends; if (this.chain) this.chain.bus(id, sends, this.strips[id] ?? null); }
   setStrip(id, st) { this.strips[id] = st || null; if (this.chain) this.chain.bus(id, this.sends[id], this.strips[id]); }
   // at: performance.now() en ms · track: id de la pista (su bus, su kit y sus envíos)
-  play(name, vel, at = performance.now(), pitch = 0, track = null, pad = null) {
+  play(name, vel, at = performance.now(), pitch = 0, track = null, pad = null, len = 0) {
     if (!this.enabled || !name) return;
     const ctx = this.ensure(), t = Math.max(ctx.currentTime, ctx.currentTime + (at - performance.now()) / 1000);
     const kit = (track && this.kits[this.trackKit[track]]) || this.kit;
     const bus = track ? this.chain.bus(track, this.sends[track], this.chain.buses[track] ? undefined : this.strips[track] ?? null) : this.out;
     const dest = padOut(ctx, chokeOut(ctx, bus, this.open, track || '-', name, t, this.choke[track] !== false), t, pad || undefined, kit?.[name]?.duration || 0.5);
     if (name !== 'tono' && kit?.[name]) playBuffer(ctx, dest, kit[name], vel, t, pitch);
-    else voice(ctx, dest, name, vel, t, pitch);
+    else voice(ctx, dest, name, vel, t, pitch, len);
     // sidechain: el bombo «empuja» a las demás pistas (baja su volumen un instante y vuelve)
     if (name === 'bombo' && this.sc > 0) for (const [id, b] of Object.entries(this.chain.buses)) {
       if (id === track) continue; const gn = b.in.gain, depth = 1 - this.sc * 0.85 * Math.min(1, vel / 110);
@@ -179,10 +185,10 @@ export async function renderWav(take, kitFor, kit = null, opt = {}) {
   for (const id of new Set(take.events.map((e) => e.track))) chain.bus(id || 'x', opt.sends?.[id], opt.strips?.[id] ?? null);
   const open = {}, events = [...take.events].sort((a, b) => a.t - b.t); // en orden, para que el choke corte al hat correcto
   for (const e of events) {
-    const n = kitFor(e), t = e.t / 1000 + 0.05, p = n === 'tono' ? e.note : (e.track === 'oido' ? 3 : 0) + (opt.padFor?.(e)?.tune || 0);
+    const n = kitFor(e), t = e.t / 1000 + 0.05, p = n === 'tono' || n === 'pad' ? e.note : (e.track === 'oido' ? 3 : 0) + (opt.padFor?.(e)?.tune || 0);
     const k = (opt.kits && opt.trackKit && opt.kits[opt.trackKit[e.track]]) || kit, pd = opt.padFor?.(e);
     const dest = padOut(ctx, chokeOut(ctx, chain.bus(e.track || 'x', opt.sends?.[e.track]), open, e.track || 'x', n, t, opt.choke?.[e.track] !== false), t, pd || undefined, k?.[n]?.duration || 0.5);
-    if (n !== 'tono' && k?.[n]) playBuffer(ctx, dest, k[n], e.vel, t, p); else voice(ctx, dest, n, e.vel, t, p);
+    if (n !== 'tono' && n !== 'pad' && k?.[n]) playBuffer(ctx, dest, k[n], e.vel, t, p); else voice(ctx, dest, n, e.vel, t, p, (e.durMs || 0) / 1000);
     const sc = opt.fx?.sc || 0;
     if (n === 'bombo' && sc > 0) for (const [id, b] of Object.entries(chain.buses)) { if (id === e.track) continue; const gn = b.in.gain; gn.setValueAtTime(1, t); gn.linearRampToValueAtTime(1 - sc * 0.85 * Math.min(1, e.vel / 110), t + 0.005); gn.linearRampToValueAtTime(1, t + 0.06 + sc * 0.18); }
   }

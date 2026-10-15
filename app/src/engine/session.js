@@ -8,6 +8,7 @@ import { mutate, mutateTaste, identity } from './mutate.js';
 import { kvGet, kvSet, takePut, takesAll, takeDel, FREE_TAKES, sampleGet, samplePut, sampleDel } from './storage.js';
 import { VOICES as KIT_VOICES, kitData, toBuffers, KITS as KITS_LIST } from './kits.js';
 import { Looper } from './looper.js';
+import { detectKey, chordFor, voicing, bassNote, declaredKey } from './armonia.js';
 import { SLOTS, FREE_SLOTS, snapshot, applyScene, morphRates, onBar, exampleSong } from './song.js';
 import { handleMidi, FREE_MAPPINGS, targetById } from './controls.js';
 import { Capture } from './capture.js';
@@ -23,7 +24,7 @@ import { KoLink, CHARLA_DEFAULT } from './ko.js';
 import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud , shareTake, unshareTake, kitIndex, uploadSample, downloadSample, deleteSample, uploadTakeAudio, downloadTakeAudio, deleteTakeAudio } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
-const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes', 'opto', 'taste', 'compas', 'acento', 'lufs', 'xfade', 'intensidad', 'mundo', 'charla', 'expr', 'fillEvery'];
+const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes', 'opto', 'taste', 'compas', 'acento', 'lufs', 'xfade', 'intensidad', 'mundo', 'charla', 'expr', 'fillEvery', 'armonia'];
 
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'], olfato: ['vinagre', 'co2', 'geosmina'], cortejo: ['canto', 'cva', 'deseo'], vision: ['acercar', 'movimiento', 'luz'] };
 // circuitos: cada uno es una parte real del mismo cerebro, con sus sensores y su neurona de salida
@@ -53,6 +54,7 @@ export const PRO_FEATURES = {
   directo: 'Directo: crossfader entre aparatos y macros para tocar en vivo',
   mundo: 'Mundo en vivo: sismos, Wikipedia y bitcoin como estímulos (el clima es gratis)',
   canal: 'Canal por pista: ecualizador, filtro y saturación',
+  armonia: 'Armonía que sigue a la mosca: acordes y bajo en vivo',
 };
 // pistas 3 y 4 (Pro): ocupan los grupos B y D del K.O. II, que las dos primeras dejan libres
 export const EXTRA_TRACKS = [{ id: 'p3', group: 'B', sense: 'olfato', root: 60 }, { id: 'p4', group: 'D', sense: 'cortejo', root: 36 }];
@@ -76,7 +78,7 @@ const DEFAULTS = {
   sk: { follow: false, fxAuto: false, fx: [0, 1] },
   fx: { ...FX_DEFAULT }, metro: false, countIn: 1, autoLanes: [],
   taste: { on: true, likes: {}, dislikes: {}, n: 0, plastic: {} },
-  compas: '4/4', acento: 0.35, lufs: 'streaming', xfade: 0.5, intensidad: 1, mundo: { mix: 1 }, charla: { ...CHARLA_DEFAULT }, expr: null, fillEvery: 0,
+  compas: '4/4', acento: 0.35, lufs: 'streaming', xfade: 0.5, intensidad: 1, mundo: { mix: 1 }, charla: { ...CHARLA_DEFAULT }, expr: null, fillEvery: 0, armonia: { on: false, modo: 'acordes', salida: 'compu', ch: 3, nivel: 0.6 },
   opto: { on: false, mode: 'activar', target: 'pad', power: 0.6, pattern: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] },
   follow: { source: 'entrada', tempo: true, key: true, autoPlay: true, offset: 0 },
   oidoSource: 'manual', dataMap: {}, perRow: 16,
@@ -89,7 +91,7 @@ export class Session {
     this.s.playing = false; this.s.rec = false; this.s.ko = { input: null, output: null, error: null };
     this.s.takes = []; this.s.ready = false; this.s.user = null; Object.assign(this.s, NO_PLAN); this.s.sync = cloudEnabled ? 'local' : 'off'; this.s.mutHistory = {}; this.s.data = null; this.s.row = 0; this.s.saved = Date.now();
     this.looper = new Looper(this);
-    this.live = { step: 0, pos: 0, active: 0, mn9: 0, groom: 0, rate: {}, lanes: {}, out: {}, hist: new Array(64).fill(0), counts: null, lastHitAt: {}, lastPad: {}, arp: {}, rowHist: [], rateHist: {}, spikes: {}, meter: {} };
+    this.live = { step: 0, pos: 0, active: 0, mn9: 0, groom: 0, rate: {}, lanes: {}, out: {}, hist: new Array(64).fill(0), counts: null, lastHitAt: {}, lastPad: {}, arp: {}, harm: null, rowHist: [], rateHist: {}, spikes: {}, meter: {} };
     if (typeof window !== 'undefined') { addEventListener('pagehide', () => this.flush()); document.addEventListener('visibilitychange', () => document.hidden && this.flush()); }
     this.rec = null; this.ear = new Ear(); this.synth = new Synth(); this.capture = new Capture(); this.world = new World(this); this.vision = new Vision(); this.kolink = new KoLink(this, SENSES);
     this.ko = new KO2({
@@ -578,7 +580,7 @@ export class Session {
   get monitorOn() { return this.s.monitor === 'siempre' || (this.s.monitor === 'auto' && (!this.ko.connected || this.profile.kind === 'interno')); }
   // ---------- transporte ----------
   play() { this.synth.ensure(); this.sim.reset(); this.live.step = 0; this.live.countIn = 0; this.s.row = 0; this.morphState = null; if (this.s.songOn) this.songPos = { row: 0, bars: 0 }; this.ko.start(); this.set({ playing: true }); }
-  stop() { this.ko.stop(); this.kolink.reset(); if (this._recArm) { this._recArm = false; this.set({ rec: false, counting: false }); } else if (this.s.rec) this.toggleRec(); this.morphState = null; this.live.arp = {}; this.looper.halt(); this.set({ playing: false, pendingScene: null }); }
+  stop() { this.ko.stop(); this.kolink.reset(); if (this._recArm) { this._recArm = false; this.set({ rec: false, counting: false }); } else if (this.s.rec) this.toggleRec(); this.morphState = null; this.live.arp = {}; this.looper.halt(); if (this.live.harm) this.live.harm.prev = null; this.set({ playing: false, pendingScene: null }); }
   toggle() { this.s.playing ? this.stop() : this.play(); }
   // ---------- un paso de semicorchea ----------
   rates() {
@@ -612,7 +614,7 @@ export class Session {
     const C = this.C, pos = n % C.len;
     if (s.metro) { const c = clickAt(C, pos); if (c) this.synth.click(at, c); }
     if (s.data && n > 0 && n % s.perRow === 0) { s.row = (s.row + 1) % s.data.rows; queueMicrotask(() => this.emit()); }
-    this.live.step = n; if (pos === 0) { const bar = Math.floor(n / C.len); onBar(this, bar); L.fillBar = this.isFillBar(bar); }
+    this.live.step = n; if (pos === 0) { const bar = Math.floor(n / C.len); onBar(this, bar); L.fillBar = this.isFillBar(bar); this.harmBar(at); }
     if (s.autoLanes?.length) this.batch(() => this.automate(n));
     this.opto(n, at);
     const R = this.rates(); L.lastRates = R;
@@ -652,6 +654,7 @@ export class Session {
         if (arp && r.voice === 'tono' && r.note != null) { this.arpHold(t, notes, vel, when, r.ch); lanes[k][pos] = vel; L.lastHitAt[t.id + k] = when; return; } // con arpegiador, la mosca «aprieta teclas» y el arpegiador las toca
         if (this.toDevice(t, port) && r.note != null) notes.forEach((nt, j) => this.ko.hit(nt, j ? Math.round(vel * 0.8) : vel, r.ch, r.voice === 'tono' ? stepMs * 0.9 : 60, when, port));
         if (this.toKit(t, port)) notes.forEach((nt, j) => this.sound({ ...r, note: nt }, j ? Math.round(vel * 0.7) : vel, when, t, k));
+        if (r.voice === 'tono' && r.note != null) notes.forEach((nt) => this.harmNote(nt, vel));
         if (k === roll && pos === C.len - 1) { const w2 = when + stepMs / 2, v2 = Math.min(127, vel + 6); // el último golpe del redoble va doble (fusas)
           if (this.toDevice(t, port) && r.note != null) this.ko.hit(r.note, v2, r.ch, 50, w2, port); if (this.toKit(t, port)) this.sound(r, v2, w2, t, k); }
         const mt = L.meter[t.id]; if (!mt || when - mt.at > 60 || vel > mt.vel) L.meter[t.id] = { at: when, vel };
@@ -691,10 +694,42 @@ export class Session {
       const nt = arp.modo === 'azar' ? seq[Math.floor(Math.random() * seq.length)] : seq[A.i++ % seq.length], when = at + j * stepMs / per, v = Math.min(127, Math.max(1, vel - (j ? 8 : 0)));
       if (this.toDevice(t, port)) this.ko.hit(nt, v, ch, dur, when, port);
       if (this.toKit(t, port)) this.sound({ voice: 'tono', note: nt }, v, when, t, null);
+      this.harmNote(nt, v);
       const mt = this.live.meter[t.id]; if (!mt || when - mt.at > 60 || v > mt.vel) this.live.meter[t.id] = { at: when, vel: v };
       this.looper.capture(n, at, { track: t.id, pad: null, note: nt, vel: v, ch, voice: 'tono', dur }, when);
       if (this.rec) this.rec.events.push({ t: when - this.rec.t0, step: n - this.rec.n0, track: t.id, pad: 0, neuron: 'arp', note: nt, vel: v, ch, voice: 'tono', port: port?.name });
     }
+  }
+  // ---------- armonía en vivo: escucha las notas de la mosca, deduce tonalidad y acorde, y acompaña ----------
+  harmNote(note, vel) { const H = (this.live.harm ||= { bar: new Array(12).fill(0), long: new Array(12).fill(0), low: null, key: null, chord: null, prev: null, hist: [] }); H.bar[((note % 12) + 12) % 12] += vel / 127; if (H.low == null || note < H.low) H.low = note; }
+  // al empezar cada compás: el acorde sale de lo que tocó la mosca en el compás anterior (la armonía la sigue, un compás detrás)
+  harmBar(at) {
+    const H = this.live.harm; if (!H) return;
+    if (H.bar.some((x) => x > 0)) {
+      for (let i = 0; i < 12; i++) H.long[i] = H.long[i] * 0.8 + H.bar[i]; // memoria de unos 5 compases para la tonalidad
+      const key = detectKey(H.long, this.s.tracks.filter((t) => t.mode === 'melodia').map(declaredKey)); if (key) H.key = key;
+      const c = chordFor(H.bar, H.key, H.low != null ? H.low % 12 : null); if (c) { H.chord = c; H.hist.push({ ...c, at }); if (H.hist.length > 8) H.hist.shift(); }
+    }
+    H.bar = new Array(12).fill(0); H.low = null;
+    const a = this.s.armonia; if (!a?.on || !H.chord || !this.can('armonia') || !this.s.playing) return;
+    const barMs = this.C.len * this.ko.stepMs, vel = Math.round(40 + 75 * (a.nivel ?? 0.6));
+    if (a.modo !== 'bajo') { const v = voicing(H.chord, H.prev); H.prev = v; v.forEach((n, j) => this.harmOut(n, vel - j * 4, at + j * 4, barMs * 0.96, 'pad')); }
+    if (a.modo !== 'acordes') { const bn = bassNote(H.chord); [0, barMs / 2].forEach((o) => this.harmOut(bn, Math.min(127, vel + 12), at + o, barMs / 2 * 0.9, 'tono')); }
+  }
+  harmOut(note, vel, when, durMs, voice) {
+    const a = this.s.armonia;
+    if (a.salida === 'midi') { const port = this.ko.output; if (port) this.ko.hit(note, vel, a.ch || 3, durMs, when, port); }
+    else this.synth.play(voice, vel, when, note, 'armonia', null, durMs / 1000);
+    if (this.rec) this.rec.events.push({ t: when - this.rec.t0, step: this.live.step - this.rec.n0, track: 'armonia', pad: voice === 'pad' ? 0 : 1, neuron: 'armonía', note, vel, ch: a.ch || 3, voice, durMs, port: a.salida === 'midi' ? this.ko.output?.name : undefined });
+  }
+  // todas las pistas melódicas a la tonalidad que se detectó (quita los choques entre pistas)
+  alignScales() {
+    const k = this.live.harm?.key; if (!k) return false;
+    this.set({ tracks: this.s.tracks.map((t) => {
+      if (t.mode !== 'melodia') return t; const pent = /pent/.test(t.scale || ''), scale = k.modo === 'mayor' ? (pent ? 'mayor_pent' : 'mayor') : (pent ? 'menor_pent' : 'menor');
+      let root = t.root - (t.root % 12) + k.tonic; if (root - t.root > 6) root -= 12; if (t.root - root > 6) root += 12;
+      return { ...t, scale, root };
+    }) }, true); return true;
   }
   // ¿este compás termina en remate? cada 4/8 compases, o el último compás de una parte de la canción
   isFillBar(bar) {
@@ -716,6 +751,7 @@ export class Session {
     const port = this.portFor(t), vel = Math.max(1, Math.round(e.vel * this.xfGain(t)));
     if (this.toDevice(t, port) && e.note != null) this.ko.hit(e.note, vel, e.ch, e.dur || 60, when, port);
     if (this.toKit(t, port)) this.sound({ voice: e.voice, note: e.note }, vel, when, t, e.pad);
+    if (e.voice === 'tono' && e.note != null) this.harmNote(e.note, vel);
     const mt = this.live.meter[t.id]; if (!mt || when - mt.at > 60 || vel > mt.vel) this.live.meter[t.id] = { at: when, vel };
     if (this.rec) this.rec.events.push({ t: when - this.rec.t0, step: this.live.step - this.rec.n0, track: t.id, pad: e.pad ?? 0, neuron: 'loop', note: e.note ?? 0, vel, ch: e.ch, voice: e.voice, port: port?.name });
   }
@@ -781,7 +817,7 @@ export class Session {
       if (r.events.length) {
         const n = this.s.takes.length + 1;
         const take = { id: crypto.randomUUID(), name: `Toma ${n}`, date: Date.now(), bpm: Math.round(this.ko.bpm), durMs, steps: this.live.step - r.n0, compas: this.s.compas || '4/4',
-          tracks: this.s.tracks.filter((t) => r.events.some((e) => e.track === t.id)).map(({ id, name, group, ch, sense }) => ({ id, name, group, ch, sense })),
+          tracks: [...this.s.tracks.filter((t) => r.events.some((e) => e.track === t.id)).map(({ id, name, group, ch, sense }) => ({ id, name, group, ch, sense })), ...(r.events.some((e) => e.track === 'armonia') ? [{ id: 'armonia', name: 'Armonía', group: '—', ch: this.s.armonia?.ch || 3, sense: 'armonia' }] : [])],
           inputs: { ...this.s.inputs }, source: this.s.data ? 'datos' : this.s.oidoSource, events: r.events };
         take.owner = this.s.user?.id || null; take.cloud = false;
         audioP.then(async (blob) => {
@@ -825,10 +861,10 @@ export class Session {
     this.takeTimers = timers;
   }
   // toma editada en el editor de notas: se guarda como toma nueva (la original no se toca)
-  async saveEditedTake(orig, edited) {
+  async saveEditedTake(orig, edited, suffix = 'editada') {
     if (this.takesLimitReached) { this.set({ notice: 'limite' }); return null; }
     const { where, shared, shareId, cloudAudio, localAudio, hasAudio, cloud, ...rest } = edited;
-    const take = { ...rest, id: crypto.randomUUID(), name: `${orig.name} · editada`.slice(0, 80), date: Date.now(), owner: this.s.user?.id || null, cloud: false, editedFrom: orig.id };
+    const take = { ...rest, id: crypto.randomUUID(), name: `${orig.name} · ${suffix}`.slice(0, 80), date: Date.now(), owner: this.s.user?.id || null, cloud: false, editedFrom: orig.id };
     await takePut(take); this.set({ lastTake: take.id }); await this.refreshTakes(); return take.id;
   }
   async renameTake(id, name) {
@@ -850,6 +886,10 @@ export class Session {
       timers.push(setTimeout(() => {
         const at = t0 + e.t;
         const port = (e.port && this.ko.outPort(e.port)) || this.ko.output;
+        if (e.track === 'armonia') { // la armonía suena como se grabó: por MIDI si salió por MIDI, si no en la compu
+          if (!kitOnly && e.port) { if (port) this.ko.hit(e.note, e.vel, e.ch, e.durMs || 60, at, port); } else this.synth.play(e.voice, e.vel, at, e.note, 'armonia', null, (e.durMs || 0) / 1000);
+          return;
+        }
         const tr = this.track(e.track) || this.track();
         if (!kitOnly && this.toDevice(tr, port)) this.ko.hit(e.note, e.vel, e.ch, 60, at, port);
         if (kitOnly || this.toKit(tr, port)) e.voice === 'tono' ? this.synth.play('tono', e.vel, at, e.note, tr.id) : this.synth.play(e.voice, e.vel, at, (e.track === 'oido' ? 3 : 0) + this.padSound(tr, e.pad).tune, tr.id, this.padSound(tr, e.pad));
