@@ -4,6 +4,7 @@ import { SLOTS, SCENE_COLORS } from '../engine/song.js';
 import { srcLabel } from '../engine/controls.js';
 import { useS, useTick, Icon, Seg } from '../ui/kit.jsx';
 import Consola from '../ui/Consola.jsx';
+import { LOOP_BARS } from '../engine/looper.js';
 
 // Directo: tocar el set en vivo. Escenas grandes que se lanzan a tiempo de compás, cada pista con su lado del crossfader,
 // y cuatro macros que se asignan al sidekick (o a cualquier perilla) con un clic.
@@ -33,6 +34,33 @@ function Macro({ id, label, value, min = 0, max = 100, fmt, onChange, pro, wide 
 // remate: lo que hace cada pista en el último tiempo antes de un cambio
 const FILLS = [['off', 'Sin remate'], ['redoble', 'Redoble'], ['corte', 'Corte (silencio)'], ['mosca', 'La mosca se suelta']];
 const FILL_HELP = { off: 'Sigue igual hasta el cambio.', redoble: 'La caja (o el último pad) acelera hasta el uno.', corte: 'Se calla el último tiempo: el uno pega más.', mosca: 'Sus neuronas reciben un empujón y la mosca improvisa, aunque esté congelada.' };
+
+const LOOP_STATE = { vacio: 'Graba 1, 2 o 4 compases de lo que suena y se repite a tempo.', armado: 'Empieza en el siguiente compás…', grabando: 'Grabando…', tocando: 'Sonando. Suma otra capa encima, una vuelta a la vez.', capa: 'Grabando una capa encima…' };
+function LooperPanel({ playing }) {
+  const s = useS(), Lp = session.looper, pro = session.can('directo'), L = session.live;
+  const frac = Lp.layers.length || Lp.phase === 'grabando' || Lp.phase === 'capa' ? (s.playing ? (Lp.pos(L.step) + 1) / Lp.steps : 0) : 0;
+  const label = Lp.phase === 'vacio' ? 'Grabar loop' : Lp.phase === 'armado' ? 'Cancelar' : Lp.phase === 'grabando' ? 'Grabando…' : Lp.phase === 'capa' ? 'Grabando capa…' : 'Agregar capa';
+  const recCol = Lp.phase === 'grabando' || Lp.phase === 'capa' || Lp.phase === 'armado';
+  return (
+    <section className="panel" style={{ gap: 10, opacity: pro ? 1 : 0.6 }} aria-label="Looper">
+      <div className="between" style={{ gap: 10, flexWrap: 'wrap' }}>
+        <h2>Looper {!pro && <a href="#/cuenta?plan" className="badge-pro" style={{ marginLeft: 6 }}>PRO</a>} <span className="mono muted" style={{ fontSize: 10, fontWeight: 400 }}>· TECLA L</span></h2>
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          <Seg label="Largo del loop" items={LOOP_BARS.map((b) => [b, `${b} ${b > 1 ? 'compases' : 'compás'}`])} value={Lp.bars} onChange={(b) => Lp.setBars(b)} />
+          <button type="button" className={`btn lg ${recCol ? 'primary' : 'acc'}`} disabled={!pro || !playing || Lp.phase === 'grabando' || Lp.phase === 'capa'} onClick={() => Lp.main()}><span className="status-dot" style={{ background: recCol ? '#E5484D' : 'currentColor' }} />{label}</button>
+          <button type="button" className="btn" disabled={!Lp.layers.length && Lp.phase !== 'capa'} onClick={() => Lp.undo()}>Quitar última capa</button>
+          <button type="button" className="btn danger" disabled={!Lp.layers.length && Lp.phase === 'vacio'} onClick={() => Lp.clear()}>Borrar</button>
+        </div>
+      </div>
+      <div style={{ height: 6, borderRadius: 3, background: 'var(--line)' }} aria-hidden="true"><div style={{ width: `${frac * 100}%`, height: '100%', borderRadius: 3, background: recCol ? '#E5484D' : 'var(--acc)' }} /></div>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <span className="muted" style={{ fontSize: 12, flex: '1 1 240px' }}>{s.playing ? LOOP_STATE[Lp.phase] : Lp.layers.length ? 'Tu loop sigue aquí: dale a Tocar y vuelve a sonar desde el compás 1.' : 'Dale a Tocar para grabar un loop.'}</span>
+        {Lp.layers.map((l) => <button key={l.id} type="button" className={`btn ${l.muted ? '' : 'acc'}`} aria-pressed={!l.muted} title="Silenciar o activar esta capa" onClick={() => Lp.toggleLayer(l.id)}>{l.name} · {l.events.length}</button>)}
+        {!!Lp.layers.length && <label className="row" style={{ gap: 6, fontSize: 12 }}><input type="checkbox" checked={Lp.callar} onChange={(e) => { Lp.callar = e.target.checked; session.emit(); }} style={{ accentColor: 'var(--acc)' }} />Callar a la mosca (solo el loop)</label>}
+      </div>
+    </section>
+  );
+}
 
 function TrackPad({ t }) {
   const s = useS(), on = session.audible(t), locked = s.tracks.indexOf(t) >= session.trackLimit, g = session.xfGain(t);
@@ -69,7 +97,7 @@ export default function Directo() {
   const fillOn = s.playing && !!(L.fillBar || s.pendingScene || L.fillManual === Math.floor(L.step / session.C.len)), anyFill = s.tracks.some((t) => t.fill && t.fill !== 'off');
   // teclas 1–8 lanzan escenas (solo en esta página)
   useEffect(() => {
-    const k = (e) => { if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName) || e.metaKey || e.ctrlKey || e.altKey) return; const i = '12345678'.indexOf(e.key); if (i >= 0) session.launchScene(SLOTS[i]); };
+    const k = (e) => { if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName) || e.metaKey || e.ctrlKey || e.altKey) return; const i = '12345678'.indexOf(e.key); if (i >= 0) session.launchScene(SLOTS[i]); if ((e.key === 'l' || e.key === 'L') && session.can('directo')) session.looper.main(); };
     addEventListener('keydown', k); return () => removeEventListener('keydown', k);
   }, []);
   const anyScene = SLOTS.some((x) => s.scenes[x]);
@@ -113,6 +141,7 @@ export default function Directo() {
       </section>
       </div>
 
+      <LooperPanel playing={s.playing} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
         {s.tracks.map((t) => <TrackPad key={t.id} t={t} />)}
         {s.tracks.length < 4 && (

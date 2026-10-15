@@ -187,6 +187,7 @@ export async function renderWav(take, kitFor, kit = null, opt = {}) {
     if (n === 'bombo' && sc > 0) for (const [id, b] of Object.entries(chain.buses)) { if (id === e.track) continue; const gn = b.in.gain; gn.setValueAtTime(1, t); gn.linearRampToValueAtTime(1 - sc * 0.85 * Math.min(1, e.vel / 110), t + 0.005); gn.linearRampToValueAtTime(1, t + 0.06 + sc * 0.18); }
   }
   const buf = await ctx.startRendering();
+  if (opt.buffer) return buf; // para remuestrear: el audio sin masterizar ni empaquetar
   if (opt.lufs !== undefined) { const r = master(buf, opt.lufs); opt.onReport?.(r); }
   return wavBlob(buf);
 }

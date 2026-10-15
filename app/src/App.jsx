@@ -196,7 +196,7 @@ export default function App() {
 const ATAJOS = [
   ['Tocar', [['Espacio', 'Tocar / detener'], ['R', 'Grabar una toma'], ['M', 'Metrónomo'], ['T', 'Marcar el tempo (tap)']]],
   ['La mosca', [['G', 'Me gusta lo que tocó'], ['N', 'No me gusta'], ['F', 'Remate ahora']]],
-  ['Directo', [['1 – 8', 'Lanzar escena A – H (entra al siguiente compás)']]],
+  ['Directo', [['1 – 8', 'Lanzar escena A – H (entra al siguiente compás)'], ['L', 'Looper: grabar el loop o sumar una capa']]],
   ['Editar', [['⌘ Z', 'Deshacer'], ['⇧ ⌘ Z', 'Rehacer'], ['?', 'Esta hoja']]],
   ['Editor de notas', [['Supr', 'Borrar lo elegido'], ['Q', 'Cuantizar'], ['⌘ A', 'Elegir todas'], ['Flechas', 'Mover lo elegido'], ['Doble clic', 'Agregar una nota'], ['Esc', 'Soltar la selección o cerrar']]],
 ];

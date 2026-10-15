@@ -3,10 +3,11 @@ import { Circuit } from './sim.js';
 import { KO2 } from './midi.js';
 import { profileById, route } from './devices.js';
 import { Ear } from './ear.js';
-import { Synth, DEFAULT_KIT, FX_DEFAULT } from './synth.js';
+import { Synth, DEFAULT_KIT, FX_DEFAULT, renderWav, wavBlob } from './synth.js';
 import { mutate, mutateTaste, identity } from './mutate.js';
 import { kvGet, kvSet, takePut, takesAll, takeDel, FREE_TAKES, sampleGet, samplePut, sampleDel } from './storage.js';
 import { VOICES as KIT_VOICES, kitData, toBuffers, KITS as KITS_LIST } from './kits.js';
+import { Looper } from './looper.js';
 import { SLOTS, FREE_SLOTS, snapshot, applyScene, morphRates, onBar, exampleSong } from './song.js';
 import { handleMidi, FREE_MAPPINGS, targetById } from './controls.js';
 import { Capture } from './capture.js';
@@ -87,6 +88,7 @@ export class Session {
     this.s = structuredClone(DEFAULTS);
     this.s.playing = false; this.s.rec = false; this.s.ko = { input: null, output: null, error: null };
     this.s.takes = []; this.s.ready = false; this.s.user = null; Object.assign(this.s, NO_PLAN); this.s.sync = cloudEnabled ? 'local' : 'off'; this.s.mutHistory = {}; this.s.data = null; this.s.row = 0; this.s.saved = Date.now();
+    this.looper = new Looper(this);
     this.live = { step: 0, pos: 0, active: 0, mn9: 0, groom: 0, rate: {}, lanes: {}, out: {}, hist: new Array(64).fill(0), counts: null, lastHitAt: {}, lastPad: {}, arp: {}, rowHist: [], rateHist: {}, spikes: {}, meter: {} };
     if (typeof window !== 'undefined') { addEventListener('pagehide', () => this.flush()); document.addEventListener('visibilitychange', () => document.hidden && this.flush()); }
     this.rec = null; this.ear = new Ear(); this.synth = new Synth(); this.capture = new Capture(); this.world = new World(this); this.vision = new Vision(); this.kolink = new KoLink(this, SENSES);
@@ -432,6 +434,28 @@ export class Session {
     try { await uploadSample(uid, voice, file.name, data, file.type); await samplePut(voice, { name: file.name, data, type: file.type, at, cloud: true }); this.set({ kitCloud: 'ok' }); }
     catch (e) { console.warn('subir muestra', e); this.set({ kitCloud: 'error' }); }
   }
+  // ---------- remuestrear: un pedazo de una toma se vuelve el sonido de un pad de Mi kit ----------
+  // src: 'kit' (la toma con los sonidos de la compu) o 'real' (el audio grabado de tus aparatos) · from/len en compases o tiempos
+  async resampleBuffer(take, { src = 'kit', track = null, fromStep = 0, steps = 16 }) {
+    const ctx = this.synth.ensure(), stepMs = 60000 / (take.bpm || this.s.bpm) / 4;
+    let buf, lead = 0;
+    if (src === 'real') { const blob = await this.getAudio(take.id); if (!blob) throw new Error('sin-audio'); buf = await ctx.decodeAudioData(await blob.arrayBuffer()); }
+    else { const ev = track ? take.events.filter((e) => e.track === track) : take.events; buf = await renderWav({ ...take, events: ev }, (e) => e.voice, this.synth.kit, { ...this.wavOptions, buffer: true }); lead = 0.05; }
+    const sr = buf.sampleRate, a = Math.floor((lead + fromStep * stepMs / 1000) * sr), n = Math.min(buf.length - a, Math.floor(steps * stepMs / 1000 * sr));
+    if (n <= sr * 0.02) throw new Error('vacio');
+    const out = ctx.createBuffer(buf.numberOfChannels, n, sr), fade = Math.min(Math.floor(sr * 0.004), n >> 2);
+    let peak = 0; for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c).subarray(a, a + n); for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(d[i])); }
+    if (peak < 1e-4) throw new Error('silencio');
+    const g = 0.89 / peak; // a −1 dBFS
+    for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c).subarray(a, a + n), o = out.getChannelData(c); for (let i = 0; i < n; i++) o[i] = d[i] * g * Math.min(1, i / fade, (n - 1 - i) / fade); }
+    return out;
+  }
+  async resample(take, opt, voice) {
+    if (!this.can('kits')) throw new Error('pro');
+    const buf = await this.resampleBuffer(take, opt), name = `${take.name} · ${opt.label || 'remuestreo'}.wav`.replace(/[\\/]/g, '-');
+    await this.addSample(voice, new File([wavBlob(buf)], name, { type: 'audio/wav' }));
+    return buf.duration;
+  }
   async removeSample(voice) {
     await sampleDel(voice); await this.loadKit();
     if (this.s.user) deleteSample(this.s.user.id, voice).catch((e) => console.warn('borrar muestra', e));
@@ -554,7 +578,7 @@ export class Session {
   get monitorOn() { return this.s.monitor === 'siempre' || (this.s.monitor === 'auto' && (!this.ko.connected || this.profile.kind === 'interno')); }
   // ---------- transporte ----------
   play() { this.synth.ensure(); this.sim.reset(); this.live.step = 0; this.live.countIn = 0; this.s.row = 0; this.morphState = null; if (this.s.songOn) this.songPos = { row: 0, bars: 0 }; this.ko.start(); this.set({ playing: true }); }
-  stop() { this.ko.stop(); this.kolink.reset(); if (this._recArm) { this._recArm = false; this.set({ rec: false, counting: false }); } else if (this.s.rec) this.toggleRec(); this.morphState = null; this.live.arp = {}; this.set({ playing: false, pendingScene: null }); }
+  stop() { this.ko.stop(); this.kolink.reset(); if (this._recArm) { this._recArm = false; this.set({ rec: false, counting: false }); } else if (this.s.rec) this.toggleRec(); this.morphState = null; this.live.arp = {}; this.looper.halt(); this.set({ playing: false, pendingScene: null }); }
   toggle() { this.s.playing ? this.stop() : this.play(); }
   // ---------- un paso de semicorchea ----------
   rates() {
@@ -595,7 +619,8 @@ export class Session {
     const cnt = this.sim.advance(s.density, R); L.counts = cnt;
     let active = 0; for (let i = 0; i < cnt.length; i++) if (cnt[i]) active++;
     L.active = active; L.hist.push(active); L.hist.shift(); L.step = n; L.stepAt = at;
-    const flyOn = this.kolink.step(n); // llamada y respuesta con el K.O.: en tu compás la mosca escucha
+    this.looper.step(n, at); // el looper repite sus capas (y empieza a grabar al inicio del compás)
+    const flyOn = this.kolink.step(n) && this.looper.flyAllowed(); // llamada y respuesta con el K.O.: en tu compás la mosca escucha
     // remate: en el último tiempo del compás antes de un cambio (escena, parte de la canción, cada 4/8 compases o «Remate ahora»)
     const fillOn = !!(L.fillBar || s.pendingScene || L.fillManual === Math.floor(n / C.len)), zone = Math.max(2, Math.round(C.len / 4)), inZone = fillOn && pos >= C.len - zone;
     const acc = accent(C, pos, s.acento ?? 0), curve = CURVES[s.curve];
@@ -631,6 +656,7 @@ export class Session {
           if (this.toDevice(t, port) && r.note != null) this.ko.hit(r.note, v2, r.ch, 50, w2, port); if (this.toKit(t, port)) this.sound(r, v2, w2, t, k); }
         const mt = L.meter[t.id]; if (!mt || when - mt.at > 60 || vel > mt.vel) L.meter[t.id] = { at: when, vel };
         L.lastHitAt[t.id + k] = when;
+        notes.forEach((nt, j) => this.looper.capture(n, at, { track: t.id, pad: k, note: nt, vel: j ? Math.round(vel * 0.8) : vel, ch: r.ch, voice: r.voice, dur: r.voice === 'tono' ? stepMs * 0.9 : 60 }, when));
         if (this.rec) notes.forEach((nt, j) => this.rec.events.push({ t: when - this.rec.t0, step: n - this.rec.n0, track: t.id, pad: k, neuron: p.tipo, note: nt ?? 0, vel: j ? Math.round(vel * 0.8) : vel, ch: r.ch, voice: r.voice, port: port?.name, ...(j ? { chord: 1 } : {}) }));
       });
       if (arp && on) this.arpStep(t, arp, n, at + swingMs, stepMs, flyOn);
@@ -666,6 +692,7 @@ export class Session {
       if (this.toDevice(t, port)) this.ko.hit(nt, v, ch, dur, when, port);
       if (this.toKit(t, port)) this.sound({ voice: 'tono', note: nt }, v, when, t, null);
       const mt = this.live.meter[t.id]; if (!mt || when - mt.at > 60 || v > mt.vel) this.live.meter[t.id] = { at: when, vel: v };
+      this.looper.capture(n, at, { track: t.id, pad: null, note: nt, vel: v, ch, voice: 'tono', dur }, when);
       if (this.rec) this.rec.events.push({ t: when - this.rec.t0, step: n - this.rec.n0, track: t.id, pad: 0, neuron: 'arp', note: nt, vel: v, ch, voice: 'tono', port: port?.name });
     }
   }
@@ -681,7 +708,17 @@ export class Session {
   }
   // nota que llega del aparato → estimula la neurona que toca esa nota (como optogenética)
   // una nota que llega de un K.O.: la conversación decide qué neurona o sentido estimula
-  onKoNote(m) { if (this.D) this.kolink.noteIn(m); }
+  onKoNote(m) { if (this.D) this.kolink.noteIn(m); if (this.kolink.isKoPort(m.port) || m.main) this.looper.captureIn(m.note, m.vel, m.ch, m.port); }
+  // repetir un evento del looper: lo de la mosca va por la ruta de su pista (aparato y/o compu); lo que tocaste vuelve a tu K.O.
+  playLoopEvent(e, when) {
+    if (e.kind === 'in') { const port = this.ko.outPort(e.port) || this.ko.output; if (port) this.ko.hit(e.note, e.vel, e.ch, 80, when, port); return; }
+    const t = this.track(e.track); if (!t || !this.audible(t)) return;
+    const port = this.portFor(t), vel = Math.max(1, Math.round(e.vel * this.xfGain(t)));
+    if (this.toDevice(t, port) && e.note != null) this.ko.hit(e.note, vel, e.ch, e.dur || 60, when, port);
+    if (this.toKit(t, port)) this.sound({ voice: e.voice, note: e.note }, vel, when, t, e.pad);
+    const mt = this.live.meter[t.id]; if (!mt || when - mt.at > 60 || vel > mt.vel) this.live.meter[t.id] = { at: when, vel };
+    if (this.rec) this.rec.events.push({ t: when - this.rec.t0, step: this.live.step - this.rec.n0, track: t.id, pad: e.pad ?? 0, neuron: 'loop', note: e.note ?? 0, vel, ch: e.ch, voice: e.voice, port: port?.name });
+  }
   tapPad(k, track = this.track()) {
     this.sim.g[this.pads(track)[k].idx] += this.D.params.w_poi * 2;
     const r = this.route(track, k); this.synth.ensure();

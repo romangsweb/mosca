@@ -3,6 +3,7 @@ import { session } from '../engine/session.js';
 import { compas } from '../engine/compas.js';
 import { TARGETS } from '../engine/loudness.js';
 import NoteEditor from '../ui/NoteEditor.jsx';
+import Resample from '../ui/Resample.jsx';
 import { makeZip } from '../engine/zip.js';
 import { shareUrl } from '../engine/cloud.js';
 import { renderVideo, videoSupported } from '../engine/video.js';
@@ -85,7 +86,7 @@ function ShareButton({ take }) {
 }
 
 export default function Tomas() {
-  const s = useS(), [sel, setSel] = useState(s.lastTake || s.takes[0]?.id), [playing, setPlaying] = useState(false), [exp, setExp] = useState(false), [fmtSel, setFmt] = useState('mid'), [busy, setBusy] = useState(false), [rep, setRep] = useState(null), [notes, setNotes] = useState(false), [vid, setVid] = useState(null), [editing, setEditing] = useState(false);
+  const s = useS(), [sel, setSel] = useState(s.lastTake || s.takes[0]?.id), [playing, setPlaying] = useState(false), [exp, setExp] = useState(false), [fmtSel, setFmt] = useState('mid'), [busy, setBusy] = useState(false), [rep, setRep] = useState(null), [notes, setNotes] = useState(false), [vid, setVid] = useState(null), [editing, setEditing] = useState(false), [rsm, setRsm] = useState(false);
   const take = s.takes.find((t) => t.id === sel) || s.takes[0], [loadErr, setLoadErr] = useState(null);
   useEffect(() => () => session.stopTake(), []);
   useEffect(() => { setLoadErr(null); if (take && !take.events) session.ensureEvents(take.id).catch(() => setLoadErr('No pudimos descargar esta toma. Revisa tu conexión.')); }, [take?.id, take?.events]);
@@ -157,6 +158,7 @@ export default function Tomas() {
                 <div className="row">
                   <button type="button" className="btn lg primary" onClick={play} disabled={!ready}><Icon name={playing ? 'stop' : 'play'} size={12} fill="currentColor" />{playing ? 'Detener' : 'Reproducir'}</button>
                   <button type="button" className="btn lg" onClick={() => { session.stopTake(); setPlaying(false); setNotes(true); }} disabled={!ready} title="Mover, borrar, agregar y cuantizar notas"><Icon name="lapiz" size={14} />Editar notas</button>
+                  <button type="button" className="btn lg" onClick={() => { session.stopTake(); setPlaying(false); setRsm(true); }} disabled={!ready} title="Convierte un pedazo de la toma en el sonido de un pad de Mi kit">Hacer pad</button>
                   <button type="button" className="btn lg" onClick={() => setExp(true)} disabled={!ready}><Icon name="bajar" size={14} />Exportar</button>
                   <ShareButton take={take} />
                 </div>
@@ -178,6 +180,7 @@ export default function Tomas() {
           )}
         </div>
       )}
+      {rsm && take?.events && <Resample take={take} onClose={() => setRsm(false)} />}
       {notes && take?.events && <NoteEditor take={take} onClose={(id) => { setNotes(false); if (id) setSel(id); }} />}
       {exp && take && (
         <div className="modal-bg" onClick={(e) => e.target === e.currentTarget && setExp(false)}>
