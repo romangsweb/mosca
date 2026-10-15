@@ -60,7 +60,7 @@ function Ahora({ s }) {
   );
 }
 
-const resumen = (d) => `dulce ${Math.round(d.inputs.dulce)} · amargo ${Math.round(d.inputs.amargo)} · ${Object.entries(d.tracks).filter(([, t]) => !t.mute).map(([id]) => (id === 'gusto' ? 'Gusto' : 'Oído')).join('+') || 'nada'}`;
+const resumen = (d) => `dulce ${Math.round(d.inputs.dulce)} · amargo ${Math.round(d.inputs.amargo)} · ${Object.entries(d.tracks).filter(([, t]) => !t.mute).map(([id]) => session.track(id)?.name || id).join('+') || 'nada'}`;
 
 function Escenas({ s }) {
   const add = (x) => session.setSong([...s.song, { scene: x, bars: 4 }]);

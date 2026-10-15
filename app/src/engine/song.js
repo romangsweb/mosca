@@ -17,7 +17,7 @@ export function applyScene(session, slot, { morph = session.s.morph, step = sess
   const sc = session.s.scenes[slot]; if (!sc) return;
   const d = sc.data, s = session.s;
   const tracks = s.tracks.map((t) => (d.tracks[t.id] ? { ...t, mute: d.tracks[t.id].mute, map: [...d.tracks[t.id].map], mode: d.tracks[t.id].mode || t.mode } : t));
-  if (morph && s.playing) session.morphState = { from: { ...s.inputs }, to: { ...d.inputs }, n0: step, len: 16 };
+  if (morph && s.playing) session.morphState = { from: { ...s.inputs }, to: { ...d.inputs }, n0: step, len: session.C.len };
   else session.morphState = null;
   session.set({ tracks, density: d.density, swing: d.swing, ...(morph && s.playing ? {} : { inputs: { ...d.inputs } }), sceneNow: slot, pendingScene: null });
 }

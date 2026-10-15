@@ -59,9 +59,9 @@ const Slider = ({ label, value, onChange, fmt = (v) => `${Math.round(v * 100)}%`
     <span className="mono" style={{ width: 40, textAlign: 'right', fontSize: 11 }}>{fmt(value)}</span></label>
 );
 
-function Strip({ title, art, icon, sub, children, controls, meter, fader, on = true }) {
+function Strip({ title, art, icon, sub, children, controls, meter, fader, on = true, wide = false }) {
   return (
-    <section className="panel" style={{ flex: '1 1 250px', maxWidth: 340, gap: 12, opacity: on ? 1 : 0.65 }}>
+    <section className="panel" style={{ flex: wide ? '1 1 330px' : '1 1 250px', maxWidth: wide ? 440 : 340, gap: 12, opacity: on ? 1 : 0.65 }}>
       <div className="row" style={{ gap: 10 }}>
         <span style={{ flex: 'none', display: 'grid', placeItems: 'center', width: 64, height: 46, borderRadius: 9, background: 'var(--screen)', color: '#ECECEE' }}>{art ? <DeviceArt art={art} size={56} /> : <Icon name={icon} size={20} />}</span>
         <div style={{ minWidth: 0 }}><h2 style={{ fontSize: 15 }}>{title}</h2><p className="muted" style={{ margin: '3px 0 0', fontSize: 11.5, lineHeight: 1.35 }}>{sub}</p></div>
@@ -80,7 +80,7 @@ function TrackStrip({ t }) {
   const dev = session.toDevice(t, port), kit = session.toKit(t, port);
   const where = [dev && (port?.name || prof.name), kit && 'compu'].filter(Boolean).join(' + ') || 'en silencio';
   return (
-    <Strip title={`Pista ${t.name}`} art={prof.art} on={session.audible(t)} sub={<><span className={`status-dot${dev ? ' on' : ''}`} /> {session.audible(t) ? `Suena en: ${where}` : 'Silenciada'}</>}
+    <Strip title={`Pista ${t.name}`} art={prof.art} on={session.audible(t)} sub={<><span className={`status-dot${dev ? ' on' : ''}`} /> {session.audible(t) ? `Suena en: ${where}` : s.tracks.indexOf(t) >= session.trackLimit ? <a href="#/cuenta?plan">Pista 3 y 4 son Pro</a> : 'Silenciada'}</>}
       fader={<Fader id={`lvl-${t.id}`} label={`Nivel de ${t.name}`} value={t.level} onChange={(v) => session.setTrack(t.id, { level: Math.max(0.05, v) })} />}
       meter={<Meter value={meterOf(t.id) * (session.audible(t) ? 1 : 0)} />}
       controls={<>
@@ -127,7 +127,7 @@ function KitStrip() {
   const s = useS(), fx = s.fx || {}, users = s.tracks.filter((t) => session.audible(t) && session.toKit(t));
   const v = Math.max(0, ...users.map((t) => meterOf(t.id)));
   return (
- <Strip title="Compu · kit y efectos" icon="sonido" sub={users.length ? `Lo usan: ${users.map((t) => t.name).join(', ')}` : 'Ninguna pista lo usa ahora'}
+ <Strip wide title="Compu · kit y efectos" icon="sonido" sub={users.length ? `Lo usan: ${users.map((t) => t.name).join(', ')}` : 'Ninguna pista lo usa ahora'}
       fader={<Fader id="kitvol" label="Volumen del kit" value={s.kitVol ?? 0.7} onChange={(x) => session.setKitVol(x)} />}
       meter={<Meter value={v * (s.kitVol ?? 0.7) / 0.7} />}
       controls={<>

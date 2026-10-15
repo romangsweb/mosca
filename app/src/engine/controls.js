@@ -4,6 +4,7 @@ import { SLOTS } from './song.js';
 
 const range = (id, label, group, min, max, get, set) => ({ id, label, group, kind: 'range', min, max, get, set });
 const trig = (id, label, group, fire) => ({ id, label, group, kind: 'trigger', fire });
+const TRACK_IDS = ['gusto', 'oido', 'p3', 'p4'];
 
 export const TARGETS = [
   range('dulce', 'Dulce', 'Estímulos', 0, 200, (s) => s.s.inputs.dulce, (s, v) => s.setInput('dulce', v, false)),
@@ -20,17 +21,19 @@ export const TARGETS = [
   range('density', 'Densidad', 'Ritmo', 1, 20, (s) => s.s.density, (s, v) => s.set({ density: v })),
   range('swing', 'Swing', 'Ritmo', 50, 75, (s) => s.s.swing, (s, v) => s.set({ swing: v })),
   range('bpm', 'Tempo', 'Ritmo', 60, 180, (s) => s.s.bpm, (s, v) => s.setBpm(v)),
-  range('lvl_gusto', 'Nivel pista Gusto', 'Mezcla', 20, 100, (s) => Math.round(s.track('gusto').level * 100), (s, v) => s.setTrack('gusto', { level: v / 100 }, false)),
-  range('lvl_oido', 'Nivel pista Oído', 'Mezcla', 20, 100, (s) => Math.round(s.track('oido').level * 100), (s, v) => s.setTrack('oido', { level: v / 100 }, false)),
+  range('xfade', 'Crossfader A ↔ B', 'Directo', 0, 100, (s) => Math.round((s.s.xfade ?? 0.5) * 100), (s, v) => s.set({ xfade: v / 100 })),
+  range('intensidad', 'Intensidad (todos los estímulos)', 'Directo', 0, 200, (s) => Math.round((s.s.intensidad ?? 1) * 100), (s, v) => s.set({ intensidad: v / 100 })),
   range('kit_vol', 'Volumen del kit (compu)', 'Mezcla', 0, 100, (s) => Math.round((s.s.kitVol ?? 0.7) * 100), (s, v) => s.setKitVol(v / 100, false)),
   range('filtro', 'Filtro de la compu', 'Mezcla', 0, 100, (s) => Math.round((s.s.fx?.filtro ?? 1) * 100), (s, v) => s.setFx({ filtro: v / 100 }, false)),
-  range('rev_gusto', 'Reverb de Gusto', 'Mezcla', 0, 100, (s) => Math.round((s.track('gusto').rev ?? 0) * 100), (s, v) => s.setTrack('gusto', { rev: v / 100 }, false)),
-  range('rev_oido', 'Reverb de Oído', 'Mezcla', 0, 100, (s) => Math.round((s.track('oido').rev ?? 0) * 100), (s, v) => s.setTrack('oido', { rev: v / 100 }, false)),
+  // por pista (1 y 2 conservan sus ids de siempre para no romper controles ya aprendidos; 3 y 4 son Pro)
+  ...TRACK_IDS.flatMap((id, i) => [
+    range(`lvl_${id}`, `Nivel pista ${i + 1}`, 'Mezcla', 20, 100, (s) => Math.round((s.track(id)?.level ?? 1) * 100), (s, v) => s.track(id) && s.setTrack(id, { level: v / 100 }, false)),
+    range(`rev_${id}`, `Reverb pista ${i + 1}`, 'Mezcla', 0, 100, (s) => Math.round((s.track(id)?.rev ?? 0) * 100), (s, v) => s.track(id) && s.setTrack(id, { rev: v / 100 }, false)),
+    trig(`mute_${id}`, `Silenciar pista ${i + 1}`, 'Mezcla', (s) => s.track(id) && s.setTrack(id, { mute: !s.track(id).mute })),
+  ]),
   trig('play', 'Tocar / detener', 'Acciones', (s) => s.toggle()),
   trig('rec', 'Grabar', 'Acciones', (s) => s.toggleRec()),
   trig('mutar', 'Mutar pista', 'Acciones', (s) => s.mutateTrack()),
-  trig('mute_gusto', 'Silenciar Gusto', 'Mezcla', (s) => s.setTrack('gusto', { mute: !s.track('gusto').mute })),
-  trig('mute_oido', 'Silenciar Oído', 'Mezcla', (s) => s.setTrack('oido', { mute: !s.track('oido').mute })),
   trig('next', 'Siguiente escena', 'Escenas', (s) => { const have = SLOTS.filter((x) => s.s.scenes[x]); if (!have.length) return; const i = have.indexOf(s.s.sceneNow); s.launchScene(have[(i + 1) % have.length]); }),
   ...SLOTS.map((x) => trig(`scene_${x}`, `Escena ${x}`, 'Escenas', (s) => s.launchScene(x))),
 ];

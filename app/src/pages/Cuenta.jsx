@@ -4,6 +4,7 @@ import { session } from '../engine/session.js';
 import { useS, Seg, Icon } from '../ui/kit.jsx';
 import { daysLeft } from '../ui/Paywall.jsx';
 import { payEnabled, paySandbox } from '../engine/pay.js';
+import MiEstudio from '../ui/MiEstudio.jsx';
 
 const DOCS = [
   ['Primeros pasos', <>
@@ -31,13 +32,13 @@ const DOCS = [
 ];
 
 export default function Cuenta() {
-  const s = useS(), q = location.hash.split('?')[1], [tab, setTab] = useState(['perfil', 'plan', 'ajustes', 'ayuda'].includes(q) ? q : 'perfil'), [yearly, setYearly] = useState(false);
+  const s = useS(), q = location.hash.split('?')[1], [tab, setTab] = useState(['perfil', 'estudio', 'plan', 'ajustes', 'ayuda'].includes(q) ? q : 'perfil'), [yearly, setYearly] = useState(false);
   useEffect(() => { const f = () => { const q2 = location.hash.split('?')[1]; if (q2) setTab(q2); }; addEventListener('hashchange', f); return () => removeEventListener('hashchange', f); }, []);
   const exportAll = () => { const blob = new Blob([JSON.stringify({ app: 'fly-punch', version: 1, takes: s.takes }, null, 1)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'fly-punch-respaldo.json'; a.click(); };
   return (
     <div className="page" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 24, alignItems: 'flex-start', maxWidth: 1180 }}>
       <nav aria-label="Secciones de la cuenta" style={{ flex: '0 1 200px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {[['perfil', 'Perfil'], ['plan', 'Plan'], ['ajustes', 'Ajustes'], ['ayuda', 'Ayuda y documentación']].map(([id, l]) => <button key={id} type="button" className="btn ghost" aria-pressed={tab === id} style={{ justifyContent: 'flex-start', height: 40 }} onClick={() => { setTab(id); history.replaceState(null, '', `#/cuenta?${id}`); }}>{l}</button>)}
+        {[['perfil', 'Perfil'], ['estudio', 'Mi estudio'], ['plan', 'Plan'], ['ajustes', 'Ajustes'], ['ayuda', 'Ayuda y documentación']].map(([id, l]) => <button key={id} type="button" className="btn ghost" aria-pressed={tab === id} style={{ justifyContent: 'flex-start', height: 40 }} onClick={() => { setTab(id); history.replaceState(null, '', `#/cuenta?${id}`); }}>{l}</button>)}
       </nav>
       <div style={{ flex: '1 1 600px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
         {tab === 'perfil' && (
@@ -57,6 +58,7 @@ export default function Cuenta() {
             </div>
           </section>
         )}
+        {tab === 'estudio' && <MiEstudio />}
         {tab === 'plan' && <PlanTab s={s} yearly={yearly} setYearly={setYearly} />}
         {tab === 'ajustes' && (
           <section className="panel" style={{ gap: 0, padding: 22 }}>
@@ -72,7 +74,7 @@ export default function Cuenta() {
           <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <h1 style={{ marginBottom: 6 }}>Ayuda y documentación</h1>
             {DOCS.map(([t, body], i) => <details key={t} className="doc-item" open={i === 0}><summary>{t}</summary><div className="doc">{body}</div></details>)}
-            <p className="dim" style={{ fontSize: 11, lineHeight: 1.6 }}>Datos: FlyWire v630 · Shiu et al. 2024 (Nature), github.com/philshiu/Drosophila_brain_model (MIT) · anotaciones: Schlegel et al. 2024; Dorkenwald et al. 2024.</p>
+            <p className="dim" style={{ fontSize: 11, lineHeight: 1.6 }}>Datos: FlyWire v783 (Dorkenwald et al. 2024) · modelo de Shiu et al. 2024 (Nature), github.com/philshiu/Drosophila_brain_model (MIT) · anotaciones: Schlegel et al. 2024; Dorkenwald et al. 2024.</p>
           </section>
         )}
       </div>
@@ -96,7 +98,7 @@ function PlanTab({ s, yearly, setYearly }) {
   else cta = payEnabled ? pay : <button type="button" className="btn lg" disabled>Pago disponible pronto</button>;
   const PLANS = [
     ['Free', !pro ? 'TU PLAN' : '', '$0', 'para siempre', ['Los 4 circuitos: gusto, oído, olfato y cortejo', '2 pistas en el K.O. II (grupos A y C)', 'Kits Análogo e Insectos', '5 tomas en la nube con cuenta', 'Exportar a MIDI, CSV y video'], <button key="f" type="button" className="btn lg" disabled>{!pro ? 'Plan actual' : 'Incluido'}</button>, false],
-    ['Pro', trial ? 'PRUEBA' : pro ? 'TU PLAN' : 'RECOMENDADO', yearly ? '$100' : '$10', yearly ? 'USD / año · 2 meses gratis' : 'USD / mes', ['Todo lo de Free', 'Melodía con acordes y progresiones', 'Todos los kits y tu propio kit en la nube', 'La mosca aprende tu gusto', 'Canción con 8 escenas', 'WAV masterizado y pistas separadas', 'Tomas ilimitadas y audio real en la nube', 'Modo Datos: tus CSV como estímulo'], cta, true],
+    ['Pro', trial ? 'PRUEBA' : pro ? 'TU PLAN' : 'RECOMENDADO', yearly ? '$100' : '$10', yearly ? 'USD / año · 2 meses gratis' : 'USD / mes', ['Todo lo de Free', '4 pistas: los 4 grupos del K.O. II', 'Directo: crossfader y macros en vivo', 'Melodía con acordes y progresiones', 'Todos los kits y tu propio kit en la nube', 'La mosca aprende tu gusto', 'Canción con 8 escenas', 'WAV masterizado y pistas separadas', 'Tomas ilimitadas y audio real en la nube', 'Modo Datos: tus CSV como estímulo'], cta, true],
   ];
   return (
     <>

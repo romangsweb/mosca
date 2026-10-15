@@ -19,7 +19,7 @@ import { liveMeter } from './loudness.js';
 import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud , shareTake, unshareTake, kitIndex, uploadSample, downloadSample, deleteSample, uploadTakeAudio, downloadTakeAudio, deleteTakeAudio } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
-const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes', 'opto', 'taste', 'compas', 'acento', 'lufs'];
+const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes', 'opto', 'taste', 'compas', 'acento', 'lufs', 'xfade', 'intensidad'];
 
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'], olfato: ['vinagre', 'co2', 'geosmina'], cortejo: ['canto', 'cva', 'deseo'] };
 // circuitos: cada uno es una parte real del mismo cerebro, con sus sensores y su neurona de salida
@@ -44,7 +44,12 @@ export const PRO_FEATURES = {
   multi: 'Un aparato distinto por pista (p. ej. dos K.O. II)',
   audio: 'Grabar el audio real de tu interfaz con cada toma',
   controles: 'Controles MIDI ilimitados (sidekick y cualquier controlador)',
+  pistas: '4 pistas: los 4 grupos del K.O. II, cada una con su circuito',
+  directo: 'Directo: crossfader entre aparatos y macros para tocar en vivo',
 };
+// pistas 3 y 4 (Pro): ocupan los grupos B y D del K.O. II, que las dos primeras dejan libres
+export const EXTRA_TRACKS = [{ id: 'p3', group: 'B', sense: 'olfato', root: 60 }, { id: 'p4', group: 'D', sense: 'cortejo', root: 36 }];
+export const MAX_TRACKS = 4, FREE_TRACKS = 2;
 const NO_PLAN = { plan: 'free', planBase: 'free', trialEnds: null, trialUsed: false, sub: null };
 const CURVES = { lineal: (x) => x, suave: (x) => Math.sqrt(x), dura: (x) => x * x };
 
@@ -64,7 +69,7 @@ const DEFAULTS = {
   sk: { follow: false, fxAuto: false, fx: [0, 1] },
   fx: { ...FX_DEFAULT }, metro: false, countIn: 1, autoLanes: [],
   taste: { on: true, likes: {}, dislikes: {}, n: 0, plastic: {} },
-  compas: '4/4', acento: 0.35, lufs: 'streaming',
+  compas: '4/4', acento: 0.35, lufs: 'streaming', xfade: 0.5, intensidad: 1,
   opto: { on: false, mode: 'activar', target: 'pad', power: 0.6, pattern: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] },
   follow: { source: 'entrada', tempo: true, key: true, autoPlay: true, offset: 0 },
   oidoSource: 'manual', dataMap: {}, perRow: 16,
@@ -99,17 +104,13 @@ export class Session {
       fetch(`${import.meta.env.BASE_URL}data/cerebro-nube.bin`).then((r) => r.arrayBuffer()),
     ]);
     this.D = D; this.cloud = new Int16Array(cloud); this.sim = new Circuit(D);
-    for (const t of this.s.tracks) {
-      this.live.lanes[t.id] = [...Array(12)].map(() => new Uint8Array(16)); this.live.rate[t.id] = new Float32Array(12);
-      // historia por neurona (últimos HIST pasos): frecuencia suavizada y disparos crudos, para la gráfica del inspector
-      this.live.rateHist[t.id] = [...Array(12)].map(() => new Float32Array(HIST)); this.live.spikes[t.id] = [...Array(12)].map(() => new Uint8Array(HIST));
-    }
+    this.ensureLive();
     // 1) Lo local (ajustes y tomas de este navegador): rápido, con su propio límite. 2) La cuenta, después y sin bloquear:
     // si Supabase tarda en despertar, la app ya está usable y solo el indicador de sincronía espera.
     const restoreLocal = async () => {
       if (!(await dbOk())) throw new Error('indexeddb no disponible');
       const saved = await kvGet('settings');
-      if (saved) Object.assign(this.s, { ...saved, inputs: { ...DEFAULTS.inputs, ...saved.inputs }, tracks: saved.tracks?.map((t, i) => ({ ...DEFAULTS.tracks[i], ...t })) || this.s.tracks });
+      if (saved) Object.assign(this.s, { ...saved, inputs: { ...DEFAULTS.inputs, ...saved.inputs }, tracks: saved.tracks?.map((t, i) => ({ ...(DEFAULTS.tracks[i] || DEFAULTS.tracks[0]), ...t })) || this.s.tracks }); this.ensureLive();
       this.ko.internalBpm = this.s.bpm; this.ko.clockOut = this.s.clockOut; this.ko.latency = this.s.latency;
       await this.refreshTakes();
     };
@@ -133,7 +134,8 @@ export class Session {
   emit() { if (this._batch) { this._batchDirty = true; return; } this.s = { ...this.s }; this.listeners.forEach((f) => f()); }
   batch(fn) { this._batch = true; try { fn(); } finally { this._batch = false; if (this._batchDirty) { this._batchDirty = false; this.emit(); } } } // varios cambios, un solo redibujado
   set(patch, persist = false) {
-    Object.assign(this.s, typeof patch === 'function' ? patch(this.s) : patch); this.emit();
+    const p = typeof patch === 'function' ? patch(this.s) : patch;
+    Object.assign(this.s, p); if (p.tracks) this.ensureLive(); this.emit();
     if (persist) this.persist();
   }
   // si cierras o recargas antes de que pase el retraso, se guarda igual
@@ -230,8 +232,8 @@ export class Session {
       const remote = p?.settings || {};
       if (Object.keys(remote).length) {
         // la nube manda: es lo último que guardaste en cualquier dispositivo
-        const tracks = remote.tracks?.map((t, i) => ({ ...DEFAULTS.tracks[i], ...t })) || this.s.tracks;
-        Object.assign(this.s, remote, { tracks, onboarded: true });
+        const tracks = remote.tracks?.map((t, i) => ({ ...(DEFAULTS.tracks[i] || DEFAULTS.tracks[0]), ...t })) || this.s.tracks;
+        Object.assign(this.s, remote, { tracks, onboarded: true }); this.ensureLive();
         this.ko.internalBpm = this.s.bpm; this.ko.clockOut = this.s.clockOut; this.ko.latency = this.s.latency;
         kvSet('settings', this.snapshot());
       } else {
@@ -457,8 +459,36 @@ export class Session {
   setTrack(id, patch, persist = true) { this.set({ tracks: this.s.tracks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }, persist); if ('level' in patch) this.skFollow(this.track(id)); if ('rev' in patch || 'dly' in patch) { const t = this.track(id); this.synth.setSends(id, { rev: t.rev ?? 0, dly: t.dly ?? 0 }); } }
   track(id = this.s.selTrack) { return this.s.tracks.find((t) => t.id === id); }
   pads(track) { return (this.D.modos[track.sense] || this.D.modos.gusto).pads; }
+  // estado en vivo de cada pista (rejilla, frecuencias y la historia por neurona para la gráfica del inspector)
+  ensureLive() {
+    const L = this.live; if (!L) return;
+    for (const t of this.s.tracks) {
+      if (L.lanes[t.id]) continue;
+      L.lanes[t.id] = [...Array(12)].map(() => new Uint8Array(16)); L.rate[t.id] = new Float32Array(12);
+      L.rateHist[t.id] = [...Array(12)].map(() => new Float32Array(HIST)); L.spikes[t.id] = [...Array(12)].map(() => new Uint8Array(HIST));
+    }
+  }
+  // crossfader de Directo: las pistas del lado A suenan a la izquierda, las del B a la derecha; al centro, ambas completas
+  xfGain(t) { if (!t.xf || !this.can('directo')) return 1; const x = this.s.xfade ?? 0.5; return t.xf === 'A' ? Math.min(1, 2 * (1 - x)) : Math.min(1, 2 * x); }
+  get trackLimit() { return this.can('pistas') ? MAX_TRACKS : FREE_TRACKS; }
+  // agregar una pista (3 y 4 son Pro): toma el siguiente grupo libre del K.O. y un circuito que aún no suena
+  addTrack(sense) {
+    if (this.s.tracks.length >= MAX_TRACKS) return null;
+    if (this.s.tracks.length >= this.trackLimit) { location.hash = '#/cuenta?plan'; return null; }
+    const slot = EXTRA_TRACKS.find((x) => !this.s.tracks.some((t) => t.id === x.id)); if (!slot) return null;
+    const used = new Set(this.s.tracks.map((t) => t.sense)), avail = Object.keys(CIRCUITS).filter((c) => this.D?.modos?.[c]);
+    const sn = sense || avail.find((c) => !used.has(c)) || slot.sense;
+    const t = { ...DEFAULTS.tracks[0], id: slot.id, name: CIRCUITS[sn]?.name || `Pista ${this.s.tracks.length + 1}`, sense: sn, group: slot.group, root: slot.root, level: 0.9, map: identity(), kit: [...DEFAULT_KIT], mute: false, solo: false, rev: 0.15, dly: 0, frozen: null, prob: null, len: null, kitId: null };
+    this.set({ tracks: [...this.s.tracks, t], selTrack: t.id }, true); this.loadKit(); return t.id;
+  }
+  removeTrack(id) {
+    if (!EXTRA_TRACKS.some((x) => x.id === id)) return; // las dos primeras siempre existen
+    this.set({ tracks: this.s.tracks.filter((t) => t.id !== id), selTrack: this.s.selTrack === id ? 'gusto' : this.s.selTrack }, true);
+    for (const k of ['lanes', 'rate', 'rateHist', 'spikes']) delete this.live[k][id];
+  }
   setSense(tid, sense) { if (!this.D.modos[sense]) return; this.setTrack(tid, { sense, frozen: null, play: 'vivo' }); }
-  audible(t) { const solo = this.s.tracks.some((x) => x.solo); return solo ? t.solo : !t.mute; }
+  // sin Pro, las pistas 3 y 4 se conservan pero no suenan
+  audible(t) { if (this.s.tracks.indexOf(t) >= this.trackLimit) return false; const solo = this.s.tracks.some((x) => x.solo); return solo ? t.solo : !t.mute; }
   // ---------- dispositivo ----------
   get profile() { return profileById(this.s.device); }
   get devOverride() { return this.s.devOverrides[this.s.device] || {}; }
@@ -503,6 +533,8 @@ export class Session {
       for (const [sense, ci] of Object.entries(this.s.dataMap)) if (ci !== '' && ci != null) r[sense] = this.s.data.cols[ci].norm[this.s.row] * 200;
     }
     morphRates(this, r, this.live.step);
+    // macro «Intensidad» de Directo: escala todos los estímulos a la vez (×0 a ×2)
+    const ki = this.can('directo') ? this.s.intensidad ?? 1 : 1; if (ki !== 1) for (const x of Object.keys(r)) r[x] *= ki;
     // las pistas silenciadas no reciben estímulo de su sentido: así no ensucian el cerebro
     // solo estimulan los sentidos de las pistas que suenan (un circuito sin pista no se activa a escondidas)
     const live = new Set(this.s.tracks.filter((t) => this.audible(t)).flatMap((t) => SENSES[t.sense] || []));
@@ -537,7 +569,7 @@ export class Session {
         let vel = 0;
         if (c && on && mode !== 'congelado') { const x = Math.min(1, c / 3), ghost = s.ghost && p.inhibidora ? 0.6 : 1; vel = Math.round((s.velMin + (s.velMax - s.velMin) * curve(x)) * ghost * t.level); }
         if (fz && on && Math.random() * 100 < (t.prob?.[k]?.[n % this.patLen(t)] ?? 100)) vel = Math.max(vel, Math.round(fz * t.level));
-        if (vel) vel = Math.max(1, Math.min(127, Math.round(vel * acc)));
+        if (vel) { const g = this.xfGain(t); vel = g ? Math.max(1, Math.min(127, Math.round(vel * acc * g))) : 0; }
         if (!vel) return;
         const when = at + swingMs + (Math.random() * 2 - 1) * s.humanize;
         const r = this.route(t, k);

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useState } from 'react';
-import { session, SENSES, SENSE_LABEL, HIST, CIRCUITS } from '../engine/session.js';
+import { session, SENSES, SENSE_LABEL, HIST, CIRCUITS, MAX_TRACKS, EXTRA_TRACKS } from '../engine/session.js';
 import { PAD_KEYS } from '../engine/midi.js';
 import { SCALES, NOTE_NAMES, CHORDS, PROGS } from '../engine/devices.js';
 import { SoundRoute } from '../ui/SoundRoute.jsx';
@@ -174,9 +174,10 @@ export default function Estudio() {
                   <button type="button" className="nm" onClick={() => session.set({ selTrack: t.id }, true)}><Icon name={t.sense} size={14} />{t.name}<span className="mono muted" style={{ fontSize: 10, fontWeight: 500 }}>{t.group}</span></button>
                   <button type="button" className="ms m" aria-pressed={t.mute} aria-label={`Silenciar ${t.name}`} onClick={() => session.setTrack(t.id, { mute: !t.mute })}>M</button>
                   <button type="button" className="ms s" aria-pressed={t.solo} aria-label={`Solo ${t.name}`} onClick={() => session.setTrack(t.id, { solo: !t.solo })}>S</button>
+                  {EXTRA_TRACKS.some((x) => x.id === t.id) && <button type="button" className="ms" aria-label={`Quitar la pista ${t.name}`} title="Quitar esta pista" onClick={() => session.removeTrack(t.id)}><Icon name="x" size={10} /></button>}
                 </div>
               ))}
-              <a className="trk" href="#/datos" style={{ color: 'var(--sub)', paddingRight: 10 }}><Icon name="mas" size={14} />Datos<span className="badge-pro">PRO</span></a>
+              {s.tracks.length < MAX_TRACKS && <button type="button" className="trk" style={{ color: 'var(--sub)', paddingRight: 10 }} title="Agrega una pista en el siguiente grupo libre del K.O. II, con otro circuito" onClick={() => session.addTrack()}><Icon name="mas" size={14} />Pista{s.tracks.length >= session.trackLimit && <span className="badge-pro">PRO</span>}</button>}
             </div>
             <div className="row" style={{ gap: 6 }}>
               <Seg label="Quién toca la pista" items={[['vivo', 'Mosca'], ['congelado', 'Patrón'], ['ambos', 'Ambos']]} value={track.play || 'vivo'} onChange={(v) => { if (v !== 'vivo' && !track.frozen && !session.freeze(track.id)) session.setTrack(track.id, { play: v, frozen: Array.from({ length: 12 }, () => new Array(16).fill(0)) }); else session.setTrack(track.id, { play: v }); }} />
