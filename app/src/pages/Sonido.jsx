@@ -52,6 +52,16 @@ export default function Sonido() {
             <Slider id="acento" label="Acento del compás" value={Math.round((s.acento ?? 0.35) * 100)} min={0} max={100} unit="%" color="var(--acc)" help="El primer tiempo suena más fuerte y lo que cae entre pulsos un poco más suave: así se siente el compás aunque la mosca toque libre." onChange={(v) => session.set({ acento: v / 100 }, true)} />
             <Slider id="dens" label="Densidad (tiempo neuronal por paso)" value={s.density} min={1} max={20} unit="ms" help="Más milisegundos por paso = más disparos por compás = groove más lleno." onChange={(v) => session.set({ density: v }, true)} />
             <Slider id="swing" label="Swing" value={s.swing} min={50} max={75} unit="%" color="var(--acc)" help="Retrasa las semicorcheas pares." onChange={(v) => session.set({ swing: v }, true)} />
+            <div className="field"><label style={{ color: 'var(--text)' }}>Swing por pista</label>
+              {s.tracks.map((t) => (
+                <div key={t.id} className="row" style={{ gap: 8, fontSize: 12 }}>
+                  <span style={{ width: 72 }}>{t.name}</span>
+                  <input type="range" min={50} max={75} value={t.swing ?? s.swing} aria-label={`Swing de ${t.name}`} onChange={(e) => session.setTrack(t.id, { swing: +e.target.value })} style={{ flex: 1, minWidth: 0, accentColor: t.swing != null ? 'var(--acc)' : 'var(--steel)' }} />
+                  <span className="mono" style={{ width: 34, textAlign: 'right' }}>{t.swing ?? s.swing}%</span>
+                  <button type="button" className="btn" style={{ height: 26, fontSize: 11, padding: '0 8px', visibility: t.swing != null ? 'visible' : 'hidden' }} onClick={() => session.setTrack(t.id, { swing: null })} title="Volver al swing general">General</button>
+                </div>
+              ))}
+              <span className="dim" style={{ fontSize: 11 }}>Por ejemplo: hats con mucho swing y el bombo recto. Si no la mueves, la pista sigue el swing general.</span></div>
             <Slider id="hum" label="Humanizar" value={s.humanize} min={0} max={30} unit="ms" color="var(--steel)" help="Pequeñas variaciones de tiempo al azar." onChange={(v) => session.set({ humanize: v }, true)} />
           </section>
           <section className="panel" style={{ flex: '999 1 480px', background: 'var(--screen)', color: '#ECECEE' }}>

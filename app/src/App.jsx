@@ -102,6 +102,8 @@ export default function App() {
   useEffect(() => {
     const k = (e) => {
       if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+      if (e.key === '?') { session.set({ atajos: !session.s.atajos }); return; }
+      if (e.key === 'Escape' && session.s.atajos) { session.set({ atajos: false }); return; }
       if (e.code === 'Space') { e.preventDefault(); session.toggle(); }
       if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); e.shiftKey ? session.redo() : session.undo(); return; }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -151,7 +153,8 @@ export default function App() {
       {s.guide && TIPS[page] && (
         <div className="guide" role="note">
           {TIPS[page].map((t, i) => <span key={i}><span className="n">{i + 1}</span>{t}</span>)}
-          <a href="#/cuenta?ayuda" style={{ marginLeft: 'auto', textDecoration: 'underline', textUnderlineOffset: 3 }}>Documentación</a>
+          <button type="button" className="linkbtn" style={{ marginLeft: 'auto', border: 0, background: 'none', color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3, cursor: 'pointer', font: 'inherit' }} onClick={() => session.set({ atajos: true })}>Atajos (?)</button>
+          <a href="#/cuenta?ayuda" style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}>Documentación</a>
           <button type="button" className="iconbtn" style={{ border: 0 }} aria-label="Cerrar guía" onClick={() => session.set({ guide: false }, true)}><Icon name="x" size={14} /></button>
         </div>
       )}
@@ -164,6 +167,7 @@ export default function App() {
           <a href="#/cuenta?ajustes" aria-current={page === 'cuenta' ? 'page' : undefined}><Icon name="ajustes" size={20} />Ajustes</a>
         </nav>
         <main className="main" id="main"><Boundary key={page}><Page /></Boundary></main>
+        {s.atajos && <Atajos />}
       </div>
       <StatusBar s={s} />
       {s.notice === 'restauracion' && (
@@ -184,6 +188,33 @@ export default function App() {
       {s.notice === 'limite' && (
         <div className="toast" role="status">Llegaste a 5 tomas guardadas en el plan Free. <a href="#/tomas" className="btn" onClick={() => session.set({ notice: null })}>Ver tomas</a><button type="button" className="iconbtn" aria-label="Cerrar" onClick={() => session.set({ notice: null })}><Icon name="x" size={14} /></button></div>
       )}
+    </div>
+  );
+}
+
+// hoja de atajos: «?» la abre y la cierra
+const ATAJOS = [
+  ['Tocar', [['Espacio', 'Tocar / detener'], ['R', 'Grabar una toma'], ['M', 'Metrónomo'], ['T', 'Marcar el tempo (tap)']]],
+  ['La mosca', [['G', 'Me gusta lo que tocó'], ['N', 'No me gusta'], ['F', 'Remate ahora']]],
+  ['Directo', [['1 – 8', 'Lanzar escena A – H (entra al siguiente compás)']]],
+  ['Editar', [['⌘ Z', 'Deshacer'], ['⇧ ⌘ Z', 'Rehacer'], ['?', 'Esta hoja']]],
+  ['Editor de notas', [['Supr', 'Borrar lo elegido'], ['Q', 'Cuantizar'], ['⌘ A', 'Elegir todas'], ['Flechas', 'Mover lo elegido'], ['Doble clic', 'Agregar una nota'], ['Esc', 'Soltar la selección o cerrar']]],
+];
+function Atajos() {
+  return (
+    <div className="modal-bg" onClick={() => session.set({ atajos: false })}>
+      <div className="modal" role="dialog" aria-label="Atajos de teclado" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
+        <div className="between"><h2 style={{ margin: 0 }}>Atajos de teclado</h2><button type="button" className="iconbtn" aria-label="Cerrar" onClick={() => session.set({ atajos: false })}><Icon name="x" size={14} /></button></div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+          {ATAJOS.map(([g, list]) => (
+            <div key={g} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span className="muted" style={{ fontSize: 12, fontWeight: 600 }}>{g}</span>
+              {list.map(([k, d]) => <div key={k} className="row" style={{ gap: 10, fontSize: 13 }}><kbd className="mono" style={{ minWidth: 70, padding: '2px 6px', borderRadius: 6, border: '1px solid var(--line2)', background: 'var(--well)', fontSize: 11, textAlign: 'center' }}>{k}</kbd><span>{d}</span></div>)}
+            </div>
+          ))}
+        </div>
+        <p className="dim" style={{ margin: 0, fontSize: 11 }}>Cualquier perilla o botón MIDI también se puede asignar en Equipo › Controles.</p>
+      </div>
     </div>
   );
 }

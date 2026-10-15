@@ -87,7 +87,7 @@ export class Session {
     this.s = structuredClone(DEFAULTS);
     this.s.playing = false; this.s.rec = false; this.s.ko = { input: null, output: null, error: null };
     this.s.takes = []; this.s.ready = false; this.s.user = null; Object.assign(this.s, NO_PLAN); this.s.sync = cloudEnabled ? 'local' : 'off'; this.s.mutHistory = {}; this.s.data = null; this.s.row = 0; this.s.saved = Date.now();
-    this.live = { step: 0, pos: 0, active: 0, mn9: 0, groom: 0, rate: {}, lanes: {}, out: {}, hist: new Array(64).fill(0), counts: null, lastHitAt: {}, lastPad: {}, rowHist: [], rateHist: {}, spikes: {}, meter: {} };
+    this.live = { step: 0, pos: 0, active: 0, mn9: 0, groom: 0, rate: {}, lanes: {}, out: {}, hist: new Array(64).fill(0), counts: null, lastHitAt: {}, lastPad: {}, arp: {}, rowHist: [], rateHist: {}, spikes: {}, meter: {} };
     if (typeof window !== 'undefined') { addEventListener('pagehide', () => this.flush()); document.addEventListener('visibilitychange', () => document.hidden && this.flush()); }
     this.rec = null; this.ear = new Ear(); this.synth = new Synth(); this.capture = new Capture(); this.world = new World(this); this.vision = new Vision(); this.kolink = new KoLink(this, SENSES);
     this.ko = new KO2({
@@ -554,7 +554,7 @@ export class Session {
   get monitorOn() { return this.s.monitor === 'siempre' || (this.s.monitor === 'auto' && (!this.ko.connected || this.profile.kind === 'interno')); }
   // ---------- transporte ----------
   play() { this.synth.ensure(); this.sim.reset(); this.live.step = 0; this.live.countIn = 0; this.s.row = 0; this.morphState = null; if (this.s.songOn) this.songPos = { row: 0, bars: 0 }; this.ko.start(); this.set({ playing: true }); }
-  stop() { this.ko.stop(); this.kolink.reset(); if (this._recArm) { this._recArm = false; this.set({ rec: false, counting: false }); } else if (this.s.rec) this.toggleRec(); this.morphState = null; this.set({ playing: false, pendingScene: null }); }
+  stop() { this.ko.stop(); this.kolink.reset(); if (this._recArm) { this._recArm = false; this.set({ rec: false, counting: false }); } else if (this.s.rec) this.toggleRec(); this.morphState = null; this.live.arp = {}; this.set({ playing: false, pendingScene: null }); }
   toggle() { this.s.playing ? this.stop() : this.play(); }
   // ---------- un paso de semicorchea ----------
   rates() {
@@ -598,12 +598,14 @@ export class Session {
     const flyOn = this.kolink.step(n); // llamada y respuesta con el K.O.: en tu compás la mosca escucha
     // remate: en el último tiempo del compás antes de un cambio (escena, parte de la canción, cada 4/8 compases o «Remate ahora»)
     const fillOn = !!(L.fillBar || s.pendingScene || L.fillManual === Math.floor(n / C.len)), zone = Math.max(2, Math.round(C.len / 4)), inZone = fillOn && pos >= C.len - zone;
-    const acc = accent(C, pos, s.acento ?? 0), swingMs = pos % 2 ? ((s.swing - 50) / 50) * stepMs : 0, curve = CURVES[s.curve];
+    const acc = accent(C, pos, s.acento ?? 0), curve = CURVES[s.curve];
     for (const t of s.tracks) {
       const pads = this.pads(t), lanes = L.lanes[t.id], rate = L.rate[t.id], on = this.audible(t), fill = inZone ? t.fill || 'off' : 'off';
       // la mosca se suelta: al entrar al remate sus neuronas reciben un empujón y toca aunque la pista esté congelada
       if (fill === 'mosca' && pos === C.len - zone && on) pads.forEach((p) => { this.sim.g[p.idx] += this.D.params.w_poi * 2.5 * (s.intensidad ?? 1); });
       const roll = fill === 'redoble' ? this.rollPad(t) : -1, ri = pos - (C.len - zone);
+      const swingMs = pos % 2 ? (((t.swing ?? s.swing) - 50) / 50) * stepMs : 0; // cada pista puede tener su propio swing
+      const arp = t.mode === 'melodia' && t.arp?.modo && t.arp.modo !== 'off' && this.can('melodia') ? t.arp : null;
       pads.forEach((p, k) => {
         const c = cnt[p.idx]; rate[k] = rate[k] * 0.9 + 0.1 * (c / (s.density / 1000));
         lanes[k][pos] = 0; L.rateHist[t.id][k][n % HIST] = rate[k]; L.spikes[t.id][k][n % HIST] = c;
@@ -622,6 +624,7 @@ export class Session {
         lanes[k][pos] = vel;
         const port = this.portFor(t);
         const notes = r.chord && r.note != null ? r.chord : [r.note]; // acorde: todas las notas, las añadidas un poco más suaves
+        if (arp && r.voice === 'tono' && r.note != null) { this.arpHold(t, notes, vel, when, r.ch); lanes[k][pos] = vel; L.lastHitAt[t.id + k] = when; return; } // con arpegiador, la mosca «aprieta teclas» y el arpegiador las toca
         if (this.toDevice(t, port) && r.note != null) notes.forEach((nt, j) => this.ko.hit(nt, j ? Math.round(vel * 0.8) : vel, r.ch, r.voice === 'tono' ? stepMs * 0.9 : 60, when, port));
         if (this.toKit(t, port)) notes.forEach((nt, j) => this.sound({ ...r, note: nt }, j ? Math.round(vel * 0.7) : vel, when, t, k));
         if (k === roll && pos === C.len - 1) { const w2 = when + stepMs / 2, v2 = Math.min(127, vel + 6); // el último golpe del redoble va doble (fusas)
@@ -630,6 +633,7 @@ export class Session {
         L.lastHitAt[t.id + k] = when;
         if (this.rec) notes.forEach((nt, j) => this.rec.events.push({ t: when - this.rec.t0, step: n - this.rec.n0, track: t.id, pad: k, neuron: p.tipo, note: nt ?? 0, vel: j ? Math.round(vel * 0.8) : vel, ch: r.ch, voice: r.voice, port: port?.name, ...(j ? { chord: 1 } : {}) }));
       });
+      if (arp && on) this.arpStep(t, arp, n, at + swingMs, stepMs, flyOn);
     }
     L.mn9 = L.mn9 * 0.9 + 0.1 * (cnt[D.mn9] / (s.density / 1000));
     const g = D.modos.oido.pads[11].idx; L.groom = L.groom * 0.9 + 0.1 * (cnt[g] / (s.density / 1000));
@@ -642,6 +646,28 @@ export class Session {
     }
     if (s.data) L.rowHist[s.row] = L.mn9;
     this.stepListeners.forEach((f) => f(n, cnt));
+  }
+  // ---------- arpegiador: las notas que dispara la mosca quedan «apretadas» un compás y el arpegiador las recorre a tempo ----------
+  arpHold(t, notes, vel, when, ch) {
+    const A = (this.live.arp[t.id] ||= { held: new Map(), i: 0 }), until = when + this.C.len * this.ko.stepMs;
+    notes.forEach((nt, j) => A.held.set(nt, { until, vel: j ? Math.round(vel * 0.85) : vel, at: when + j * 0.01, ch }));
+  }
+  arpStep(t, arp, n, at, stepMs, flyOn) {
+    const A = this.live.arp[t.id]; if (!A) return;
+    for (const [nt, h] of A.held) if (h.until < at) A.held.delete(nt);
+    if (!A.held.size || !flyOn) return;
+    const rate = arp.rate || '1/16', every = rate === '1/8' ? 2 : 1, per = rate === '1/32' ? 2 : 1; if (n % every) return;
+    const asc = [...A.held.keys()].sort((a, b) => a - b), oct = arp.oct || 1, up = Array.from({ length: oct }, (_, o) => asc.map((x) => x + 12 * o)).flat();
+    const seq = arp.modo === 'abajo' ? [...up].reverse() : arp.modo === 'arribaabajo' ? (up.length > 2 ? [...up, ...up.slice(1, -1).reverse()] : up)
+      : arp.modo === 'orden' ? [...A.held.entries()].sort((a, b) => a[1].at - b[1].at).map(([x]) => x) : up;
+    const port = this.portFor(t), vels = [...A.held.values()], vel = Math.round(Math.max(...vels.map((h) => h.vel)) * 0.92), ch = vels[0].ch, dur = stepMs * every / per * 0.8;
+    for (let j = 0; j < per; j++) {
+      const nt = arp.modo === 'azar' ? seq[Math.floor(Math.random() * seq.length)] : seq[A.i++ % seq.length], when = at + j * stepMs / per, v = Math.min(127, Math.max(1, vel - (j ? 8 : 0)));
+      if (this.toDevice(t, port)) this.ko.hit(nt, v, ch, dur, when, port);
+      if (this.toKit(t, port)) this.sound({ voice: 'tono', note: nt }, v, when, t, null);
+      const mt = this.live.meter[t.id]; if (!mt || when - mt.at > 60 || v > mt.vel) this.live.meter[t.id] = { at: when, vel: v };
+      if (this.rec) this.rec.events.push({ t: when - this.rec.t0, step: n - this.rec.n0, track: t.id, pad: 0, neuron: 'arp', note: nt, vel: v, ch, voice: 'tono', port: port?.name });
+    }
   }
   // ¿este compás termina en remate? cada 4/8 compases, o el último compás de una parte de la canción
   isFillBar(bar) {

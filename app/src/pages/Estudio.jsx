@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useState } from 'react';
 import { session, SENSES, SENSE_LABEL, HIST, CIRCUITS, MAX_TRACKS, EXTRA_TRACKS } from '../engine/session.js';
 import { PAD_KEYS } from '../engine/midi.js';
 import { SCALES, NOTE_NAMES, CHORDS, PROGS } from '../engine/devices.js';
+const ARP_MODES = [['off', 'Sin arpegio'], ['arriba', 'Arpegio ↑'], ['abajo', 'Arpegio ↓'], ['arribaabajo', 'Arpegio ↕'], ['orden', 'Arpegio: orden de la mosca'], ['azar', 'Arpegio al azar']];
 import { SoundRoute } from '../ui/SoundRoute.jsx';
 import { useS, useTick, Icon, Knob, Seg, roleColor, ROLE_DESC } from '../ui/kit.jsx';
 // el 3D (three.js) solo se descarga si abres una vista 3D: el arranque es más rápido
@@ -156,12 +157,14 @@ export default function Estudio() {
             <Seg label="Modo de la pista" items={[['ritmo', 'Ritmo'], ['melodia', session.can('melodia') ? 'Melodía' : 'Melodía · PRO']]} value={track.mode || 'ritmo'} onChange={(m) => (m === 'melodia' && !session.can('melodia') ? (location.hash = '#/cuenta?plan') : session.setTrack(track.id, { mode: m }))} />
           </div>
           {track.mode === 'melodia' && session.can('melodia') && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 84px', gap: 6 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) 68px', gap: 6 }}>
               <select className="input" aria-label="Escala" style={{ height: 30 }} value={track.scale} onChange={(ev) => session.setTrack(track.id, { scale: ev.target.value })}>{Object.entries(SCALES).map(([id, [n]]) => <option key={id} value={id}>{n}</option>)}</select>
-              <select className="input" aria-label="Tónica" style={{ height: 30 }} value={track.root} onChange={(ev) => session.setTrack(track.id, { root: +ev.target.value })}>{[36, 48, 60].flatMap((o) => NOTE_NAMES.map((n, i) => <option key={o + i} value={o + i}>{n}{o / 12 - 1}</option>))}</select>
               <select className="input" aria-label="Acorde" title="Cada neurona toca un acorde dentro de la escala; el bajo sigue con nota sola" style={{ height: 30 }} value={track.chord || 'nota'} onChange={(ev) => session.setTrack(track.id, { chord: ev.target.value })}>{Object.entries(CHORDS).map(([id, [n]]) => <option key={id} value={id}>{n}</option>)}</select>
-              <span />
-              <select className="input" aria-label="Progresión" title="La armonía avanza un acorde por compás" style={{ height: 30, gridColumn: '1 / -1' }} value={track.prog || 'ninguna'} onChange={(ev) => session.setTrack(track.id, { prog: ev.target.value })}>{Object.entries(PROGS).map(([id, [n]]) => <option key={id} value={id}>{n}</option>)}</select>
+              <select className="input" aria-label="Tónica" style={{ height: 30 }} value={track.root} onChange={(ev) => session.setTrack(track.id, { root: +ev.target.value })}>{[36, 48, 60].flatMap((o) => NOTE_NAMES.map((n, i) => <option key={o + i} value={o + i}>{n}{o / 12 - 1}</option>))}</select>
+              <select className="input" aria-label="Progresión" title="La armonía avanza un acorde por compás" style={{ height: 30 }} value={track.prog || 'ninguna'} onChange={(ev) => session.setTrack(track.id, { prog: ev.target.value })}>{Object.entries(PROGS).map(([id, [n]]) => <option key={id} value={id}>{n}</option>)}</select>
+              <select className="input" aria-label="Arpegiador" title="Las notas que dispara la mosca quedan apretadas un compás y el arpegiador las recorre a tempo" style={{ height: 30 }} value={track.arp?.modo || 'off'} onChange={(ev) => session.setTrack(track.id, { arp: { rate: '1/16', oct: 1, ...(track.arp || {}), modo: ev.target.value } })}>{ARP_MODES.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select>
+              <select className="input" aria-label="Velocidad y octavas del arpegiador" title="Velocidad del arpegio (×2: dos octavas)" style={{ height: 30 }} disabled={!track.arp?.modo || track.arp.modo === 'off'} value={`${track.arp?.rate || '1/16'}|${track.arp?.oct || 1}`} onChange={(ev) => { const [rate, oct] = ev.target.value.split('|'); session.setTrack(track.id, { arp: { ...(track.arp || {}), rate, oct: +oct } }); }}>
+                {['1/8', '1/16', '1/32'].flatMap((r) => [1, 2].map((o) => <option key={r + o} value={`${r}|${o}`}>{r}{o > 1 ? ' ×2' : ''}</option>))}</select>
             </div>
           )}
           <Pads track={track} selPad={selPad} onSelect={onPick} />

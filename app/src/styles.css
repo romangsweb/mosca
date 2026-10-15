@@ -144,8 +144,8 @@ input[type='range'] { accent-color: var(--text); }
 .knob svg { cursor: ns-resize; touch-action: none; }
 .knob input { width: 84%; }
 .studio-bottom { height: 290px; flex: none; display: flex; gap: 10px; }
-.pads-panel { width: 330px; flex: none; }
-.pads { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(4, 1fr); gap: 6px; min-height: 0; }
+.pads-panel { width: 330px; flex: none; overflow-y: auto; min-height: 0; }
+.pads { flex: 1 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(4, minmax(42px, 1fr)); gap: 6px; min-height: 0; }
 .pad { position: relative; overflow: hidden; border-radius: 8px; border: 1px solid var(--line); background: var(--pad); box-shadow: var(--pad-shadow); padding: 6px 8px; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; text-align: left; transition: transform .06s, border-color .15s; }
 .pad:active { transform: translateY(1px); }
 .pad[aria-pressed='true'] { border-color: var(--pc); }
