@@ -16,18 +16,20 @@ import Cancion from './pages/Cancion.jsx';
 import Mezcla from './pages/Mezcla.jsx';
 import Escuchar from './pages/Escuchar.jsx';
 import Directo from './pages/Directo.jsx';
+import Mundo from './pages/Mundo.jsx';
 
 const NAV = [
   ['estudio', 'Estudio', 'estudio'], ['mezcla', 'Mezcla', 'mezcla'], ['cancion', 'Canción', 'cancion', true], ['directo', 'Directo', 'directo', true], null,
-  ['sonido', 'Sonido', 'sonido'], ['oido', 'Oído', 'oido'], ['datos', 'Datos', 'datos', true], null,
+  ['sonido', 'Sonido', 'sonido'], ['oido', 'Oído', 'oido'], ['datos', 'Datos', 'datos', true], ['mundo', 'Mundo', 'mundo'], null,
   ['tomas', 'Tomas', 'tomas'], ['equipo', 'Equipo', 'usb'],
 ];
-const PAGES = { directo: Directo, estudio: Estudio, equipo: Equipo, mezcla: Mezcla, cancion: Cancion, oido: Oido, datos: Datos, sonido: Sonido, tomas: Tomas, cuenta: Cuenta };
+const PAGES = { mundo: Mundo, directo: Directo, estudio: Estudio, equipo: Equipo, mezcla: Mezcla, cancion: Cancion, oido: Oido, datos: Datos, sonido: Sonido, tomas: Tomas, cuenta: Cuenta };
 const TIPS = {
   estudio: ['Gira Dulce y Amargo: es lo que prueba la mosca.', 'Pulsa Tocar (o la barra espaciadora). Cada neurona que dispara toca su pad.', 'Toca un pad o una neurona del cerebro para inspeccionarla.'],
   oido: ['Elige micrófono, un archivo o los deslizadores.', 'Graves, medios y agudos estimulan tres grupos de sensores de la antena.', 'La pista Oído suena en el grupo A del K.O. II.'],
   datos: ['Sube un CSV o usa el ejemplo.', 'Asigna columnas a sabores o sonidos.', 'Cada fila dura un compás: escucha cómo cambian tus datos.'],
   equipo: ['Aparato principal: elige en la galería (K.O. II, TR-8S, Digitakt, Ableton…).', 'Controles: aprende las perillas del sidekick o de cualquier controlador.', 'Audio: graba la mezcla real de tus aparatos con cada toma.'],
+  mundo: ['Enciende una fuente: el clima es gratis.', 'Elige qué sentido toca cada dato.', 'Dale a Tocar: el mundo suena en la mosca.'],
   directo: ['Lanza escenas con clic o con las teclas 1–8: entran al siguiente compás.', 'Pon cada pista del lado A o B y cruza con el crossfader.', 'Pulsa MIDI en una macro y mueve un fader del sidekick para asignarlo.'],
   mezcla: ['Destino: cada pista va al aparato, al kit de la compu o a ambos.', 'Pro: un aparato por pista, p. ej. dos K.O. II.', 'Entrada: la mezcla del sidekick vuelve aquí y se graba con cada toma.'],
   cancion: ['Ajusta lo que suena y guárdalo en una casilla de Escenas (o crea la canción de ejemplo).', 'Pulsa una escena para añadirla al Arreglo y elige sus compases.', 'Toca: la mosca cambia de escena al compás.'],

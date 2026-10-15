@@ -16,10 +16,11 @@ import { Follower } from './follow.js';
 import { SCALES } from './devices.js';
 import { compas, clickAt, accent } from './compas.js';
 import { liveMeter } from './loudness.js';
+import { World, FEEDS } from './world.js';
 import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud , shareTake, unshareTake, kitIndex, uploadSample, downloadSample, deleteSample, uploadTakeAudio, downloadTakeAudio, deleteTakeAudio } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
-const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes', 'opto', 'taste', 'compas', 'acento', 'lufs', 'xfade', 'intensidad'];
+const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes', 'opto', 'taste', 'compas', 'acento', 'lufs', 'xfade', 'intensidad', 'mundo'];
 
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'], olfato: ['vinagre', 'co2', 'geosmina'], cortejo: ['canto', 'cva', 'deseo'] };
 // circuitos: cada uno es una parte real del mismo cerebro, con sus sensores y su neurona de salida
@@ -46,6 +47,7 @@ export const PRO_FEATURES = {
   controles: 'Controles MIDI ilimitados (sidekick y cualquier controlador)',
   pistas: '4 pistas: los 4 grupos del K.O. II, cada una con su circuito',
   directo: 'Directo: crossfader entre aparatos y macros para tocar en vivo',
+  mundo: 'Mundo en vivo: sismos, Wikipedia y bitcoin como estímulos (el clima es gratis)',
 };
 // pistas 3 y 4 (Pro): ocupan los grupos B y D del K.O. II, que las dos primeras dejan libres
 export const EXTRA_TRACKS = [{ id: 'p3', group: 'B', sense: 'olfato', root: 60 }, { id: 'p4', group: 'D', sense: 'cortejo', root: 36 }];
@@ -69,7 +71,7 @@ const DEFAULTS = {
   sk: { follow: false, fxAuto: false, fx: [0, 1] },
   fx: { ...FX_DEFAULT }, metro: false, countIn: 1, autoLanes: [],
   taste: { on: true, likes: {}, dislikes: {}, n: 0, plastic: {} },
-  compas: '4/4', acento: 0.35, lufs: 'streaming', xfade: 0.5, intensidad: 1,
+  compas: '4/4', acento: 0.35, lufs: 'streaming', xfade: 0.5, intensidad: 1, mundo: { mix: 1 },
   opto: { on: false, mode: 'activar', target: 'pad', power: 0.6, pattern: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] },
   follow: { source: 'entrada', tempo: true, key: true, autoPlay: true, offset: 0 },
   oidoSource: 'manual', dataMap: {}, perRow: 16,
@@ -83,7 +85,7 @@ export class Session {
     this.s.takes = []; this.s.ready = false; this.s.user = null; Object.assign(this.s, NO_PLAN); this.s.sync = cloudEnabled ? 'local' : 'off'; this.s.mutHistory = {}; this.s.data = null; this.s.row = 0; this.s.saved = Date.now();
     this.live = { step: 0, pos: 0, active: 0, mn9: 0, groom: 0, rate: {}, lanes: {}, out: {}, hist: new Array(64).fill(0), counts: null, lastHitAt: {}, rowHist: [], rateHist: {}, spikes: {}, meter: {} };
     if (typeof window !== 'undefined') { addEventListener('pagehide', () => this.flush()); document.addEventListener('visibilitychange', () => document.hidden && this.flush()); }
-    this.rec = null; this.ear = new Ear(); this.synth = new Synth(); this.capture = new Capture();
+    this.rec = null; this.ear = new Ear(); this.synth = new Synth(); this.capture = new Capture(); this.world = new World(this);
     this.ko = new KO2({
       onStep: (n, at) => this.step(n, at),
       onStart: () => { if (!this.s.playing) this.play(); },
@@ -117,7 +119,7 @@ export class Session {
     try { await Promise.race([restoreLocal(), new Promise((_, rej) => setTimeout(() => rej(new Error('guardado local lento')), 5000))]); }
     catch (e) { console.warn('Fly Punch arrancó sin restaurar todo:', e); this.s.notice = 'restauracion'; }
     try { const pl = this.s.taste?.plastic?.[this.plasticKey]; if (pl) this.sim.applyLearned(pl); } catch (e) { console.warn('aprendizaje', e); }
-    this.s.ready = true; this.emit(); this.remember();
+    this.s.ready = true; this.emit(); this.remember(); this.world.syncAll();
     try { this.loadKit(); } catch (e) { console.warn('kit', e); }
     if (cloudEnabled) {
       (async () => {
@@ -470,6 +472,15 @@ export class Session {
   }
   // crossfader de Directo: las pistas del lado A suenan a la izquierda, las del B a la derecha; al centro, ambas completas
   xfGain(t) { if (!t.xf || !this.can('directo')) return 1; const x = this.s.xfade ?? 0.5; return t.xf === 'A' ? Math.min(1, 2 * (1 - x)) : Math.min(1, 2 * x); }
+  // ---------- Mundo en vivo ----------
+  feedAllowed(id) { return !!FEEDS[id]?.free || this.can('mundo'); }
+  setMundo(id, patch) {
+    if (patch.on && !this.feedAllowed(id)) { location.hash = '#/cuenta?plan'; return; }
+    const m = this.s.mundo || {}, prev = { ...FEEDS[id]?.defaults, ...m[id] }, next = { ...prev, ...patch };
+    this.set({ mundo: { ...m, [id]: next } }, true);
+    const restart = ['lat', 'lon', 'wiki', 'product', 'replay'].some((k) => k in patch && patch[k] !== prev[k]);
+    if (restart && next.on) this.world.start(id); else this.world.syncAll();
+  }
   get trackLimit() { return this.can('pistas') ? MAX_TRACKS : FREE_TRACKS; }
   // agregar una pista (3 y 4 son Pro): toma el siguiente grupo libre del K.O. y un circuito que aún no suena
   addTrack(sense) {
@@ -533,6 +544,8 @@ export class Session {
       for (const [sense, ci] of Object.entries(this.s.dataMap)) if (ci !== '' && ci != null) r[sense] = this.s.data.cols[ci].norm[this.s.row] * 200;
     }
     morphRates(this, r, this.live.step);
+    // Mundo en vivo: clima, sismos, Wikipedia, mercado
+    if (this.s.mundo && Object.keys(FEEDS).some((id) => this.s.mundo[id]?.on)) this.world.apply(r);
     // macro «Intensidad» de Directo: escala todos los estímulos a la vez (×0 a ×2)
     const ki = this.can('directo') ? this.s.intensidad ?? 1 : 1; if (ki !== 1) for (const x of Object.keys(r)) r[x] *= ki;
     // las pistas silenciadas no reciben estímulo de su sentido: así no ensucian el cerebro
