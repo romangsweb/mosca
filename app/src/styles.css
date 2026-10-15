@@ -265,3 +265,17 @@ button, .btn, .iconbtn, .pad, .cell, .seg button, .knob svg, input[type=range] {
 @media (max-width: 1439px) { .hide-md { display: none !important; } }
 /* iPad vertical: el transporte baja a su propia fila para no pisar los botones */
 @media (max-width: 1000px) { .topbar { height: auto; flex-wrap: wrap; padding: 8px 12px; gap: 8px; } .topbar .side { flex: 1 1 40%; } .transport { order: 3; width: 100%; justify-content: center; } .dile { top: 112px; } }
+/* modo escenario: pantalla completa para proyectar */
+.escenario { position: fixed; inset: 0; z-index: 60; background: #050506; color: #ECECEE; overflow: hidden; }
+.escenario .esc-halo { position: absolute; inset: -10%; pointer-events: none; background: radial-gradient(ellipse at 50% 55%, rgba(255,106,26,.28), transparent 60%); transition: opacity .08s linear; mix-blend-mode: screen; }
+.escenario .esc-cols { position: absolute; left: 0; right: 0; bottom: 0; height: 38%; display: flex; gap: 2px; pointer-events: none; }
+.escenario .esc-cols > div { flex: 1; transform-origin: bottom; transition: transform .09s, opacity .09s; filter: blur(18px); }
+.escenario .esc-tl, .escenario .esc-tr, .escenario .esc-bl, .escenario .esc-br { position: absolute; font-size: 13px; opacity: .9; }
+.escenario .esc-tl { left: 32px; top: 28px; } .escenario .esc-tr { right: 32px; top: 28px; text-align: right; }
+.escenario .esc-bl { left: 32px; bottom: 84px; } .escenario .esc-br { right: 32px; bottom: 84px; text-align: right; }
+.escenario .esc-brand { font-weight: 700; letter-spacing: .02em; font-size: 15px; }
+.escenario .esc-big { font-size: clamp(32px, 5vw, 64px); font-weight: 650; letter-spacing: -.03em; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.escenario .esc-label { font-size: 11px; opacity: .6; }
+.escenario .esc-bar { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); display: flex; gap: 8px; opacity: .35; transition: opacity .2s; }
+.escenario .esc-bar:hover, .escenario .esc-bar:focus-within { opacity: 1; }
+.escenario .btn { background: rgba(20,20,22,.7); border-color: rgba(255,255,255,.12); color: #ECECEE; }

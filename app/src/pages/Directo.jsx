@@ -106,6 +106,7 @@ export default function Directo() {
       <div className="page-head">
         <div><h1>Directo</h1><p>Toca el set en vivo: lanza escenas a tiempo, cruza entre tus aparatos y mueve la mosca con cuatro macros. Todo se puede asignar al sidekick con el botón MIDI.</p></div>
         <div className="row">
+          <button type="button" className="btn lg" onClick={() => session.set({ escenario: true })} title="Pantalla completa para proyectar o grabar (tecla E)">Modo escenario</button>
           <button type="button" className={`btn lg ${s.rec ? 'primary' : ''}`} onClick={() => session.toggleRec()}><span className="status-dot" style={{ background: '#E5484D' }} />{s.rec ? 'Detener grabación' : 'Grabar el set'}</button>
           <button type="button" className="btn lg acc" onClick={() => session.toggle()}><Icon name={s.playing ? 'stop' : 'play'} size={13} fill="currentColor" />{s.playing ? 'Detener' : 'Tocar'}</button>
         </div>

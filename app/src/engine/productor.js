@@ -92,3 +92,13 @@ export function contextoVariacion(take, an) {
 const VEL = { X: 122, x: 98, o: 58, '-': 0 };
 export const pedirBeat = (S, pedido) => call({ modo: 'beat', contexto: { pasos: Math.min(16, S.C.len), compas: S.s.compas || '4/4', bpm_actual: Math.round(S.ko.bpm || S.s.bpm), kit_actual: S.s.kitActive || S.s.kitId }, pedido });
 export const beatAPatron = (S, r) => ({ nombre: r.nombre, filas: r.filas.map((f) => ({ voz: f.voz, vels: [...f.pasos].map((c) => VEL[c] ?? 0) })), len: Math.min(16, S.C.len), compas: S.s.compas || '4/4', ...(r.bpm ? { bpm: r.bpm } : {}), ...(r.swing ? { swing: r.swing } : {}), ...(r.kit ? { kit: r.kit } : {}), ia: true, explicacion: r.explicacion });
+
+// ---------- mezclar por mí con referencia (IA): parte de las medidas reales ----------
+export function pedirMezcla(S, med, referencia) {
+  const pistas = Object.fromEntries(Object.entries(med).filter(([id]) => S.track(id)).map(([id, m]) => { const t = S.track(id); return [id, { nombre: t.name, modo: t.mode || 'ritmo', nivel: t.level, canal: t.strip || {}, rev: t.rev || 0, dly: t.dly || 0, ...m }]; }));
+  return call({ modo: 'mezcla', contexto: { pistas, bpm: Math.round(S.ko.bpm || S.s.bpm) }, pedido: referencia });
+}
+export const mezclaACambios = (S, r) => Object.fromEntries(r.pistas.map((p) => [p.id, { ...(p.nivel != null ? { level: p.nivel } : {}), ...(p.rev != null ? { rev: p.rev } : {}), ...(p.dly != null ? { dly: p.dly } : {}), strip: { ...(S.track(p.id)?.strip || {}), ...Object.fromEntries(['lo', 'mid', 'hi', 'filtro', 'drive'].filter((k) => p[k] != null).map((k) => [k, p[k]])) } }]));
+
+// ---------- diseñador de sonidos: tu descripción → parámetros del sintetizador de la app ----------
+export const pedirSonido = (pedido) => call({ modo: 'sonido', contexto: {}, pedido });

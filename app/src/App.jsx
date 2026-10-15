@@ -1,4 +1,5 @@
 import DileMosca from './ui/DileMosca.jsx';
+import Escenario from './ui/Escenario.jsx';
 import { isIOS, isStandalone } from './ui/Install.jsx';
 import { Component, useEffect, useState } from 'react';
 import { session } from './engine/session.js';
@@ -105,6 +106,7 @@ export default function App() {
       if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
       if (e.key === '?') { session.set({ atajos: !session.s.atajos }); return; }
       if (e.key === '/') { e.preventDefault(); session.set({ dile: true }); return; }
+      if ((e.key === 'e' || e.key === 'E') && !e.metaKey && !e.ctrlKey) { session.set({ escenario: !session.s.escenario }); return; }
       if (e.key === 'Escape' && session.s.atajos) { session.set({ atajos: false }); return; }
       if (e.code === 'Space') { e.preventDefault(); session.toggle(); }
       if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); e.shiftKey ? session.redo() : session.undo(); return; }
@@ -172,6 +174,7 @@ export default function App() {
         <main className="main" id="main"><Boundary key={page}><Page /></Boundary></main>
         {s.atajos && <Atajos />}
         {s.dile && <DileMosca onClose={() => session.set({ dile: false })} />}
+        {s.escenario && <Escenario onClose={() => session.set({ escenario: false })} />}
       </div>
       <StatusBar s={s} />
       {s.notice === 'restauracion' && (
@@ -200,7 +203,7 @@ export default function App() {
 const ATAJOS = [
   ['Tocar', [['Espacio', 'Tocar / detener'], ['R', 'Grabar una toma'], ['M', 'Metrónomo'], ['T', 'Marcar el tempo (tap)']]],
   ['La mosca', [['/', 'Dile a la mosca cómo sentirse'], ['G', 'Me gusta lo que tocó'], ['N', 'No me gusta'], ['F', 'Remate ahora']]],
-  ['Directo', [['1 – 8', 'Lanzar escena A – H (entra al siguiente compás)'], ['L', 'Looper: grabar el loop o sumar una capa']]],
+  ['Directo', [['E', 'Modo escenario (pantalla completa)'], ['1 – 8', 'Lanzar escena A – H (entra al siguiente compás)'], ['L', 'Looper: grabar el loop o sumar una capa']]],
   ['Editar', [['⌘ Z', 'Deshacer'], ['⇧ ⌘ Z', 'Rehacer'], ['?', 'Esta hoja']]],
   ['Editor de notas', [['Supr', 'Borrar lo elegido'], ['Q', 'Cuantizar'], ['⌘ A', 'Elegir todas'], ['Flechas', 'Mover lo elegido'], ['Doble clic', 'Agregar una nota'], ['Esc', 'Soltar la selección o cerrar']]],
 ];

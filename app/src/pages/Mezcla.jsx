@@ -10,6 +10,7 @@ import { TARGETS } from '../engine/controls.js';
 import { Acompanar } from '../ui/Acompanar.jsx';
 import Consola from '../ui/Consola.jsx';
 import Espectro from '../ui/Espectro.jsx';
+import MezclarPorMi from '../ui/MezclarPorMi.jsx';
 import { kitName } from '../ui/SoundRoute.jsx';
 
 // Mezcla: una tira por pista (a dónde va, nivel, silencio, solo), la compu (kit interno) y la entrada de audio
@@ -299,6 +300,7 @@ export default function Mezcla() {
       
       <Consola />
       <Espectro />
+      <MezclarPorMi />
       <Acompanar />
       <SidekickPanel />
       <div className="cols" style={{ alignItems: 'stretch' }}>

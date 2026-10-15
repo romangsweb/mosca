@@ -1,19 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { session } from '../engine/session.js';
 import { useS } from './kit.jsx';
+import { analysers as an0 } from '../engine/medidor.js';
+const analysers = () => an0(session);
 
 // Analizador de espectro: la mezcla de la compu (relleno) y cada pista (línea de su color). Escala logarítmica de 30 Hz a 16 kHz.
 // Sirve para ver dónde se pisan las pistas (el bombo y el bajo en los graves, por ejemplo) y qué hace el EQ de cada canal.
 const COL = { gusto: '#FF6A1A', oido: '#7D93B2', p3: '#3DD68C', p4: '#C08CFF', armonia: '#E8C547' };
 const F0 = 30, F1 = 16000, BANDS = [[30, 'GRAVES'], [250, 'MEDIOS'], [2000, 'AGUDOS'], [6000, 'BRILLO']];
 
-function analysers() {
-  const syn = session.synth, ctx = syn.ensure(), ch = syn.chain;
-  const A = (syn._an ||= { master: null, tracks: {} });
-  if (!A.master) { A.master = ctx.createAnalyser(); A.master.fftSize = 4096; A.master.smoothingTimeConstant = 0.82; ch.post.connect(A.master); }
-  for (const [id, b] of Object.entries(ch.buses)) if (!A.tracks[id]) { const a = ctx.createAnalyser(); a.fftSize = 4096; a.smoothingTimeConstant = 0.82; b.mk.connect(a); A.tracks[id] = a; }
-  return A;
-}
 
 export default function Espectro() {
   const s = useS(), cv = useRef(null), [solo, setSolo] = useState(null), [peak, setPeak] = useState(null);

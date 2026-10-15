@@ -2,7 +2,9 @@
 // ajustes de las pistas) y le pide a Gemini una explicación, una progresión y ajustes. Nunca recibe datos personales:
 // ni correo, ni id, ni nombres de tomas.
 // Modos: 'productor' (armonía y ajustes), 'mosca' («Dile a la mosca»: tu frase → lo que siente) y 'variacion'
-// (tu frase → una cadena de variaciones de la lista, aplicadas en la app) y 'beat' (tu frase → un patrón de batería).
+// (tu frase → una cadena de variaciones de la lista, aplicadas en la app), 'beat' (tu frase → un patrón de batería)
+// 'mezcla' (medidas de cada pista + una referencia → niveles, EQ, filtro, saturación y envíos) y 'sonido'
+// (tu descripción → parámetros del sintetizador de la app; el audio lo genera la app, no la IA).
 // Secretos: GEMINI_API_KEY · opcionales: GEMINI_MODEL (gemini-3.1-flash-lite), IA_POR_USUARIO (15), IA_GLOBAL_MES (2000)
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
@@ -67,6 +69,17 @@ Voces disponibles: ${VOCES.join(', ')}. Usa de 3 a 7 filas. Kits: ${KITS.join(',
 Haz patrones musicales y reconocibles para el estilo pedido (boom bap, house, trap, reggaetón, techno, breakbeat…), con dinámica (no todo X). La mosca tocará encima, así que deja aire.
 Responde solo con el JSON: "nombre" (2–4 palabras), "explicacion" (1 frase en español de México), "filas", y si aplica "bpm" (60–180), "swing" (50–75) y "kit".`;
 const SCHEMA_BEAT = { type: 'OBJECT', required: ['nombre', 'explicacion', 'filas'], properties: { nombre: { type: 'STRING' }, explicacion: { type: 'STRING' }, bpm: { type: 'INTEGER' }, swing: { type: 'INTEGER' }, kit: { type: 'STRING' }, filas: { type: 'ARRAY', items: { type: 'OBJECT', required: ['voz', 'pasos'], properties: { voz: { type: 'STRING' }, pasos: { type: 'STRING' } } } } } };
+// ---------- mezclar por mí ----------
+const SISTEMA_MEZCLA = `Eres ingeniero de mezcla. Recibes medidas reales de cada pista (nivel RMS en dB y energía por banda: graves 30–150 Hz, medios 150–2k, agudos 2–6k, brillo 6–16k) y su canal actual, más una referencia de estilo.
+Propón para cada pista (usa su id): nivel 0.2–1 (relativo; la más fuerte en 1), lo/mid/hi en dB de −12 a 12 (estantes en 120 Hz, campana en 1 kHz, estante en 6 kHz), filtro −1…1 (0 = abierto; negativo quita agudos, positivo quita graves), drive 0–1 (saturación), rev 0–1 y dly 0–1 (envíos).
+Reglas: un solo dueño de los graves; cortes antes que realces; cambios moderados (±6 dB casi siempre basta); respeta el estilo pedido. Responde solo con el JSON: "explicacion" (2 frases, español de México) y "pistas".`;
+const SCHEMA_MEZCLA = { type: 'OBJECT', required: ['explicacion', 'pistas'], properties: { explicacion: { type: 'STRING' }, pistas: { type: 'ARRAY', items: { type: 'OBJECT', required: ['id'], properties: { id: { type: 'STRING' }, nivel: { type: 'NUMBER' }, lo: { type: 'NUMBER' }, mid: { type: 'NUMBER' }, hi: { type: 'NUMBER' }, filtro: { type: 'NUMBER' }, drive: { type: 'NUMBER' }, rev: { type: 'NUMBER' }, dly: { type: 'NUMBER' } } } } } };
+// ---------- diseñador de sonidos ----------
+const PARAMS: [string, number, number][] = [['freq', 30, 2000], ['barrido', -48, 48], ['barrido_ms', 5, 600], ['ataque_ms', 0, 300], ['caida_ms', 20, 3000], ['ruido', 0, 1], ['ruido_color', 200, 14000], ['fm', 0, 1], ['fm_ratio', 0.5, 8], ['filtro', 100, 18000], ['resonancia', 0, 20], ['drive', 0, 1]];
+const SISTEMA_SONIDO = `Eres diseñador de sonido de cajas de ritmos. Traduces una descripción a parámetros de un sintetizador sencillo: un oscilador (onda: sine, triangle, square, sawtooth) que arranca "barrido" semitonos arriba (o abajo si es negativo) de "freq" y llega a "freq" en "barrido_ms"; ruido mezclado (0–1) pasado por un filtro de banda en "ruido_color" Hz; FM opcional (fm 0–1 = cantidad, fm_ratio = razón: valores no enteros suenan metálicos); envolvente con "ataque_ms" y "caida_ms"; filtro pasa-bajos ("filtro" Hz, "resonancia" 0–20) y saturación ("drive" 0–1).
+Referencias: bombo 808 ≈ sine, freq 45–60, barrido 24–36, barrido_ms 40–90, caída 600–1800. Caja ≈ triangle 180–220 Hz + ruido 0.6–0.8 en 3–5 kHz, caída 120–250. Hat ≈ ruido 0.6+ en 8–11 kHz + fm metálico, caída 30–120 (abierto 300–600).
+Responde solo con el JSON: "nombre" (2–3 palabras), "explicacion" (1 frase, español de México), "voz" (la voz del kit que más se parece: ${VOCES.join(', ')}) y "params".`;
+const SCHEMA_SONIDO = { type: 'OBJECT', required: ['nombre', 'explicacion', 'voz', 'params'], properties: { nombre: { type: 'STRING' }, explicacion: { type: 'STRING' }, voz: { type: 'STRING' }, params: { type: 'OBJECT', properties: { onda: { type: 'STRING' }, ...Object.fromEntries(PARAMS.map(([k]) => [k, { type: 'NUMBER' }])) } } } };
 const clamp = (x: unknown, lo: number, hi: number) => (typeof x === 'number' && isFinite(x) ? Math.max(lo, Math.min(hi, x)) : undefined);
 
 Deno.serve(async (req) => {
@@ -79,8 +92,8 @@ Deno.serve(async (req) => {
 
   let body: Record<string, unknown>; try { body = await req.json(); } catch { return json({ error: 'json' }, 400); }
   if (body.consulta === 'cuota') { const m = new Date().toISOString().slice(0, 7); const { data } = await admin.from('ia_uso').select('n').eq('user_id', u.user.id).eq('mes', m).maybeSingle(); return json({ quedan: Math.max(0, POR_USUARIO - (data?.n || 0)), de: POR_USUARIO }); }
-  const modo = ['mosca', 'variacion', 'beat'].includes(body.modo as string) ? body.modo as string : 'productor', ctx = JSON.stringify(body.contexto ?? {}).slice(0, 6000), pedido = String(body.pedido ?? '').slice(0, 240);
-  if (modo !== 'productor' && !pedido.trim()) return json({ error: 'vacio' }, 400);
+  const modo = ['mosca', 'variacion', 'beat', 'mezcla', 'sonido'].includes(body.modo as string) ? body.modo as string : 'productor', ctx = JSON.stringify(body.contexto ?? {}).slice(0, 6000), pedido = String(body.pedido ?? '').slice(0, 240);
+  if (modo !== 'productor' && modo !== 'mezcla' && !pedido.trim()) return json({ error: 'vacio' }, 400);
 
   const { data: quedan, error: qe } = await admin.rpc('ia_consumir', { uid: u.user.id, por_usuario: POR_USUARIO, global_max: GLOBAL });
   if (qe) return json({ error: 'cuota' }, 500);
@@ -91,13 +104,24 @@ Deno.serve(async (req) => {
     const r = await fetch(`${Deno.env.get('GEMINI_BASE') || 'https://generativelanguage.googleapis.com'}/v1beta/models/${MODEL}:generateContent`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': Deno.env.get('GEMINI_API_KEY')! },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: modo === 'mosca' ? SISTEMA_MOSCA : modo === 'variacion' ? SISTEMA_VAR : modo === 'beat' ? SISTEMA_BEAT : SISTEMA }] },
-        contents: [{ role: 'user', parts: [{ text: modo === 'mosca' ? `Estado actual (JSON):\n${ctx}\n\nLe dicen a la mosca: ${pedido}` : modo === 'variacion' ? `La toma (JSON):\n${ctx}\n\nVariación que piden: ${pedido}` : modo === 'beat' ? `Contexto (JSON):\n${ctx}\n\nBeat que piden: ${pedido}` : `Análisis de la app (JSON):\n${ctx}\n\nLo que pide el usuario: ${pedido || '(nada en especial: propón tú)'}` }] }],
-        generationConfig: { responseMimeType: 'application/json', responseSchema: modo === 'mosca' ? SCHEMA_MOSCA : modo === 'variacion' ? SCHEMA_VAR : modo === 'beat' ? SCHEMA_BEAT : SCHEMA, temperature: 0.8, maxOutputTokens: 1200 },
+        systemInstruction: { parts: [{ text: modo === 'mosca' ? SISTEMA_MOSCA : modo === 'variacion' ? SISTEMA_VAR : modo === 'beat' ? SISTEMA_BEAT : modo === 'mezcla' ? SISTEMA_MEZCLA : modo === 'sonido' ? SISTEMA_SONIDO : SISTEMA }] },
+        contents: [{ role: 'user', parts: [{ text: modo === 'mosca' ? `Estado actual (JSON):\n${ctx}\n\nLe dicen a la mosca: ${pedido}` : modo === 'variacion' ? `La toma (JSON):\n${ctx}\n\nVariación que piden: ${pedido}` : modo === 'beat' ? `Contexto (JSON):\n${ctx}\n\nBeat que piden: ${pedido}` : modo === 'mezcla' ? `Medidas y canales (JSON):\n${ctx}\n\nReferencia: ${pedido || 'una mezcla clara y equilibrada'}` : modo === 'sonido' ? `Sonido que piden: ${pedido}` : `Análisis de la app (JSON):\n${ctx}\n\nLo que pide el usuario: ${pedido || '(nada en especial: propón tú)'}` }] }],
+        generationConfig: { responseMimeType: 'application/json', responseSchema: modo === 'mosca' ? SCHEMA_MOSCA : modo === 'variacion' ? SCHEMA_VAR : modo === 'beat' ? SCHEMA_BEAT : modo === 'mezcla' ? SCHEMA_MEZCLA : modo === 'sonido' ? SCHEMA_SONIDO : SCHEMA, temperature: 0.8, maxOutputTokens: 1200 },
       }),
     });
     const out = await r.json(); if (!r.ok) throw new Error(out?.error?.message || `gemini ${r.status}`);
     const p = JSON.parse(out.candidates?.[0]?.content?.parts?.[0]?.text || '{}');
+    if (modo === 'sonido') {
+      const pr = p.params || {}, params: Record<string, unknown> = { onda: ['sine', 'triangle', 'square', 'sawtooth'].includes(pr.onda) ? pr.onda : 'sine' };
+      for (const [k, lo, hi] of PARAMS) { const v = clamp(pr[k], lo, hi); if (v !== undefined) params[k] = v; }
+      return json({ nombre: String(p.nombre || 'Sonido').slice(0, 40), explicacion: String(p.explicacion || '').slice(0, 300), voz: VOCES.includes(p.voz) ? p.voz : 'perc', params, quedan, de: POR_USUARIO });
+    }
+    if (modo === 'mezcla') {
+      const ids = Object.keys(((body.contexto as { pistas?: Record<string, unknown> })?.pistas) || {}), r2 = (x: unknown, lo: number, hi: number) => { const v = clamp(x, lo, hi); return v === undefined ? undefined : Math.round(v * 100) / 100; };
+      const pistas = (Array.isArray(p.pistas) ? p.pistas : []).filter((x: { id?: string }) => ids.includes(x?.id as string)).map((x: Record<string, unknown>) => Object.fromEntries(Object.entries({ id: x.id, nivel: r2(x.nivel, 0.2, 1), lo: r2(x.lo, -12, 12), mid: r2(x.mid, -12, 12), hi: r2(x.hi, -12, 12), filtro: r2(x.filtro, -1, 1), drive: r2(x.drive, 0, 1), rev: r2(x.rev, 0, 1), dly: r2(x.dly, 0, 1) }).filter(([, v]) => v !== undefined)));
+      if (!pistas.length) throw new Error('sin pistas');
+      return json({ explicacion: String(p.explicacion || '').slice(0, 400), pistas, quedan, de: POR_USUARIO });
+    }
     if (modo === 'beat') {
       const L = Math.max(4, Math.min(16, Math.round(Number((body.contexto as { pasos?: number })?.pasos) || 16)));
       const filas = (Array.isArray(p.filas) ? p.filas : []).filter((f: { voz?: string }) => VOCES.includes(f?.voz as string)).slice(0, 8)

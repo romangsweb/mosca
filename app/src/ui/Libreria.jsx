@@ -3,6 +3,7 @@ import { session } from '../engine/session.js';
 import { KITS, VOICES, kitData, toBuffers } from '../engine/kits.js';
 import { playBuffer } from '../engine/synth.js';
 import { useS, Icon } from './kit.jsx';
+import Disenador from './Disenador.jsx';
 
 // Patrón corto para escuchar un kit (2 compases a 110 BPM)
 const DEMO = [['bombo', [0, 7, 10, 16, 23, 26]], ['caja', [4, 12, 20, 28]], ['hat', [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30]], ['hat abierto', [14, 30]], ['palmas', [12, 28]], ['perc', [3, 19, 27]], ['bajo', [0, 10, 16, 26]], ['aro', [9, 25]], ['tom', [29]], ['zap', [31]]];
@@ -29,7 +30,7 @@ function Strip({ id, active }) {
 }
 
 export default function Libreria() {
-  const s = useS(), [playing, setPlaying] = useState(null), [err, setErr] = useState(null), [over, setOver] = useState(null);
+  const s = useS(), [playing, setPlaying] = useState(null), [err, setErr] = useState(null), [over, setOver] = useState(null), [dis, setDis] = useState(false);
   const listen = (id) => { setPlaying(id); const ms = audition(toBuffers(session.synth.ensure(), kitData(id))); setTimeout(() => setPlaying((p) => (p === id ? null : p)), ms); };
   const upload = async (voice, file) => {
     setErr(null); if (!file) return;
@@ -59,10 +60,12 @@ export default function Libreria() {
         })}
       </div>
 
+      {dis && <Disenador onClose={() => setDis(false)} />}
       <section className="panel" style={{ borderColor: activeKit === 'propio' ? 'var(--acc)' : undefined }}>
         <div className="between" style={{ flexWrap: 'wrap' }}>
           <div><h3 className="row" style={{ fontSize: 15, gap: 8 }}>Mi kit <span className="badge-pro">PRO</span></h3><p className="muted" style={{ margin: '4px 0 0', fontSize: 12 }}>Sube tus propias muestras (WAV, MP3, AIFF · hasta 4 MB). Lo que no reemplaces suena con Análogo. {!s.user ? 'Se guardan en este navegador; con tu cuenta te siguen a cualquier dispositivo.' : s.kitCloud === 'subiendo' ? 'Subiendo a tu cuenta…' : s.kitCloud === 'error' ? 'No se pudo sincronizar con tu cuenta; quedó guardado en este navegador.' : 'Guardadas en tu cuenta: las tienes también en el iPad.'}</p></div>
-          {pro && <button type="button" className={`btn ${activeKit === 'propio' ? '' : 'primary'}`} disabled={activeKit === 'propio'} onClick={() => session.setKit('propio')}>{activeKit === 'propio' ? 'En uso' : 'Usar Mi kit'}</button>}
+          <div className="row" style={{ gap: 8 }}><button type="button" className="btn acc" onClick={() => setDis(true)}>Diseñar un sonido</button>
+          {pro && <button type="button" className={`btn ${activeKit === 'propio' ? '' : 'primary'}`} disabled={activeKit === 'propio'} onClick={() => session.setKit('propio')}>{activeKit === 'propio' ? 'En uso' : 'Usar Mi kit'}</button>}</div>
         </div>
         {!pro ? <a href="#/cuenta?plan" className="btn lg acc" style={{ alignSelf: 'flex-start' }}>{session.canTrial ? 'Probar Pro 7 días gratis' : 'Ver planes'}</a> : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
