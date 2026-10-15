@@ -1,6 +1,7 @@
 import { session } from '../engine/session.js';
 import { PASOS } from '../ui/Recorrido.jsx';
 import { useS, Icon } from '../ui/kit.jsx';
+import { CienciaAprende } from '../ui/Ciencia.jsx';
 
 // Aprende: el mapa de Fly Punch. El flujo de una idea, de lo que siente la mosca a tu DAW, con cada herramienta en su etapa.
 const go = (h) => () => { location.hash = h; };
@@ -48,6 +49,7 @@ export default function Aprende() {
           </section>
         ))}
       </div>
+      <CienciaAprende />
       <div className="cols">
         <section className="panel" style={{ flex: '1 1 320px', gap: 8 }}>
           <h2>Tres ideas para entenderlo</h2>

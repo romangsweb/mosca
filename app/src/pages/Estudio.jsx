@@ -13,6 +13,8 @@ import CircuitMap from '../ui/CircuitMap.jsx';
 import { Pads, Lanes } from '../ui/PadsLanes.jsx';
 import ScenesStrip from '../ui/Scenes.jsx';
 import Patrones from '../ui/Patrones.jsx';
+import { Narrador, FichaPlegable } from '../ui/Ciencia.jsx';
+import { describe } from '../engine/ciencia.js';
 
 const PRESETS = { gusto: { dulce: ['Solo dulce', { dulce: 180, amargo: 0 }], veto: ['Veto amargo', { dulce: 150, amargo: 40 }], rampa: ['Mitad y mitad', { dulce: 90, amargo: 90 }] },
   oido: { voz: ['Voz', { jon_ce: 40, jon_f: 150, jon_dm: 40 }], bajo: ['Bajo', { jon_ce: 180, jon_f: 30, jon_dm: 0 }], brillo: ['Brillos', { jon_ce: 0, jon_f: 40, jon_dm: 170 }] },
@@ -100,7 +102,7 @@ function NeuronCard({ track, k }) {
       <div className="panel-head"><h2>Neurona</h2><span className="mono muted" style={{ fontSize: 10 }}>PAD {PAD_KEYS[off]} · NOTA {session.route(track, k).note ?? '—'}</span></div>
       <div className="between"><span className="mono" style={{ fontSize: 20, fontWeight: 600, color: p.clase === 'sensor' ? 'var(--text)' : roleColor(p) }}>{p.tipo}</span><span className="mono" style={{ fontSize: 20 }}>{rate}<small className="muted" style={{ fontSize: 11 }}> Hz</small></span></div>
       <RateChart track={track} k={k} color={p.clase === 'sensor' ? 'var(--acc)' : roleColor(p)} />
-      <span className="muted" style={{ fontSize: 12, lineHeight: 1.5 }}>{ROLE_DESC[p.clase]}{p.inhibidora ? ' Es inhibidora: frena a las que conecta.' : ''}{p.idx === D.mn9 ? ' MN9 es la que hace comer a la mosca: la salida del circuito.' : ''}</span>
+      <span className="muted" style={{ fontSize: 12, lineHeight: 1.5 }}>{describe(p) || ROLE_DESC[p.clase]}</span>
       <div className="row"><div className="stat"><div className="label">Entradas</div><div className="v">{ins}</div></div><div className="stat"><div className="label">Salidas</div><div className="v">{outs}</div></div><div className="stat"><div className="label">Transmisor</div><div className="v">{NT[p.nt] || p.nt}</div></div></div>
       <div className="row">
         <button type="button" className="btn" style={{ flex: 1 }} aria-pressed={silenced} onClick={toggleMute}>{silenced ? 'Reactivar' : 'Silenciar'}</button>
@@ -124,6 +126,7 @@ function Inputs({ track }) {
         <div className="knobs">{senses.map((k) => <Knob key={k} id={`in-${k}`} label={SENSE_LABEL[k]} value={s.inputs[k]} color={SENSE_COLOR[k]} onChange={(v) => session.setInput(k, v)} />)}</div>
       )}
       {!live && <Seg label="Presets" items={Object.entries(pre).map(([id, [t]]) => [id, t])} value={cur} onChange={(id) => session.set({ inputs: { ...s.inputs, ...pre[id][1] } }, true)} />}
+      <FichaPlegable sense={track.sense} />
     </section>
   );
 }
@@ -139,7 +142,7 @@ export default function Estudio() {
       <div className="studio-top">
         <section className="screen" aria-label="Cerebro de la mosca">
           <div className="grid" />{view === 'Mapa' ? <CircuitMap selTrack={track.id} selPad={selPad} onPick={onPick} sense={track.sense} /> : <Suspense fallback={<div className="mono" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#77777F', fontSize: 11 }}>CARGANDO 3D…</div>}><Brain view={view} selTrack={track.id} selPad={selPad} onPick={onPick} sense={track.sense} /></Suspense>}<div className="vignette" />
-          <Hud /><Taste />
+          <Hud /><Taste /><Narrador />
           <div className="tr"><Seg onScreen label="Vista" items={[['Mapa', 'Mapa'], ['Frontal', '3D'], ['Dorsal', 'Dorsal'], ['Lateral', 'Lateral']]} value={view} onChange={setView} /></div>
           <div className="bl">
             <span className="legend"><i style={{ borderColor: '#ECECEE' }} />SENSOR</span><span className="legend"><i style={{ borderColor: '#FF6A1A' }} />EXCITA</span><span className="legend"><i style={{ borderColor: '#7D93B2' }} />INHIBE</span>
