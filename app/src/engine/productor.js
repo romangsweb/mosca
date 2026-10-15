@@ -79,3 +79,16 @@ export function resumenMosca(S, before, r, label) {
   const otros = [r.densidad && `densidad ${r.densidad} ms`, r.intensidad != null && `intensidad ×${(+r.intensidad).toFixed(2)}`, r.bpm && `${r.bpm} BPM`, r.swing && `swing ${r.swing}%`].filter(Boolean);
   return { ch, otros };
 }
+
+// ---------- variaciones descritas con palabras: la IA elige una cadena de la lista; la app las aplica ----------
+export const pedirVariacion = (contexto, pedido) => call({ modo: 'variacion', contexto, pedido });
+export function contextoVariacion(take, an) {
+  const C = take.compas || '4/4', stepMs = 60000 / (take.bpm || 110) / 4, bars = Math.max(1, Math.round(take.durMs / (stepMs * 16)));
+  const porPista = Object.fromEntries(take.tracks.map((t) => [t.name, take.events.filter((e) => e.track === t.id).length]));
+  return { bpm: take.bpm, compas: C, compases: bars, notas_por_compas: Math.round(take.events.length / bars), notas_por_pista: porPista, tonalidad: an?.empty ? 'sin melodía' : keyName(an?.key) };
+}
+
+// ---------- generador de beat: tu frase → un patrón por voces ----------
+const VEL = { X: 122, x: 98, o: 58, '-': 0 };
+export const pedirBeat = (S, pedido) => call({ modo: 'beat', contexto: { pasos: Math.min(16, S.C.len), compas: S.s.compas || '4/4', bpm_actual: Math.round(S.ko.bpm || S.s.bpm), kit_actual: S.s.kitActive || S.s.kitId }, pedido });
+export const beatAPatron = (S, r) => ({ nombre: r.nombre, filas: r.filas.map((f) => ({ voz: f.voz, vels: [...f.pasos].map((c) => VEL[c] ?? 0) })), len: Math.min(16, S.C.len), compas: S.s.compas || '4/4', ...(r.bpm ? { bpm: r.bpm } : {}), ...(r.swing ? { swing: r.swing } : {}), ...(r.kit ? { kit: r.kit } : {}), ia: true, explicacion: r.explicacion });

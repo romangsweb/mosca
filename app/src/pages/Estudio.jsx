@@ -12,6 +12,7 @@ const Opto = lazy(() => import('../ui/Opto.jsx'));
 import CircuitMap from '../ui/CircuitMap.jsx';
 import { Pads, Lanes } from '../ui/PadsLanes.jsx';
 import ScenesStrip from '../ui/Scenes.jsx';
+import Patrones from '../ui/Patrones.jsx';
 
 const PRESETS = { gusto: { dulce: ['Solo dulce', { dulce: 180, amargo: 0 }], veto: ['Veto amargo', { dulce: 150, amargo: 40 }], rampa: ['Mitad y mitad', { dulce: 90, amargo: 90 }] },
   oido: { voz: ['Voz', { jon_ce: 40, jon_f: 150, jon_dm: 40 }], bajo: ['Bajo', { jon_ce: 180, jon_f: 30, jon_dm: 0 }], brillo: ['Brillos', { jon_ce: 0, jon_f: 40, jon_dm: 170 }] },
@@ -128,7 +129,7 @@ function Inputs({ track }) {
 }
 
 export default function Estudio() {
-  const [view2, setView2] = useState('disparos');
+  const [view2, setView2] = useState('disparos'), [pats, setPats] = useState(false);
   const s = useS(), [view, setView] = useState('Mapa');
   const track = session.track(), selPad = s.selPad;
   const onPick = useCallback((k) => session.set({ selPad: k }, true), []);
@@ -151,6 +152,7 @@ export default function Estudio() {
         </aside>
       </div>
       <ScenesStrip />
+      {pats && <Patrones onClose={() => setPats(false)} />}
       <div className="studio-bottom">
         <section className="panel pads-panel" style={{ gap: 8 }}>
           <div className="panel-head"><h2>Pads · {track.name}</h2>
@@ -192,6 +194,7 @@ export default function Estudio() {
               )}
               {track.frozen && track.play !== 'vivo' && s.tracks.filter((x) => x.id !== track.id).map((x) => <button key={x.id} type="button" className="btn" title={`Copiar este patrón a la pista ${x.name}`} onClick={() => session.copyPattern(track.id, x.id)}>Copiar → {x.name}</button>)}
               <button type="button" className="btn" onClick={() => { if (!session.freeze(track.id)) session.set({ notice: 'congelar' }); }} title="Guarda el último compás de la mosca como patrón editable"><Icon name="nieve" size={14} />Congelar</button>
+              <button type="button" className="btn" onClick={() => setPats(true)} title="Mis patrones y generador de beats">Patrones</button>
               <button type="button" className="btn" onClick={() => session.mutateTrack()} title="Reparte las neuronas entre los pads respetando graves, medios y agudos"><Icon name="dado" size={14} />Mutar</button>
               <button type="button" className="iconbtn" disabled={!canUndo} aria-label="Deshacer mutación" onClick={() => session.undoMutate()}><Icon name="deshacer" size={14} /></button>
             </div>

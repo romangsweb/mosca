@@ -3,7 +3,7 @@ import { Circuit } from './sim.js';
 import { KO2 } from './midi.js';
 import { profileById, route } from './devices.js';
 import { Ear } from './ear.js';
-import { Synth, DEFAULT_KIT, FX_DEFAULT, renderWav, wavBlob } from './synth.js';
+import { Synth, DEFAULT_KIT, FX_DEFAULT, VOICE_CAT, renderWav, wavBlob } from './synth.js';
 import { mutate, mutateTaste, identity } from './mutate.js';
 import { kvGet, kvSet, takePut, takesAll, takeDel, FREE_TAKES, sampleGet, samplePut, sampleDel } from './storage.js';
 import { VOICES as KIT_VOICES, kitData, toBuffers, KITS as KITS_LIST } from './kits.js';
@@ -24,7 +24,7 @@ import { KoLink, CHARLA_DEFAULT } from './ko.js';
 import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud , shareTake, unshareTake, kitIndex, uploadSample, downloadSample, deleteSample, uploadTakeAudio, downloadTakeAudio, deleteTakeAudio } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
-const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes', 'opto', 'taste', 'compas', 'acento', 'lufs', 'xfade', 'intensidad', 'mundo', 'charla', 'expr', 'fillEvery', 'armonia'];
+const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes', 'opto', 'taste', 'compas', 'acento', 'lufs', 'xfade', 'intensidad', 'mundo', 'charla', 'expr', 'fillEvery', 'armonia', 'patrones'];
 
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'], olfato: ['vinagre', 'co2', 'geosmina'], cortejo: ['canto', 'cva', 'deseo'], vision: ['acercar', 'movimiento', 'luz'] };
 // circuitos: cada uno es una parte real del mismo cerebro, con sus sensores y su neurona de salida
@@ -78,7 +78,7 @@ const DEFAULTS = {
   sk: { follow: false, fxAuto: false, fx: [0, 1] },
   fx: { ...FX_DEFAULT }, metro: false, countIn: 1, autoLanes: [],
   taste: { on: true, likes: {}, dislikes: {}, n: 0, plastic: {} },
-  compas: '4/4', acento: 0.35, lufs: 'streaming', xfade: 0.5, intensidad: 1, mundo: { mix: 1 }, charla: { ...CHARLA_DEFAULT }, expr: null, fillEvery: 0, armonia: { on: false, modo: 'acordes', salida: 'compu', ch: 3, nivel: 0.6 },
+  compas: '4/4', acento: 0.35, lufs: 'streaming', xfade: 0.5, intensidad: 1, mundo: { mix: 1 }, charla: { ...CHARLA_DEFAULT }, expr: null, fillEvery: 0, patrones: [], armonia: { on: false, modo: 'acordes', salida: 'compu', ch: 3, nivel: 0.6 },
   opto: { on: false, mode: 'activar', target: 'pad', power: 0.6, pattern: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] },
   follow: { source: 'entrada', tempo: true, key: true, autoPlay: true, offset: 0 },
   oidoSource: 'manual', dataMap: {}, perRow: 16,
@@ -419,6 +419,33 @@ export class Session {
   setStepDeg(tid, k, pos, delta) {
     const t = this.track(tid), deg = (t.deg || Array.from({ length: 12 }, () => new Array(16).fill(0))).map((r) => [...r]);
     deg[k][pos] = Math.max(-7, Math.min(7, (deg[k][pos] || 0) + delta)); this.setTrack(tid, { deg });
+  }
+  // ---------- Mis patrones: ritmos guardados por voz (no por pad), así sirven en cualquier pista y kit ----------
+  voiceOf(t, k) { return t.kit[t.map[k]]; }
+  patternFromTrack(tid = this.s.selTrack) {
+    const t = this.track(tid); if (!t?.frozen) return null; const L = this.patLen(t), rows = {};
+    t.frozen.forEach((row, k) => { if (!row.some((v) => v)) return; const v = this.voiceOf(t, k); const r = (rows[v] ||= new Array(L).fill(0)); for (let i = 0; i < L; i++) r[i] = Math.max(r[i], row[i] || 0); });
+    return Object.keys(rows).length ? { filas: Object.entries(rows).map(([voz, vels]) => ({ voz, vels })), len: L, compas: this.s.compas || '4/4' } : null;
+  }
+  savePattern(p, nombre) {
+    const pat = { id: crypto.randomUUID().slice(0, 8), nombre: (nombre || 'Patrón').slice(0, 40), fecha: Date.now(), ...p };
+    this.set({ patrones: [pat, ...(this.s.patrones || [])].slice(0, 40) }, true); return pat;
+  }
+  deletePattern(id) { this.set({ patrones: (this.s.patrones || []).filter((p) => p.id !== id) }, true); }
+  // pone el patrón en la pista: cada voz va al pad que suena con esa voz (o uno de la misma familia: grave, medio, agudo)
+  applyPattern(tid, pat) {
+    const t = this.track(tid); if (!t) return { ok: false };
+    if (t.mode === 'melodia') return { ok: false, why: 'melodia' };
+    const frozen = Array.from({ length: 12 }, () => new Array(16).fill(0)), used = new Set(), faltan = [];
+    for (const { voz, vels } of pat.filas) {
+      let k = [...Array(12).keys()].find((i) => !used.has(i) && this.voiceOf(t, i) === voz);
+      if (k == null) k = [...Array(12).keys()].find((i) => !used.has(i) && VOICE_CAT[this.voiceOf(t, i)] === VOICE_CAT[voz]);
+      if (k == null) { faltan.push(voz); continue; }
+      used.add(k); vels.forEach((v, i) => { if (i < 16) frozen[k][i] = v; });
+    }
+    this.setTrack(tid, { frozen, prob: null, len: pat.len && pat.len !== this.C.len ? pat.len : null, play: 'ambos' });
+    if (pat.bpm) this.setBpm(pat.bpm); if (pat.swing) this.set({ swing: pat.swing }, true); if (pat.kit && this.kitAllowed(pat.kit)) this.setKit(pat.kit);
+    return { ok: true, faltan };
   }
   copyPattern(from, to) {
     const a = this.track(from); if (!a?.frozen) return;
