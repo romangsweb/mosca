@@ -65,7 +65,8 @@ export async function getPublicTake(shareId) {
   if (error) throw error;
   return data && { ...fromRow(data), author: data.author };
 }
-export const shareUrl = (shareId) => `${location.origin}${location.pathname}#/t/${shareId}`;
+// enlace corto /t/<id>: en Cloudflare una función le da a las redes título e imagen (vista previa) y redirige a /#/t/<id>
+export const shareUrl = (shareId) => `${location.origin}/t/${shareId}`;
 export async function getTake(id) {
   const { data, error } = await cloud.from('takes').select(`${META}, events`).eq('id', id).single();
   if (error) throw error;

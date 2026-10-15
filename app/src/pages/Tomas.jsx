@@ -48,31 +48,49 @@ function RealAudio({ id }) {
 }
 
 // compartir por enlace: la toma queda pública (solo su música) en flypunch…/#/t/<id>; se puede retirar
-function ShareButton({ take }) {
-  const s = useS(), [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [err, setErr] = useState(null), [copied, setCopied] = useState(false);
+// redes: enlaces para publicar (WhatsApp, X, Facebook, Threads). Instagram no admite enlaces en publicaciones.
+const TEXTO = 'Un cerebro real de mosca tocó esta música';
+const REDES = [
+  ['WhatsApp', (u) => `https://wa.me/?text=${encodeURIComponent(`${TEXTO} ${u}`)}`],
+  ['X', (u) => `https://twitter.com/intent/tweet?text=${encodeURIComponent(TEXTO)}&url=${encodeURIComponent(u)}`],
+  ['Facebook', (u) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(u)}`],
+  ['Threads', (u) => `https://www.threads.net/intent/post?text=${encodeURIComponent(`${TEXTO} ${u}`)}`],
+];
+function ShareButton({ take, onVideo }) {
+  const s = useS(), [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [err, setErr] = useState(null), [copied, setCopied] = useState(null);
   const url = take.shareId ? shareUrl(take.shareId) : null;
+  const copy = async (u, k) => { try { await navigator.clipboard.writeText(u); setCopied(k); setTimeout(() => setCopied(null), 2000); } catch {} };
   const doShare = async () => {
     setErr(null); setBusy(true);
-    try { const id = await session.share(take.id); const u = shareUrl(id); try { await navigator.clipboard.writeText(u); setCopied(true); } catch {} if (navigator.share) navigator.share({ title: take.name, text: 'Un cerebro real de mosca tocando mi música', url: u }).catch(() => {}); }
-    catch (e) { console.warn('compartir', e); setErr(/column|share_id|public/i.test(e?.message || '') ? 'Falta activar «compartir» en la base de datos (migración 0004).' : 'No pudimos compartir. Revisa tu conexión.'); }
+    try { const id = await session.share(take.id); await copy(shareUrl(id), 'link'); }
+    catch (e) { console.warn('compartir', e); setErr(/column|share_id|public/i.test(e?.message || '') ? `Falta activar «compartir» en la base de datos (migración 0004). Detalle: ${e?.message || e}` : `No pudimos compartir: ${e?.message || 'revisa tu conexión'}.`); }
     setBusy(false);
   };
   return (
     <span style={{ position: 'relative' }}>
       <button type="button" className={`btn lg ${take.shared ? 'acc' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open}><Icon name="subir" size={14} />{take.shared ? 'Compartida' : 'Compartir'}</button>
       {open && (
-        <div className="panel" role="dialog" aria-label="Compartir toma" style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', width: 320, zIndex: 20, gap: 10, boxShadow: '0 12px 40px rgba(0,0,0,.35)' }}>
+        <div className="panel" role="dialog" aria-label="Compartir toma" style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', width: 340, zIndex: 20, gap: 10, boxShadow: '0 12px 40px rgba(0,0,0,.35)' }}>
           {!s.user ? <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>Para compartir con un enlace, <a href="#/cuenta" style={{ textDecoration: 'underline' }}>inicia sesión</a>: la toma se sube a tu cuenta.</p>
             : take.where !== 'nube' ? <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>Esta toma aún no está en la nube. Se sube sola al sincronizar; vuelve en un momento.</p>
             : take.shared && url ? (
               <>
-                <span style={{ fontSize: 12.5 }}>Cualquiera con el enlace puede escucharla y ver el cerebro. No se muestra tu correo.</span>
+                <span style={{ fontSize: 12.5 }}>Cualquiera con el enlace puede escucharla y ver el cerebro. Al pegarlo en una red sale con título e imagen. No se muestra tu correo.</span>
                 <input className="input mono" readOnly value={url} onFocus={(e) => e.target.select()} style={{ fontSize: 11 }} />
-                <div className="row" style={{ gap: 6 }}>
-                  <button type="button" className="btn primary" onClick={async () => { try { await navigator.clipboard.writeText(url); setCopied(true); } catch {} }}>{copied ? 'Copiado' : 'Copiar enlace'}</button>
-                  {navigator.share && <button type="button" className="btn" onClick={() => navigator.share({ title: take.name, url }).catch(() => {})}>Compartir…</button>}
-                  <button type="button" className="btn ghost" style={{ marginLeft: 'auto' }} onClick={async () => { setBusy(true); await session.unshare(take.id).catch(() => setErr('No pudimos retirarla.')); setBusy(false); }} disabled={busy}>Retirar</button>
+                <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                  <button type="button" className="btn primary" onClick={() => copy(url, 'link')}>{copied === 'link' ? 'Copiado' : 'Copiar enlace'}</button>
+                  {navigator.share && <button type="button" className="btn" onClick={() => navigator.share({ title: take.name, text: TEXTO, url }).catch(() => {})}>Compartir…</button>}
+                  {REDES.map(([n, f]) => <a key={n} className="btn" href={f(url)} target="_blank" rel="noopener noreferrer">{n}</a>)}
                 </div>
+                <div className="well" style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 600 }}>Instagram y TikTok</span>
+                  <span className="muted" style={{ fontSize: 11.5, lineHeight: 1.45 }}>Instagram no deja enlaces en publicaciones. Sube el video vertical (Reels, TikTok o historia) y pon el enlace en tu historia con el sticker «Enlace» o en tu bio.</span>
+                  <div className="row" style={{ gap: 6 }}>
+                    {onVideo && <button type="button" className="btn acc" onClick={() => { setOpen(false); onVideo(); }}>Crear video vertical</button>}
+                    <button type="button" className="btn" onClick={() => copy(url, 'story')}>{copied === 'story' ? 'Copiado: pégalo en el sticker' : 'Copiar enlace para la historia'}</button>
+                  </div>
+                </div>
+                <button type="button" className="btn ghost" style={{ alignSelf: 'flex-end' }} onClick={async () => { setBusy(true); await session.unshare(take.id).catch(() => setErr('No pudimos retirarla.')); setBusy(false); }} disabled={busy}>Dejar de compartir</button>
               </>
             ) : (
               <>
@@ -161,7 +179,7 @@ export default function Tomas() {
                   <button type="button" className="btn lg primary" onClick={play} disabled={!ready}><Icon name={playing ? 'stop' : 'play'} size={12} fill="currentColor" />{playing ? 'Detener' : 'Reproducir'}</button>
                   <button type="button" className="btn lg" onClick={() => { session.stopTake(); setPlaying(false); setNotes(true); }} disabled={!ready} title="Mover, borrar, agregar y cuantizar notas"><Icon name="lapiz" size={14} />Editar notas</button>
                   <button type="button" data-tour="exportar" className="btn lg" onClick={() => setExp(true)} disabled={!ready}><Icon name="bajar" size={14} />Exportar</button>
-                  <ShareButton take={take} />
+                  <ShareButton take={take} onVideo={videoSupported() ? () => { setFmt('video'); setExp(true); } : null} />
                 </div>
               </div>
               <div className="row" style={{ gap: 8, flexWrap: 'wrap' }} aria-label="Crear a partir de esta toma">
