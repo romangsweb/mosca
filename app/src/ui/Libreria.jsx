@@ -61,7 +61,7 @@ export default function Libreria() {
 
       <section className="panel" style={{ borderColor: activeKit === 'propio' ? 'var(--acc)' : undefined }}>
         <div className="between" style={{ flexWrap: 'wrap' }}>
-          <div><h3 className="row" style={{ fontSize: 15, gap: 8 }}>Mi kit <span className="badge-pro">PRO</span></h3><p className="muted" style={{ margin: '4px 0 0', fontSize: 12 }}>Sube tus propias muestras (WAV, MP3, AIFF · hasta 4 MB). Lo que no reemplaces suena con Análogo. Se guardan en este navegador.</p></div>
+          <div><h3 className="row" style={{ fontSize: 15, gap: 8 }}>Mi kit <span className="badge-pro">PRO</span></h3><p className="muted" style={{ margin: '4px 0 0', fontSize: 12 }}>Sube tus propias muestras (WAV, MP3, AIFF · hasta 4 MB). Lo que no reemplaces suena con Análogo. {!s.user ? 'Se guardan en este navegador; con tu cuenta te siguen a cualquier dispositivo.' : s.kitCloud === 'subiendo' ? 'Subiendo a tu cuenta…' : s.kitCloud === 'error' ? 'No se pudo sincronizar con tu cuenta; quedó guardado en este navegador.' : 'Guardadas en tu cuenta: las tienes también en el iPad.'}</p></div>
           {pro && <button type="button" className={`btn ${activeKit === 'propio' ? '' : 'primary'}`} disabled={activeKit === 'propio'} onClick={() => session.setKit('propio')}>{activeKit === 'propio' ? 'En uso' : 'Usar Mi kit'}</button>}
         </div>
         {!pro ? <a href="#/cuenta?plan" className="btn lg acc" style={{ alignSelf: 'flex-start' }}>{session.canTrial ? 'Probar Pro 7 días gratis' : 'Ver planes'}</a> : (

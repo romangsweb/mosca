@@ -16,7 +16,7 @@ import { Follower } from './follow.js';
 import { SCALES } from './devices.js';
 import { compas, clickAt, accent } from './compas.js';
 import { liveMeter } from './loudness.js';
-import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud , shareTake, unshareTake } from './cloud.js';
+import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud , shareTake, unshareTake, kitIndex, uploadSample, downloadSample, deleteSample, uploadTakeAudio, downloadTakeAudio, deleteTakeAudio } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
 const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes', 'opto', 'taste', 'compas', 'acento', 'lufs'];
@@ -236,6 +236,7 @@ export class Session {
         this.s.onboarded = true; await saveProfile(user.id, { settings: this.snapshot(), alias: this.s.alias || p?.alias || null });
       }
       this.set({ alias: this.s.alias || p?.alias || '', ...this.planFrom(p), sync: 'sincronizado' });
+      await this.syncKit();
       this.loadKit();
       await this.refreshTakes();
     } catch (e) { console.warn('perfil', e); this.set({ sync: 'error' }); }
@@ -245,6 +246,21 @@ export class Session {
     this.set({ sync: 'sincronizando' });
     try { await saveProfile(this.s.user.id, { settings: this.snapshot(), alias: this.s.alias || null }); this.set({ sync: 'sincronizado' }); }
     catch (e) { console.warn('sincronizar', e); this.set({ sync: 'error' }); }
+  }
+  // «Mi kit» en la nube: baja lo que subiste desde otro dispositivo y sube lo que solo está aquí (Pro)
+  syncKit() { return (this._kitSync ||= this._syncKit().finally(() => { this._kitSync = null; })); } // una a la vez
+  async _syncKit() {
+    const uid = this.s.user?.id; if (!uid) return;
+    try {
+      const idx = await kitIndex(uid); let changed = false;
+      for (const v of KIT_VOICES) {
+        const loc = await sampleGet(v), rem = idx[v];
+        if (rem && (!loc || loc.name !== rem.name || (loc.at || 0) < rem.at)) { await samplePut(v, { name: rem.name, data: await downloadSample(uid, v), at: rem.at, cloud: true }); changed = true; }
+        else if (!rem && loc?.cloud) { await sampleDel(v); changed = true; } // la borraste en otro dispositivo
+        else if (!rem && loc && this.can('kits')) { await uploadSample(uid, v, loc.name, loc.data, loc.type); await samplePut(v, { ...loc, at: Date.now(), cloud: true }); }
+      }
+      this.set({ kitCloud: 'ok' }); return changed;
+    } catch (e) { console.warn('kit en la nube', e); this.set({ kitCloud: 'error' }); }
   }
   async logout() { await signOut(); this.set({ user: null, ...NO_PLAN, sync: 'local' }); this.loadKit(); await this.refreshTakes(); }
   // ---------- controles aprendidos ----------
@@ -305,7 +321,16 @@ export class Session {
     ko.nextAt += Math.max(-dur * 0.5, Math.min(dur * 0.5, err * 0.35)); this.live.followErr = err;
   }
   unmap(target) { this.set({ mappings: this.s.mappings.filter((m) => m.target !== target) }, true); }
-  getAudio(id) { return audioGet(id); }
+  // audio real de una toma: de este navegador o, si no está, de la nube (y queda guardado aquí)
+  async getAudio(id) {
+    const loc = await audioGet(id); if (loc || !this.s.user) return loc;
+    const b = await downloadTakeAudio(this.s.user.id, id); if (b) await audioPut(id, b).catch(() => {}); return b;
+  }
+  async pushAudio(id) {
+    const uid = this.s.user?.id; if (!uid || !this.can('audio')) return;
+    const b = await audioGet(id); if (!b) return;
+    try { await uploadTakeAudio(uid, id, b); this.set({ takes: this.s.takes.map((x) => (x.id === id ? { ...x, cloudAudio: true, hasAudio: true } : x)) }); } catch (e) { console.warn('subir audio', e); }
+  }
   // ---------- escenas y canción ----------
   slotAllowed(slot) { return SLOTS.indexOf(slot) < FREE_SLOTS || this.can('cancion'); }
   saveScene(slot, name) {
@@ -384,9 +409,16 @@ export class Session {
     if (!this.can('kits')) throw new Error('pro');
     if (file.size > 4 * 1024 * 1024) throw new Error('grande');
     const data = await file.arrayBuffer(); await this.synth.ensure().decodeAudioData(data.slice(0)); // valida que sea audio
-    await samplePut(voice, { name: file.name, data }); if (this.s.kitId !== 'propio') this.set({ kitId: 'propio' }, true); await this.loadKit();
+    const at = Date.now(); await samplePut(voice, { name: file.name, data, type: file.type, at }); if (this.s.kitId !== 'propio') this.set({ kitId: 'propio' }, true); await this.loadKit();
+    const uid = this.s.user?.id; if (!uid) return;
+    this.set({ kitCloud: 'subiendo' });
+    try { await uploadSample(uid, voice, file.name, data, file.type); await samplePut(voice, { name: file.name, data, type: file.type, at, cloud: true }); this.set({ kitCloud: 'ok' }); }
+    catch (e) { console.warn('subir muestra', e); this.set({ kitCloud: 'error' }); }
   }
-  async removeSample(voice) { await sampleDel(voice); await this.loadKit(); }
+  async removeSample(voice) {
+    await sampleDel(voice); await this.loadKit();
+    if (this.s.user) deleteSample(this.s.user.id, voice).catch((e) => console.warn('borrar muestra', e));
+  }
   // ---------- plan ----------
   planFrom(p) {
     const trialEnds = p?.trial_ends_at ? new Date(p.trial_ends_at).getTime() : null, planBase = p?.plan || 'free';
@@ -559,10 +591,12 @@ export class Session {
       if (r === 'limite') blocked = true;
     }
     const byId = new Map((await takesAll()).map((t) => [t.id, t]));
-    const merged = remote.map((r) => { const l = byId.get(r.id); return { ...r, events: l?.events || null, hasAudio: !!l?.hasAudio, nEvents: r.nEvents ?? l?.events?.length ?? 0, where: 'nube' }; });
+    const merged = remote.map((r) => { const l = byId.get(r.id); return { ...r, events: l?.events || null, hasAudio: !!l?.hasAudio || !!r.cloudAudio, localAudio: !!l?.hasAudio, nEvents: r.nEvents ?? l?.events?.length ?? 0, where: 'nube' }; });
     for (const t of byId.values()) if ((!t.owner || t.owner === uid) && !remoteIds.has(t.id) && !merged.some((m) => m.id === t.id)) merged.push({ ...t, where: 'local' });
     merged.sort((a, b) => b.date - a.date);
     this.set({ takes: merged, ...(blocked ? { notice: 'limite' } : {}) });
+    // audio real que aún no está en la nube (tomas grabadas sin conexión o antes de la migración 0005)
+    if (this.can('audio')) for (const t of merged) if (t.where === 'nube' && t.localAudio && !t.cloudAudio) this.pushAudio(t.id);
   }
   // notas de una toma que solo está en la nube
   async ensureEvents(id) {
@@ -618,7 +652,7 @@ export class Session {
   }
   async deleteTake(id) {
     const t = this.s.takes.find((x) => x.id === id);
-    if (t?.where === 'nube') await deleteTakeCloud(id).catch((e) => console.warn(e));
+    if (t?.where === 'nube') { await deleteTakeCloud(id).catch((e) => console.warn(e)); if (t.hasAudio) deleteTakeAudio(this.s.user.id, id).catch(() => {}); }
     await takeDel(id); audioDel(id); this.set({ takes: this.s.takes.filter((x) => x.id !== id) });
   }
   // reproducir una toma: re-envía notas al K.O. y/o voces internas

@@ -14,7 +14,8 @@ function db() {
   });
   return dbp;
 }
-const tx = async (store, mode, fn) => { const d = await db(); return new Promise((res, rej) => { const t = d.transaction(store, mode), s = t.objectStore(store), out = fn(s); const to = setTimeout(() => rej(new Error('indexeddb lenta')), 4000); t.oncomplete = () => { clearTimeout(to); res(out?.result ?? out); }; t.onerror = () => { clearTimeout(to); rej(t.error); }; }); };
+// tx devuelve el resultado de la petición (undefined si un get no encuentra nada), nunca la petición misma
+const tx = async (store, mode, fn) => { const d = await db(); return new Promise((res, rej) => { const t = d.transaction(store, mode), s = t.objectStore(store), out = fn(s); const to = setTimeout(() => rej(new Error('indexeddb lenta')), 4000); t.oncomplete = () => { clearTimeout(to); res(out instanceof IDBRequest ? out.result : out); }; t.onerror = () => { clearTimeout(to); rej(t.error); }; }); };
 
 export const kvGet = (k) => tx('kv', 'readonly', (s) => s.get(k)).catch(() => undefined);
 export const kvSet = (k, v) => tx('kv', 'readwrite', (s) => s.put(v, k)).catch(() => undefined);
