@@ -181,8 +181,8 @@ export default function Estudio() {
             <div className="row" style={{ gap: 6 }}>
               <Seg label="Quién toca la pista" items={[['vivo', 'Mosca'], ['congelado', 'Patrón'], ['ambos', 'Ambos']]} value={track.play || 'vivo'} onChange={(v) => { if (v !== 'vivo' && !track.frozen && !session.freeze(track.id)) session.setTrack(track.id, { play: v, frozen: Array.from({ length: 12 }, () => new Array(16).fill(0)) }); else session.setTrack(track.id, { play: v }); }} />
               {track.play && track.play !== 'vivo' && (
-                <select className="input" aria-label="Largo del patrón" title="Largo del patrón: menos de 16 pasos crea polirritmos contra el compás" style={{ height: 34, width: 'auto' }} value={track.len || session.C.len} onChange={(e) => session.setTrack(track.id, { len: +e.target.value })}>
-                  {[16, 15, 14, 12, 10, 9, 8, 7, 6, 5, 3].map((n) => <option key={n} value={n}>{n} pasos</option>)}
+                <select className="input" aria-label="Largo del patrón" title="Largo del patrón: menos de 16 pasos crea polirritmos contra el compás" style={{ height: 34, width: 'auto' }} value={session.patLen(track)} onChange={(e) => session.setTrack(track.id, { len: +e.target.value === session.C.len ? null : +e.target.value })}>
+                  {[...new Set([session.C.len, 15, 14, 12, 10, 9, 8, 7, 6, 5, 3])].map((n) => <option key={n} value={n}>{n} pasos{n === session.C.len ? ' · compás' : ''}</option>)}
                 </select>
               )}
               {track.frozen && track.play !== 'vivo' && s.tracks.filter((x) => x.id !== track.id).map((x) => <button key={x.id} type="button" className="btn" title={`Copiar este patrón a la pista ${x.name}`} onClick={() => session.copyPattern(track.id, x.id)}>Copiar → {x.name}</button>)}

@@ -21,7 +21,9 @@ export async function currentUser() { const { data } = await cloud.auth.getSessi
 export function onAuth(fn) { const { data } = cloud.auth.onAuthStateChange((_e, s) => fn(s?.user || null)); return () => data.subscription.unsubscribe(); }
 
 export async function loadProfile(uid) {
-  const { data, error } = await cloud.from('profiles').select('alias, plan, settings, updated_at, trial_ends_at, trial_used').eq('id', uid).maybeSingle();
+  // con el estado de la suscripción (migración 0006); si aún no existe, sin él
+  let { data, error } = await cloud.from('profiles').select('alias, plan, settings, updated_at, trial_ends_at, trial_used, plan_status, plan_cycle, plan_renews_at, plan_cancel_at, paddle_subscription_id').eq('id', uid).maybeSingle();
+  if (error) ({ data, error } = await cloud.from('profiles').select('alias, plan, settings, updated_at, trial_ends_at, trial_used').eq('id', uid).maybeSingle());
   if (error) throw error;
   return data;
 }

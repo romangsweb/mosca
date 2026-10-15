@@ -239,3 +239,5 @@ button, .btn, .iconbtn, .pad, .cell, .seg button, .knob svg, input[type=range] {
 .cell.on.half { box-shadow: inset 0 0 0 1.5px var(--acc); background-image: repeating-linear-gradient(135deg, rgba(255,106,26,.35) 0 2px, transparent 2px 5px); }
 /* el chip del reloj solo cabe en pantallas anchas; el estado sigue visible en Sonido › MIDI y reloj */
 @media (max-width: 1599px) { .transport .clk:not(.acc) { display: none; } }
+/* en pantallas medianas el compás se elige en Sonido › Ritmo; así el transporte no tapa el botón del aparato */
+@media (max-width: 1399px) { .transport .tsel { display: none; } }

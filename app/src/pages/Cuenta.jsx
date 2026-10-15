@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { session } from '../engine/session.js';
 import { useS, Seg, Icon } from '../ui/kit.jsx';
 import { daysLeft } from '../ui/Paywall.jsx';
+import { payEnabled, paySandbox } from '../engine/pay.js';
 
 const DOCS = [
   ['Primeros pasos', <>
@@ -82,21 +83,25 @@ export default function Cuenta() {
 function PlanTab({ s, yearly, setYearly }) {
   const [busy, setBusy] = useState(false), [err, setErr] = useState(null);
   const start = async () => { setBusy(true); setErr(null); try { await session.startTrial(); } catch { setErr('No pudimos activar la prueba. Intenta de nuevo.'); } setBusy(false); };
+  const buy = async () => { setBusy(true); setErr(null); try { const r = await session.buyPro(yearly ? 'año' : 'mes'); if (r === 'pendiente') setErr('Recibimos tu pago; Pro se activará en unos minutos. Si no, escríbenos.'); } catch (e) { console.warn('pago', e); setErr('No se pudo abrir el pago. Revisa tu conexión e intenta de nuevo.'); } setBusy(false); };
+  const manage = async () => { setBusy(true); setErr(null); try { await session.manageBilling(); } catch { setErr('No se pudo abrir la administración de tu suscripción.'); } setBusy(false); };
+  const sub = s.sub, fecha = (t) => new Date(t).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
   const pro = s.plan === 'pro', trial = session.onTrial;
   let cta;
-  if (s.planBase === 'pro') cta = <button type="button" className="btn lg" disabled>Tu plan</button>;
-  else if (trial) cta = <button type="button" className="btn lg" disabled>Prueba activa · quedan {daysLeft(s.trialEnds)} días</button>;
-  else if (session.canTrial) cta = <button type="button" className="btn lg acc" disabled={busy} onClick={start}>{busy ? 'Activando…' : 'Probar 7 días gratis'}</button>;
+  const pay = <button type="button" className="btn lg acc" disabled={busy || s.paying} onClick={buy}>{s.paying ? 'Activando Pro…' : busy ? 'Abriendo pago…' : yearly ? 'Suscribirme · $100 al año' : 'Suscribirme · $10 al mes'}</button>;
+  if (s.planBase === 'pro') cta = sub ? <button type="button" className="btn lg" disabled={busy} onClick={manage}>Administrar suscripción</button> : <button type="button" className="btn lg" disabled>Tu plan</button>;
   else if (!s.user) cta = <a className="btn lg acc" href="#/bienvenida">Crea tu cuenta para probar Pro</a>;
-  else cta = <button type="button" className="btn lg" disabled>Pago disponible pronto</button>;
+  else if (trial) cta = payEnabled ? <>{pay}<span className="dim" style={{ fontSize: 11.5, marginTop: 6, textAlign: 'center' }}>Prueba activa · quedan {daysLeft(s.trialEnds)} días</span></> : <button type="button" className="btn lg" disabled>Prueba activa · quedan {daysLeft(s.trialEnds)} días</button>;
+  else if (session.canTrial) cta = <><button type="button" className="btn lg acc" disabled={busy} onClick={start}>{busy ? 'Activando…' : 'Probar 7 días gratis'}</button>{payEnabled && <button type="button" className="btn ghost" style={{ marginTop: 6 }} disabled={busy} onClick={buy}>O suscríbete ya</button>}</>;
+  else cta = payEnabled ? pay : <button type="button" className="btn lg" disabled>Pago disponible pronto</button>;
   const PLANS = [
-    ['Free', !pro ? 'TU PLAN' : '', '$0', 'para siempre', ['Gusto y Oído (micrófono y archivos)', '2 pistas en el K.O. II (grupos A y C)', '5 tomas en la nube con cuenta', 'Exportar a MIDI y CSV'], <button key="f" type="button" className="btn lg" disabled>{!pro ? 'Plan actual' : 'Incluido'}</button>, false],
-    ['Pro', trial ? 'PRUEBA' : pro ? 'TU PLAN' : 'RECOMENDADO', yearly ? '$100' : '$10', yearly ? 'USD / año · 2 meses gratis' : 'USD / mes', ['Todo lo de Free', 'Modo Datos: tus CSV como estímulo', 'Tomas ilimitadas en la nube', 'Exportar tomas a WAV', 'Próximamente: 4 pistas y más circuitos'], cta, true],
+    ['Free', !pro ? 'TU PLAN' : '', '$0', 'para siempre', ['Los 4 circuitos: gusto, oído, olfato y cortejo', '2 pistas en el K.O. II (grupos A y C)', 'Kits Análogo e Insectos', '5 tomas en la nube con cuenta', 'Exportar a MIDI, CSV y video'], <button key="f" type="button" className="btn lg" disabled>{!pro ? 'Plan actual' : 'Incluido'}</button>, false],
+    ['Pro', trial ? 'PRUEBA' : pro ? 'TU PLAN' : 'RECOMENDADO', yearly ? '$100' : '$10', yearly ? 'USD / año · 2 meses gratis' : 'USD / mes', ['Todo lo de Free', 'Melodía con acordes y progresiones', 'Todos los kits y tu propio kit en la nube', 'La mosca aprende tu gusto', 'Canción con 8 escenas', 'WAV masterizado y pistas separadas', 'Tomas ilimitadas y audio real en la nube', 'Modo Datos: tus CSV como estímulo'], cta, true],
   ];
   return (
     <>
       <div className="between" style={{ flexWrap: 'wrap' }}>
-        <div><h1>Plan</h1><p className="muted" style={{ margin: '4px 0 0' }}>{trial ? `Estás probando Pro: quedan ${daysLeft(s.trialEnds)} días. Al terminar vuelves a Free y conservas tus tomas.` : 'Gusto, Oído y la exportación MIDI son gratis.'}</p></div>
+        <div><h1>Plan</h1><p className="muted" style={{ margin: '4px 0 0' }}>{trial ? `Estás probando Pro: quedan ${daysLeft(s.trialEnds)} días. Al terminar vuelves a Free y conservas tus tomas.` : 'Los 4 circuitos, el MIDI y el video son gratis.'}</p></div>
         <Seg label="Facturación" items={[['m', 'Mensual'], ['a', 'Anual']]} value={yearly ? 'a' : 'm'} onChange={(v) => setYearly(v === 'a')} />
       </div>
       <div className="cols" style={{ gap: 16 }}>
@@ -109,8 +114,14 @@ function PlanTab({ s, yearly, setYearly }) {
           </article>
         ))}
       </div>
+      {sub && s.planBase === 'pro' && (
+        <div className="well" style={{ padding: 14, display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 13 }}>
+          <span>Suscripción <strong>{sub.cycle === 'año' ? 'anual' : 'mensual'}</strong>{sub.status === 'past_due' ? ' · pago pendiente: revisa tu tarjeta' : ''}</span>
+          {sub.cancelAt ? <span>Cancelada: sigues siendo Pro hasta el <strong>{fecha(sub.cancelAt)}</strong></span> : sub.renews && <span>Se renueva el <strong>{fecha(sub.renews)}</strong></span>}
+        </div>
+      )}
       {err && <p role="alert" style={{ margin: 0, color: '#FF8A4D' }}>{err}</p>}
-      <p className="dim" style={{ margin: 0, fontSize: 12 }}>Precios en dólares (USD). El pago se habilita pronto; la prueba no pide tarjeta y se activa una sola vez por cuenta.</p>
+      <p className="dim" style={{ margin: 0, fontSize: 12 }}>Precios en dólares (USD), impuestos según tu país. {payEnabled ? 'El pago lo procesa Paddle (tarjeta, PayPal, Apple Pay o Google Pay); cancelas cuando quieras desde «Administrar suscripción».' : 'El pago se habilita pronto.'} La prueba no pide tarjeta y se activa una sola vez por cuenta.{payEnabled && paySandbox ? ' · MODO DE PRUEBA (sandbox): usa la tarjeta 4242 4242 4242 4242.' : ''}</p>
     </>
   );
 }

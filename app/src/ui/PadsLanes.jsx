@@ -42,7 +42,7 @@ export function Lanes({ track, selPad }) {
     const color = pads.map((p) => (p.clase === 'sensor' ? '236,236,238' : p.inhibidora ? '125,147,178' : '255,106,26'));
     const paint = () => {
       const lanes = session.live.lanes[track.id], t = session.track(track.id), fz = t.play !== 'vivo' && t.frozen;
-      const len = fz ? t.len || session.C.len : session.C.len;
+      const len = fz ? session.patLen(t) : session.C.len;
       lanes.forEach((row, k) => row.forEach((v, i) => { const c = cells[k * 16 + i]; c.style.background = v ? `rgba(${color[k]},${0.25 + (v / 127) * 0.6})` : ''; c.classList.toggle('on', !!(fz && i < len && fz[k][i])); c.classList.toggle('half', !!(fz && fz[k][i] && (t.prob?.[k]?.[i] ?? 100) < 100)); c.classList.toggle('out', i >= len); }));
     };
     paint();

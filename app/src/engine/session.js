@@ -45,7 +45,7 @@ export const PRO_FEATURES = {
   audio: 'Grabar el audio real de tu interfaz con cada toma',
   controles: 'Controles MIDI ilimitados (sidekick y cualquier controlador)',
 };
-const NO_PLAN = { plan: 'free', planBase: 'free', trialEnds: null, trialUsed: false };
+const NO_PLAN = { plan: 'free', planBase: 'free', trialEnds: null, trialUsed: false, sub: null };
 const CURVES = { lineal: (x) => x, suave: (x) => Math.sqrt(x), dura: (x) => x * x };
 
 const DEFAULTS = {
@@ -201,6 +201,8 @@ export class Session {
   // recompensa) y guarda el reparto de pads para que «Mutar» tienda hacia lo que te gusta.
   // medidor de sonoridad de la salida de la compu (LUFS momentáneo y de 3 s, pico)
   loudness() { if (!this.synth.chain) return null; if (!this._lm || this._lmCtx !== this.synth.ctx) { this._lm = liveMeter(this.synth.ctx, this.synth.chain.post); this._lmCtx = this.synth.ctx; } return this._lm.read(); }
+  // largo del patrón de una pista: sigue al compás salvo que elijas otro (polirritmo); 16 = «el compás completo» por compatibilidad
+  patLen(t) { return !t?.len || t.len === 16 ? this.C.len : t.len; }
   get C() { return compas(this.s.compas); } // compás actual: len (pasos por compás) y pulsos
   get plasticKey() { return `${this.D.n}:${this.sim.wt.length}`; }
   feedback(sign) {
@@ -401,7 +403,7 @@ export class Session {
   }
   copyPattern(from, to) {
     const a = this.track(from); if (!a?.frozen) return;
-    this.setTrack(to, { frozen: a.frozen.map((r) => [...r]), prob: a.prob?.map((r) => [...r]) || null, len: a.len || 16, play: this.track(to).play === 'vivo' ? 'congelado' : this.track(to).play });
+    this.setTrack(to, { frozen: a.frozen.map((r) => [...r]), prob: a.prob?.map((r) => [...r]) || null, len: a.len || null, play: this.track(to).play === 'vivo' ? 'congelado' : this.track(to).play });
   }
 
   setKit(id) { if (!this.kitAllowed(id)) { location.hash = '#/cuenta?plan'; return; } this.set({ kitId: id }, true); this.loadKit(); }
@@ -425,11 +427,26 @@ export class Session {
     const plan = planBase === 'pro' || (trialEnds && trialEnds > Date.now()) ? 'pro' : 'free';
     clearTimeout(this._trialT);
     if (planBase !== 'pro' && trialEnds && trialEnds > Date.now()) this._trialT = setTimeout(() => { this.set(this.planFrom(p)); this.loadKit(); }, Math.min(trialEnds - Date.now() + 1000, 2 ** 31 - 1));
-    return { plan, planBase, trialEnds, trialUsed: !!p?.trial_used };
+    const sub = p?.paddle_subscription_id ? { status: p.plan_status, cycle: p.plan_cycle, renews: p.plan_renews_at ? new Date(p.plan_renews_at).getTime() : null, cancelAt: p.plan_cancel_at ? new Date(p.plan_cancel_at).getTime() : null } : null;
+    return { plan, planBase, trialEnds, trialUsed: !!p?.trial_used, sub };
   }
   get onTrial() { return this.s.planBase !== 'pro' && this.s.plan === 'pro'; }
   get canTrial() { return !!this.s.user && !this.s.trialUsed && this.s.planBase !== 'pro'; }
   can(feature) { return this.s.plan === 'pro' || !PRO_FEATURES[feature]; }
+  // suscribirse con Paddle: al pagar, el webhook activa Pro en la nube; aquí esperamos a verlo (hasta 1 min)
+  async buyPro(cycle) {
+    if (!this.s.user) { location.hash = '#/bienvenida'; return 'sin-cuenta'; }
+    const { checkout } = await import('./pay.js');
+    const r = await checkout(cycle, this.s.user); if (r !== 'pagado') return r;
+    this.set({ paying: true });
+    for (let i = 0; i < 30; i++) {
+      const p = await loadProfile(this.s.user.id).catch(() => null);
+      if (p?.plan === 'pro') { this.set({ ...this.planFrom(p), paying: false, notice: 'pro' }); this.loadKit(); await this.refreshTakes(); return 'pro'; }
+      await new Promise((ok) => setTimeout(ok, 2000));
+    }
+    this.set({ paying: false }); return 'pendiente'; // el pago se hizo; Pro llega en cuanto Paddle avise
+  }
+  async manageBilling() { const { portal } = await import('./pay.js'); await portal(); }
   async startTrial() {
     const end = await startTrialCloud();
     this.set(this.planFrom({ plan: this.s.planBase, trial_ends_at: new Date(end).toISOString(), trial_used: true }));
@@ -516,10 +533,10 @@ export class Session {
         const c = cnt[p.idx]; rate[k] = rate[k] * 0.9 + 0.1 * (c / (s.density / 1000));
         lanes[k][pos] = 0; L.rateHist[t.id][k][n % HIST] = rate[k]; L.spikes[t.id][k][n % HIST] = c;
         // vivo = toca la mosca · congelado = toca el patrón · ambos = el patrón más lo que agregue la mosca
-        const mode = t.play || 'vivo', fz = mode !== 'vivo' && t.frozen ? t.frozen[k][n % (t.len || C.len)] : 0;
+        const mode = t.play || 'vivo', fz = mode !== 'vivo' && t.frozen ? t.frozen[k][n % this.patLen(t)] : 0;
         let vel = 0;
         if (c && on && mode !== 'congelado') { const x = Math.min(1, c / 3), ghost = s.ghost && p.inhibidora ? 0.6 : 1; vel = Math.round((s.velMin + (s.velMax - s.velMin) * curve(x)) * ghost * t.level); }
-        if (fz && on && Math.random() * 100 < (t.prob?.[k]?.[n % (t.len || C.len)] ?? 100)) vel = Math.max(vel, Math.round(fz * t.level));
+        if (fz && on && Math.random() * 100 < (t.prob?.[k]?.[n % this.patLen(t)] ?? 100)) vel = Math.max(vel, Math.round(fz * t.level));
         if (vel) vel = Math.max(1, Math.min(127, Math.round(vel * acc)));
         if (!vel) return;
         const when = at + swingMs + (Math.random() * 2 - 1) * s.humanize;
