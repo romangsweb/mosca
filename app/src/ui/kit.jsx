@@ -17,6 +17,7 @@ export const ICONS = {
   sonido: 'M5 6h14M5 12h14M5 18h14M9 4v4M15 10v4M8 16v4',
   tomas: 'M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0',
   docs: 'M5 4h9a4 4 0 0 1 4 4v12H9a4 4 0 0 1-4-4zM5 16a4 4 0 0 1 4-4h9',
+  capturar: 'M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4M12 8v4l3 2',
   hablar: 'M4 5h16v11H10l-5 4v-4H4zM8 10h.01M12 10h.01M16 10h.01',
   ajustes: 'M8 12a4 4 0 1 0 8 0a4 4 0 1 0-8 0M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1',
   play: 'M7 4.5v15l12-7.5z', stop: 'M6 6h12v12H6z', pause: 'M6 4h4v16H6zM14 4h4v16h-4z',

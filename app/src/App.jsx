@@ -1,5 +1,8 @@
 import DileMosca from './ui/DileMosca.jsx';
 import Escenario from './ui/Escenario.jsx';
+import Plantillas from './ui/Plantillas.jsx';
+import { Recorrido, InvitaRecorrido } from './ui/Recorrido.jsx';
+import Aprende from './pages/Aprende.jsx';
 import { isIOS, isStandalone } from './ui/Install.jsx';
 import { Component, useEffect, useState } from 'react';
 import { session } from './engine/session.js';
@@ -27,7 +30,7 @@ const NAV = [
   ['sonido', 'Sonido', 'sonido'], ['oido', 'Oído', 'oido'], ['vision', 'Visión', 'vision'], ['datos', 'Datos', 'datos', true], ['mundo', 'Mundo', 'mundo'], null,
   ['tomas', 'Tomas', 'tomas'], ['ko', 'K.O. II', 'ko'], ['equipo', 'Equipo', 'usb'],
 ];
-const PAGES = { ko: KO, vision: Vision, mundo: Mundo, directo: Directo, estudio: Estudio, equipo: Equipo, mezcla: Mezcla, cancion: Cancion, oido: Oido, datos: Datos, sonido: Sonido, tomas: Tomas, cuenta: Cuenta };
+const PAGES = { aprende: Aprende, ko: KO, vision: Vision, mundo: Mundo, directo: Directo, estudio: Estudio, equipo: Equipo, mezcla: Mezcla, cancion: Cancion, oido: Oido, datos: Datos, sonido: Sonido, tomas: Tomas, cuenta: Cuenta };
 const TIPS = {
   estudio: ['Gira Dulce y Amargo: es lo que prueba la mosca.', 'Pulsa Tocar (o la barra espaciadora). Cada neurona que dispara toca su pad.', 'Toca un pad o una neurona del cerebro para inspeccionarla.'],
   oido: ['Elige micrófono, un archivo o los deslizadores.', 'Graves, medios y agudos estimulan tres grupos de sensores de la antena.', 'La pista Oído suena en el grupo A del K.O. II.'],
@@ -69,12 +72,15 @@ function Position() {
   const n = session.s.playing ? session.live.step : 0;
   return <div className="pos mono" aria-label="Posición">{posLabel(session.C, n)}</div>;
 }
+// «¡eso estuvo bueno!»: guarda los últimos compases como toma y avisa con un toast
+async function capturar() { const t = await session.captureLast(8); session.set({ toastCap: t ? t.name : 'vacio' }); setTimeout(() => session.set({ toastCap: null }), 3200); }
 function Transport({ s }) {
   const ext = session.ko.hasExternalClock;
   return (
     <div className="transport" role="group" aria-label="Transporte">
       <button type="button" className="tbtn rec" aria-pressed={s.rec} aria-label={s.rec ? 'Detener grabación' : 'Grabar'} title="Grabar (R)" onClick={() => session.toggleRec()}><span className="dot" /></button>
-      <button type="button" className="tbtn play" aria-pressed={s.playing} onClick={() => session.toggle()} title="Tocar / detener (espacio)"><Icon name={s.playing ? 'stop' : 'play'} size={14} fill="currentColor" />{s.playing ? 'Detener' : 'Tocar'}</button>
+      <button type="button" data-tour="captura" className="tbtn cap" disabled={!s.playing} aria-label="Capturar los últimos 8 compases" title="Capturar: guarda como toma los últimos 8 compases, aunque no estuvieras grabando (C)" onClick={capturar}><Icon name="capturar" size={15} /></button>
+      <button type="button" data-tour="play" className="tbtn play" aria-pressed={s.playing} onClick={() => session.toggle()} title="Tocar / detener (espacio)"><Icon name={s.playing ? 'stop' : 'play'} size={14} fill="currentColor" />{s.playing ? 'Detener' : 'Tocar'}</button>
       <span className="tdiv" /><Position /><span className="tdiv" />
       <div className="bpm">
         <button type="button" aria-label="Bajar tempo" onClick={() => session.setBpm(s.bpm - 1)} disabled={ext}>−</button>
@@ -112,6 +118,7 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); e.shiftKey ? session.redo() : session.undo(); return; }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === 'r' || e.key === 'R') session.toggleRec();
+      if (e.key === 'c' || e.key === 'C') capturar();
       if (e.key === 'm' || e.key === 'M') session.set({ metro: !session.s.metro }, true);
       if (e.key === 't' || e.key === 'T') session.tap();
       if (e.key === 'g' || e.key === 'G') session.feedback(1);
@@ -149,7 +156,7 @@ export default function App() {
           <TrialBadge />
           <button type="button" className="iconbtn" aria-label="Deshacer" title="Deshacer (⌘Z)" disabled={!s.canUndo} onClick={() => session.undo()}><Icon name="deshacer" size={15} /></button>
           <button type="button" className="iconbtn" aria-label="Rehacer" title="Rehacer (⇧⌘Z)" disabled={!s.canRedo} onClick={() => session.redo()}><Icon name="deshacer" size={15} style={{ transform: 'scaleX(-1)' }} /></button>
-          <button type="button" className={`btn ${s.dile ? 'acc' : ''}`} aria-pressed={!!s.dile} title="Dile a la mosca cómo quieres que se sienta (tecla /)" onClick={() => session.set({ dile: !s.dile })}><Icon name="hablar" size={15} /><span className="hide-md">Dile a la mosca</span></button>
+          <button type="button" data-tour="mosca" className={`btn ${s.dile ? 'acc' : ''}`} aria-pressed={!!s.dile} title="Dile a la mosca cómo quieres que se sienta (tecla /)" onClick={() => session.set({ dile: !s.dile })}><Icon name="hablar" size={15} /><span className="hide-md">Dile a la mosca</span></button>
           <button type="button" className="btn" aria-pressed={s.guide} onClick={() => session.set({ guide: !s.guide }, true)}>Guía</button>
           <button type="button" className="iconbtn" aria-label={night ? 'Cambiar a tema día' : 'Cambiar a tema noche'} onClick={() => session.set({ theme: night ? 'dia' : 'noche' }, true)}><Icon name={night ? 'sol' : 'luna'} size={15} /></button>
           <a href="#/cuenta" className="avatar" aria-label={`Cuenta, plan ${s.plan}`}><span className="mono muted" style={{ fontSize: 9, letterSpacing: '.1em' }}>{!s.user ? 'INVITADO' : session.onTrial ? 'PRUEBA' : s.plan.toUpperCase()}</span><span>{initials(s)}</span></a>
@@ -168,12 +175,16 @@ export default function App() {
           {NAV.map((n, i) => (!n ? <span key={`sep${i}`} className="rail-sep" aria-hidden="true" />
             : <a key={n[0]} href={`#/${n[0]}`} aria-current={page === n[0] ? 'page' : undefined}><Icon name={n[2]} size={20} />{n[1]}{n[3] && <span className="pro" title="Pro" />}</a>))}
           <span className="spacer" />
-          <a href="#/cuenta?ayuda" aria-current={undefined}><Icon name="docs" size={20} />Docs</a>
+          <a href="#/aprende" aria-current={page === 'aprende' ? 'page' : undefined}><Icon name="docs" size={20} />Aprende</a>
           <a href="#/cuenta?ajustes" aria-current={page === 'cuenta' ? 'page' : undefined}><Icon name="ajustes" size={20} />Ajustes</a>
         </nav>
         <main className="main" id="main"><Boundary key={page}><Page /></Boundary></main>
         {s.atajos && <Atajos />}
+        {s.toastCap && <div className="toast" role="status">{s.toastCap === 'vacio' ? 'No hay nada que capturar: la mosca no tocó en los últimos compases.' : <>Guardado como <strong>{s.toastCap}</strong>: los últimos 8 compases. <a href="#/tomas" onClick={() => session.set({ toastCap: null })}>Ver en Tomas</a></>}</div>}
         {s.dile && <DileMosca onClose={() => session.set({ dile: false })} />}
+        {s.tour?.on && page !== 'bienvenida' && <Recorrido />}
+        {!s.tour?.visto && s.onboarded && page !== 'bienvenida' && <InvitaRecorrido />}
+        {s.plantillas && <Plantillas onClose={() => session.set({ plantillas: false })} />}
         {s.escenario && <Escenario onClose={() => session.set({ escenario: false })} />}
       </div>
       <StatusBar s={s} />
@@ -201,7 +212,7 @@ export default function App() {
 
 // hoja de atajos: «?» la abre y la cierra
 const ATAJOS = [
-  ['Tocar', [['Espacio', 'Tocar / detener'], ['R', 'Grabar una toma'], ['M', 'Metrónomo'], ['T', 'Marcar el tempo (tap)']]],
+  ['Tocar', [['Espacio', 'Tocar / detener'], ['R', 'Grabar una toma'], ['C', 'Capturar los últimos 8 compases'], ['M', 'Metrónomo'], ['T', 'Marcar el tempo (tap)']]],
   ['La mosca', [['/', 'Dile a la mosca cómo sentirse'], ['G', 'Me gusta lo que tocó'], ['N', 'No me gusta'], ['F', 'Remate ahora']]],
   ['Directo', [['E', 'Modo escenario (pantalla completa)'], ['1 – 8', 'Lanzar escena A – H (entra al siguiente compás)'], ['L', 'Looper: grabar el loop o sumar una capa']]],
   ['Editar', [['⌘ Z', 'Deshacer'], ['⇧ ⌘ Z', 'Rehacer'], ['?', 'Esta hoja']]],

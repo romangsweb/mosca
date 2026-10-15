@@ -96,7 +96,7 @@ export default function Tomas() {
   const count = s.user && s.plan === 'pro' ? `${s.takes.length} TOMAS · PRO` : `${s.takes.length} DE ${FREE_TAKES} · FREE`;
   const play = () => { if (playing) { session.stopTake(); setPlaying(false); return; } session.playTake(take, () => setPlaying(false)); setPlaying(true); };
   const doExport = async () => {
-    setBusy(true);
+    setBusy(true); session.tourMark('exportar');
     const base = slug(take.name);
     if (fmtSel === 'mid') download(takeToMidi(take), `${base}.mid`);
     if (fmtSel === 'csv') download(takeToCsv(take), `${base}-disparos.csv`);
@@ -160,13 +160,13 @@ export default function Tomas() {
                 <div className="row">
                   <button type="button" className="btn lg primary" onClick={play} disabled={!ready}><Icon name={playing ? 'stop' : 'play'} size={12} fill="currentColor" />{playing ? 'Detener' : 'Reproducir'}</button>
                   <button type="button" className="btn lg" onClick={() => { session.stopTake(); setPlaying(false); setNotes(true); }} disabled={!ready} title="Mover, borrar, agregar y cuantizar notas"><Icon name="lapiz" size={14} />Editar notas</button>
-                  <button type="button" className="btn lg" onClick={() => setExp(true)} disabled={!ready}><Icon name="bajar" size={14} />Exportar</button>
+                  <button type="button" data-tour="exportar" className="btn lg" onClick={() => setExp(true)} disabled={!ready}><Icon name="bajar" size={14} />Exportar</button>
                   <ShareButton take={take} />
                 </div>
               </div>
               <div className="row" style={{ gap: 8, flexWrap: 'wrap' }} aria-label="Crear a partir de esta toma">
                 <span className="label" style={{ marginRight: 4 }}>Crear a partir de esta</span>
-                <button type="button" className="btn" onClick={() => { session.stopTake(); setPlaying(false); setVari(true); }} disabled={!ready} title="Una toma nueva a partir de esta: mitad de tiempo, al revés, pregunta y respuesta…">Variaciones</button>
+                <button type="button" data-tour="variacion" className="btn" onClick={() => { session.stopTake(); setPlaying(false); setVari(true); }} disabled={!ready} title="Una toma nueva a partir de esta: mitad de tiempo, al revés, pregunta y respuesta…">Variaciones</button>
                 <button type="button" className="btn" onClick={() => { session.stopTake(); setPlaying(false); setArm(true); }} disabled={!ready} title="Tonalidad, acordes, notas que chocan y una pista de armonía">Armonía</button>
                 <button type="button" className="btn" onClick={() => { session.stopTake(); setPlaying(false); setRsm(true); }} disabled={!ready} title="Convierte un pedazo de la toma en el sonido de un pad de Mi kit">Hacer pad</button>
               </div>

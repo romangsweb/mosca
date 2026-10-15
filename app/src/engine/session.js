@@ -24,7 +24,7 @@ import { KoLink, CHARLA_DEFAULT } from './ko.js';
 import { cloudEnabled, currentUser, onAuth, loadProfile, saveProfile, signOut, startTrialCloud, listTakes, getTake, uploadTake, renameTakeCloud, deleteTakeCloud , shareTake, unshareTake, kitIndex, uploadSample, downloadSample, deleteSample, uploadTakeAudio, downloadTakeAudio, deleteTakeAudio } from './cloud.js';
 
 // ajustes que se guardan en el navegador y, con cuenta, en la nube
-const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes', 'opto', 'taste', 'compas', 'acento', 'lufs', 'xfade', 'intensidad', 'mundo', 'charla', 'expr', 'fillEvery', 'armonia', 'patrones'];
+const KEEP = ['bpm', 'sessionName', 'theme', 'guide', 'onboarded', 'alias', 'inputs', 'tracks', 'selTrack', 'selPad', 'density', 'swing', 'humanize', 'curve', 'velMin', 'velMax', 'ghost', 'sendMidi', 'clockOut', 'fxAuto', 'monitor', 'latency', 'oidoSource', 'perRow', 'device', 'port', 'devOverrides', 'kitId', 'scenes', 'song', 'songLoop', 'morph', 'mappings', 'audioIn', 'captureAudio', 'kitVol', 'sk', 'follow', 'fx', 'installHint', 'metro', 'countIn', 'autoLanes', 'opto', 'taste', 'compas', 'acento', 'lufs', 'xfade', 'intensidad', 'mundo', 'charla', 'expr', 'fillEvery', 'armonia', 'patrones', 'tour'];
 
 export const SENSES = { gusto: ['dulce', 'amargo'], oido: ['jon_ce', 'jon_f', 'jon_dm'], olfato: ['vinagre', 'co2', 'geosmina'], cortejo: ['canto', 'cva', 'deseo'], vision: ['acercar', 'movimiento', 'luz'] };
 // circuitos: cada uno es una parte real del mismo cerebro, con sus sensores y su neurona de salida
@@ -78,7 +78,7 @@ const DEFAULTS = {
   sk: { follow: false, fxAuto: false, fx: [0, 1] },
   fx: { ...FX_DEFAULT }, metro: false, countIn: 1, autoLanes: [],
   taste: { on: true, likes: {}, dislikes: {}, n: 0, plastic: {} },
-  compas: '4/4', acento: 0.35, lufs: 'streaming', xfade: 0.5, intensidad: 1, mundo: { mix: 1 }, charla: { ...CHARLA_DEFAULT }, expr: null, fillEvery: 0, patrones: [], armonia: { on: false, modo: 'acordes', salida: 'compu', ch: 3, nivel: 0.6 },
+  compas: '4/4', acento: 0.35, lufs: 'streaming', xfade: 0.5, intensidad: 1, mundo: { mix: 1 }, charla: { ...CHARLA_DEFAULT }, expr: null, fillEvery: 0, patrones: [], tour: { on: false, visto: false, done: {} }, armonia: { on: false, modo: 'acordes', salida: 'compu', ch: 3, nivel: 0.6 },
   opto: { on: false, mode: 'activar', target: 'pad', power: 0.6, pattern: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] },
   follow: { source: 'entrada', tempo: true, key: true, autoPlay: true, offset: 0 },
   oidoSource: 'manual', dataMap: {}, perRow: 16,
@@ -485,6 +485,17 @@ export class Session {
     await this.addSample(voice, new File([wavBlob(buf)], name, { type: 'audio/wav' }));
     return buf.duration;
   }
+  // varias muestras de una vez (chop): se guardan todas, el kit se recarga una sola vez y se suben a la nube en fila
+  async addSamples(list) {
+    if (!this.can('kits')) throw new Error('pro');
+    const at = Date.now(), datos = [];
+    for (const { voice, file } of list) { const data = await file.arrayBuffer(); await samplePut(voice, { name: file.name, data, type: file.type, at }); datos.push({ voice, file, data }); }
+    if (this.s.kitId !== 'propio') this.set({ kitId: 'propio' }, true); await this.loadKit();
+    const uid = this.s.user?.id; if (!uid) return;
+    this.set({ kitCloud: 'subiendo' });
+    try { for (const { voice, file, data } of datos) { await uploadSample(uid, voice, file.name, data, file.type); await samplePut(voice, { name: file.name, data, type: file.type, at, cloud: true }); } this.set({ kitCloud: 'ok' }); }
+    catch (e) { console.warn('subir muestras', e); this.set({ kitCloud: 'error' }); }
+  }
   async removeSample(voice) {
     await sampleDel(voice); await this.loadKit();
     if (this.s.user) deleteSample(this.s.user.id, voice).catch((e) => console.warn('borrar muestra', e));
@@ -606,7 +617,7 @@ export class Session {
   setKitVol(v, persist = true) { this.set({ kitVol: v }, persist); if (this.synth.out) this.synth.out.gain.value = v; }
   get monitorOn() { return this.s.monitor === 'siempre' || (this.s.monitor === 'auto' && (!this.ko.connected || this.profile.kind === 'interno')); }
   // ---------- transporte ----------
-  play() { this.synth.ensure(); this.sim.reset(); this.live.step = 0; this.live.countIn = 0; this.s.row = 0; this.morphState = null; if (this.s.songOn) this.songPos = { row: 0, bars: 0 }; this.ko.start(); this.set({ playing: true }); }
+  play() { this.synth.ensure(); this.sim.reset(); this.shadow = { t0: 0, n0: 0, events: [], stepT: new Map() }; this.live.step = 0; this.live.countIn = 0; this.s.row = 0; this.morphState = null; if (this.s.songOn) this.songPos = { row: 0, bars: 0 }; this.ko.start(); this.set({ playing: true }); }
   stop() { this.ko.stop(); this.kolink.reset(); if (this._recArm) { this._recArm = false; this.set({ rec: false, counting: false }); } else if (this.s.rec) this.toggleRec(); this.morphState = null; this.live.arp = {}; this.looper.halt(); if (this.live.harm) this.live.harm.prev = null; this.set({ playing: false, pendingScene: null }); }
   toggle() { this.s.playing ? this.stop() : this.play(); }
   // ---------- un paso de semicorchea ----------
@@ -641,6 +652,7 @@ export class Session {
     const C = this.C, pos = n % C.len;
     if (s.metro) { const c = clickAt(C, pos); if (c) this.synth.click(at, c); }
     if (s.data && n > 0 && n % s.perRow === 0) { s.row = (s.row + 1) % s.data.rows; queueMicrotask(() => this.emit()); }
+    if (this.shadow) { const sh = this.shadow; sh.stepT.set(n, at); if (pos === 0) { const keep = n - 33 * C.len; sh.events = sh.events.filter((e) => e.step >= keep); for (const k of sh.stepT.keys()) if (k < keep) sh.stepT.delete(k); } } // la sombra guarda ~32 compases
     this.live.step = n; if (pos === 0) { const bar = Math.floor(n / C.len); onBar(this, bar); L.fillBar = this.isFillBar(bar); this.harmBar(at); }
     if (s.autoLanes?.length) this.batch(() => this.automate(n));
     this.opto(n, at);
@@ -687,7 +699,7 @@ export class Session {
         const mt = L.meter[t.id]; if (!mt || when - mt.at > 60 || vel > mt.vel) L.meter[t.id] = { at: when, vel };
         L.lastHitAt[t.id + k] = when;
         notes.forEach((nt, j) => this.looper.capture(n, at, { track: t.id, pad: k, note: nt, vel: j ? Math.round(vel * 0.8) : vel, ch: r.ch, voice: r.voice, dur: r.voice === 'tono' ? stepMs * 0.9 : 60 }, when));
-        if (this.rec) notes.forEach((nt, j) => this.rec.events.push({ t: when - this.rec.t0, step: n - this.rec.n0, track: t.id, pad: k, neuron: p.tipo, note: nt ?? 0, vel: j ? Math.round(vel * 0.8) : vel, ch: r.ch, voice: r.voice, port: port?.name, ...(j ? { chord: 1 } : {}) }));
+        for (const R of this.recs()) notes.forEach((nt, j) => R.events.push({ t: when - R.t0, step: n - R.n0, track: t.id, pad: k, neuron: p.tipo, note: nt ?? 0, vel: j ? Math.round(vel * 0.8) : vel, ch: r.ch, voice: r.voice, port: port?.name, ...(j ? { chord: 1 } : {}) }));
       });
       if (arp && on) this.arpStep(t, arp, n, at + swingMs, stepMs, flyOn);
     }
@@ -724,7 +736,7 @@ export class Session {
       this.harmNote(nt, v);
       const mt = this.live.meter[t.id]; if (!mt || when - mt.at > 60 || v > mt.vel) this.live.meter[t.id] = { at: when, vel: v };
       this.looper.capture(n, at, { track: t.id, pad: null, note: nt, vel: v, ch, voice: 'tono', dur }, when);
-      if (this.rec) this.rec.events.push({ t: when - this.rec.t0, step: n - this.rec.n0, track: t.id, pad: 0, neuron: 'arp', note: nt, vel: v, ch, voice: 'tono', port: port?.name });
+      for (const R of this.recs()) R.events.push({ t: when - R.t0, step: n - R.n0, track: t.id, pad: 0, neuron: 'arp', note: nt, vel: v, ch, voice: 'tono', port: port?.name });
     }
   }
   // ---------- armonía en vivo: escucha las notas de la mosca, deduce tonalidad y acorde, y acompaña ----------
@@ -747,7 +759,7 @@ export class Session {
     const a = this.s.armonia;
     if (a.salida === 'midi') { const port = this.ko.output; if (port) this.ko.hit(note, vel, a.ch || 3, durMs, when, port); }
     else this.synth.play(voice, vel, when, note, 'armonia', null, durMs / 1000);
-    if (this.rec) this.rec.events.push({ t: when - this.rec.t0, step: this.live.step - this.rec.n0, track: 'armonia', pad: voice === 'pad' ? 0 : 1, neuron: 'armonía', note, vel, ch: a.ch || 3, voice, durMs, port: a.salida === 'midi' ? this.ko.output?.name : undefined });
+    for (const R of this.recs()) R.events.push({ t: when - R.t0, step: this.live.step - R.n0, track: 'armonia', pad: voice === 'pad' ? 0 : 1, neuron: 'armonía', note, vel, ch: a.ch || 3, voice, durMs, port: a.salida === 'midi' ? this.ko.output?.name : undefined });
   }
   // todas las pistas melódicas a la tonalidad que se detectó (quita los choques entre pistas)
   alignScales() {
@@ -780,7 +792,7 @@ export class Session {
     if (this.toKit(t, port)) this.sound({ voice: e.voice, note: e.note }, vel, when, t, e.pad);
     if (e.voice === 'tono' && e.note != null) this.harmNote(e.note, vel);
     const mt = this.live.meter[t.id]; if (!mt || when - mt.at > 60 || vel > mt.vel) this.live.meter[t.id] = { at: when, vel };
-    if (this.rec) this.rec.events.push({ t: when - this.rec.t0, step: this.live.step - this.rec.n0, track: t.id, pad: e.pad ?? 0, neuron: 'loop', note: e.note ?? 0, vel, ch: e.ch, voice: e.voice, port: port?.name });
+    for (const R of this.recs()) R.events.push({ t: when - R.t0, step: this.live.step - R.n0, track: t.id, pad: e.pad ?? 0, neuron: 'loop', note: e.note ?? 0, vel, ch: e.ch, voice: e.voice, port: port?.name });
   }
   tapPad(k, track = this.track()) {
     this.sim.g[this.pads(track)[k].idx] += this.D.params.w_poi * 2;
@@ -849,7 +861,7 @@ export class Session {
         take.owner = this.s.user?.id || null; take.cloud = false;
         audioP.then(async (blob) => {
           if (blob && blob.size) { await audioPut(take.id, blob); take.hasAudio = true; }
-          await takePut(take); this.set({ lastTake: take.id }); await this.refreshTakes();
+          await takePut(take); this.set({ lastTake: take.id }); await this.refreshTakes(); this.tourMark('captura');
         });
       }
       this.set({ rec: false }); return;
@@ -860,6 +872,26 @@ export class Session {
     if (!this.s.playing && this.s.countIn > 0) { this.play(); this.live.countIn = this.s.countIn * this.C.len; this._recArm = true; this.set({ rec: true, counting: true }); return; }
     if (!this.s.playing) this.play();
     this.startRec();
+  }
+  // recorrido de primera vez: marca un paso como hecho
+  tourMark(k) { const t = this.s.tour || {}; if (t.done?.[k]) return; this.set({ tour: { ...t, done: { ...(t.done || {}), [k]: true } } }, true); }
+  // grabaciones activas: la toma (si estás grabando) y la sombra, que siempre guarda los últimos compases para «Capturar»
+  recs() { return this.rec ? [this.rec, this.shadow].filter(Boolean) : this.shadow ? [this.shadow] : []; }
+  // captura retroactiva: lo que sonó en los últimos `bars` compases se vuelve una toma (como «Capture MIDI»)
+  async captureLast(bars = 8) {
+    const S = this.shadow, len = this.C.len, L = this.live; if (!S || !this.s.playing) return null;
+    if (this.takesLimitReached) { this.set({ notice: 'limite' }); return null; }
+    const barNow = Math.floor(L.step / len), pos = L.step % len, end = (barNow + (pos >= len / 2 ? 1 : 0)) * len, start = Math.max(0, end - bars * len);
+    const t0 = S.stepT.get(start) ?? (S.stepT.get(L.step) - (L.step - start) * this.ko.stepMs);
+    const events = S.events.filter((e) => e.step >= start && e.step < end).map((e) => ({ ...e, t: e.t - t0, step: e.step - start }));
+    if (!events.length) return null;
+    const durMs = (end - start) * this.ko.stepMs, n = this.s.takes.filter((t) => /^Captura/.test(t.name)).length + 1;
+    const ids = new Set(events.map((e) => e.track));
+    const take = { id: crypto.randomUUID(), name: `Captura ${n}`, date: Date.now(), bpm: Math.round(this.ko.bpm), durMs, steps: end - start, compas: this.s.compas || '4/4', captured: true,
+      tracks: [...this.s.tracks.filter((t) => ids.has(t.id)).map(({ id, name, group, ch, sense }) => ({ id, name, group, ch, sense })), ...(ids.has('armonia') ? [{ id: 'armonia', name: 'Armonía', group: '—', ch: this.s.armonia?.ch || 3, sense: 'armonia' }] : [])],
+      inputs: { ...this.s.inputs }, source: this.s.data ? 'datos' : this.s.oidoSource, events, owner: this.s.user?.id || null, cloud: false };
+    await takePut(take); this.set({ lastTake: take.id, notice: null }); await this.refreshTakes(); this.live.capturedAt = performance.now(); this.tourMark('captura'); this.emit();
+    return take;
   }
   startRec(t0 = performance.now(), n0 = this.live.step) {
     if (this.s.captureAudio && this.can('audio')) this.capture.start(this.s.audioIn).catch((e) => { console.warn('audio', e); this.set({ notice: 'audio' }); });

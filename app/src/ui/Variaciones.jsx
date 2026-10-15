@@ -9,7 +9,7 @@ import { useS, Icon } from './kit.jsx';
 export default function Variaciones({ take, onClose, onDone }) {
   const s = useS(), [st, setSt] = useState(5), [busy, setBusy] = useState(null), [txt, setTxt] = useState(''), [msg, setMsg] = useState(null), pro = session.can('armonia');
   const an = useMemo(() => analyzeTake(take), [take]);
-  const save = async (edited, suffix) => { const id = await session.saveEditedTake(take, edited, suffix); if (id) onDone(id); else setMsg({ bad: true, t: 'No se pudo guardar: llegaste al límite de tomas.' }); };
+  const save = async (edited, suffix) => { const id = await session.saveEditedTake(take, edited, suffix); if (id) { session.tourMark('variacion'); onDone(id); } else setMsg({ bad: true, t: 'No se pudo guardar: llegaste al límite de tomas.' }); };
   const one = async (op) => { setBusy(op); setMsg(null); const v = op === 'transponer' ? st : 0; await save(variar(take, op, v), nombreVar(op, v)); setBusy(null); };
   const ia = async () => {
     const t = txt.trim(); if (!t) return; setBusy('ia'); setMsg(null);

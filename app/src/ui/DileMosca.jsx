@@ -17,6 +17,7 @@ export default function DileMosca({ onClose }) {
   const apply = (texto, r, ia) => {
     const before = { ...session.s.inputs }, undo = aplicarMosca(session, r), { ch, otros } = resumenMosca(session, before, r, SENSE_LABEL);
     if (!session.s.playing) session.toggle(); // decirle algo a la mosca es para oírla
+    session.tourMark('mosca');
     push({ quien: 'mosca', texto: r.respuesta, ch, otros, undo, ia, cambio: [...ch.map(([l, , v]) => `${l} ${v}`), ...otros].join(', ') });
   };
   const animo = ([n, resp, est, extra]) => { push({ quien: 'tu', texto: n }); apply(n, { respuesta: resp, estimulos: est, ...extra, transicion_compases: 2 }, false); };
